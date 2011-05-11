@@ -1,0 +1,24 @@
+for next release
+----------------
+
+ * delete segments as per index retention policy.
+ * implement segment optimization using DB->optimize().  this will probably
+   require a separate pthread.  need to investigate what happens if this 
+   procedure is cancelled (does optimize use pthread_testcancel()?).
+ * re-add query restrictions.
+ * add new XMLRPC method ExplainQuery: show how query is parsed, an estimate
+   of the number of results, what indices will be used, etc.
+ * add new XMLRPC method ShowIndices: display statistics about each local
+   index.
+ * make TOC.count_segments() and TOC.count_fields() more accurate, by
+   implementing internal counters.
+ * implement filters for more application logs.
+ * sort results based on multiple fields.
+ * process XMLRPC search requests in a threadpool, separate from event adds.
+ * build a configuration template system, so the most common input sources
+   are simple to configure and standardized.
+ * parse nagios events.
+ * parse postfix events.
+ * parse mysql server and slow query events.
+ * implement a logging channel for C module, possibly using an anonymous pipe,
+   so we can safely send log messages to the loggers module.

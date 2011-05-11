@@ -1,0 +1,8 @@
+
+Release 0.0.6
+-------------
+
+ * multiple output indices may now be created, stored to, and searched.
+ * database is now checkpointed once every second.
+ * updated Whoosh library to version 1.8.1.
+ * explicitly licensed all code as GPLv3 or later

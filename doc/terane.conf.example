@@ -1,0 +1,120 @@
+# ---------------------------------------------------------------------
+# Server configuration
+# ---------------------------------------------------------------------
+[server]
+listen address = 0.0.0.0
+listen port = 45565
+log file = /var/log/terane/server.log
+pid file = /var/run/terane/terane.pid
+stats file = /var/lib/terane/statistics
+stats sync interval = 1
+log verbosity = INFO
+
+# ---------------------------------------------------------------------
+# Database configuration
+# ---------------------------------------------------------------------
+[database]
+data directory = /var/lib/terane/db
+
+# ---------------------------------------------------------------------
+# Plugins configuration
+# ---------------------------------------------------------------------
+[plugin:input:file]
+
+[plugin:input:syslog]
+syslog udp address = 0.0.0.0
+syslog udp port = 51500
+
+[plugin:input:collect]
+collect address = 0.0.0.0
+collect port = 8643
+
+[plugin:filter:syslog]
+
+[plugin:filter:messages]
+
+[plugin:filter:regex]
+
+[plugin:filter:datetime]
+
+[plugin:filter:apache_common]
+
+[plugin:filter:apache_combined]
+
+[plugin:output:store]
+
+[plugin:output:forward]
+
+# ---------------------------------------------------------------------
+# Inputs configuration
+# ---------------------------------------------------------------------
+[input:testfile]
+type = file
+file path = /home/msfrank/testfile
+polling interval = 1
+
+[input:udp_syslog]
+type = syslog
+syslog udp allowed clients = 10.0.0.0/8
+
+[input:apache_access]
+type = file
+file path = /var/log/apache2/access.log
+
+[input:collect]
+type = collect
+
+# ---------------------------------------------------------------------
+# Filters configuration
+# ---------------------------------------------------------------------
+[filter:file_var_log_messages]
+type = messages
+
+[filter:syslog_info_local0_7]
+type = syslog
+syslog selectors = local0,local1.info
+
+[filter:apache_combined]
+type = apache_combined
+
+# ---------------------------------------------------------------------
+# Outputs configuration
+# ---------------------------------------------------------------------
+[output:local]
+type = store
+index name = events
+segment retention policy = 2
+segment optimization policy = 0
+store retention policy = 0
+
+[output:access]
+type = store
+segment retention policy = 5
+
+[output:remote]
+type = forward
+forwarding address = 10.10.10.101
+forwarding port = 8643
+
+# ---------------------------------------------------------------------
+# Routes configuration
+# ---------------------------------------------------------------------
+[route:testfile_to_local]
+input = testfile
+filter = file_var_log_messages
+output = local
+
+[route:udp_syslog_to_local]
+input = udp_syslog
+filter = syslog_info_local0_7
+output = local
+
+[route:apache_access]
+input = apache_access
+filter = apache_combined
+output = access
+
+[route:testfile_to_remote]
+input = testfile
+filter = file_var_log_messages
+output = remote

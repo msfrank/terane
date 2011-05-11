@@ -1,0 +1,9 @@
+# package ez_setup in case the host system doesn't have it
+include ez_setup.py
+
+# package any C extension header files
+recursive-include terane *.h
+
+# package sphinx documentation and build files
+include doc/conf.py
+recursive-include doc *.rst
