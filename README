@@ -1,0 +1,32 @@
+What is Terane?
+---------------
+
+Terane is a search engine for logs.  Terane consumes log events from
+multiple sources (log files, syslog messages, other Terane servers), 
+analyzes them, and feeds them into a searchable database.
+
+Prerequisite Software
+---------------------
+
+ * python >= 2.5
+    Terane requires at least version 2.5.  However, python3 is also not
+    supported.  Terane is tested on version 2.6.5.
+    http://www.python.org
+
+ * twisted
+    Any recent version should work.  Terane is tested with version 10.0.0.
+    http://www.twistedmatrix.com
+
+ * libdb
+    Any version in the 4.x/5.x series should work.  Terane is tested with
+    version 4.8.
+    http://www.oracle.com/technetwork/database/berkeleydb/
+
+ * python-dateutil
+    Any recent version should work.  Terane is tested with version 1.4.1.
+    http://niemeyer.net/python-dateutil
+
+Copyright/License
+-----------------
+
+Terane is licensed under the GPL version 3 or later.
