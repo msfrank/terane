@@ -1,0 +1,5 @@
+build/
+dist/
+Terane.egg-info/
+*.pyc
+terane/db/storage.so
