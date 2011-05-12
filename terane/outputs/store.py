@@ -35,8 +35,8 @@ class StoreOutput(Output):
     def configure(self, section):
         self._indexName = section.getString("index name", self.name)
         self._segRetention = section.getInt("segment retention policy", 0)
+        self._segOptimize = section.getBoolean("optimize segments", False)
         self._indexRetention = section.getInt("index retention policy", 0)
-        self._segOptimize = section.getInt("segment optimization policy", 0)
         
     def startService(self):
         self._index = db.getIndex(self._indexName)
@@ -54,19 +54,18 @@ class StoreOutput(Output):
         remove = [k for k in fields.keys() if k.startswith('_')]
         for key in remove:
             del fields[key]
+        # store the event in the index
+        logger.debug("[output:%s] storing event: %s" % (self.name,str(fields)))
+        self._index.add(fields)
         # if the current segment contains more events than specified by
         # _segRetention, then rotate the index to generate a new segment.
         segment = self._index.current()
-        if self._segRetention > 0 and segment.count_docs() > self._segRetention:
+        if self._segRetention > 0 and segment.count_docs() >= self._segRetention:
             self._index.rotate()
-        # if the current segment contains more events than specified by
-        # _segOptimize, then optimize the segment.
-        if self._segOptimize > 0 and segment.count_docs() > self._segOptimize:
-            segment.optimize()
+            # if _segOptimize is true, then optimize the segment.
+            #if self._segOptimize == True:
+            #    segment.optimize()
         # FIXME: if the index contains more events than specified by _indexRetention,
         # then delete the oldest segment.
         #if self._indexRetention > 0 and self._index.doc_count() > self._indexRetention:
         #    self._index.delete(self._index.segment(0))
-        # store the event in the index
-        logger.debug("[output:%s] storing event: %s" % (self.name,str(fields)))
-        self._index.add(fields)
