@@ -1,20 +1,20 @@
 /*
  * Copyright 2010,2011 Michael Frank <msfrank@syntaxjockey.com>
  *
- * This file is part of Diggle.
+ * This file is part of Terane.
  *
- * Diggle is free software: you can redistribute it and/or modify
+ * Terane is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  * 
- * Diggle is distributed in the hope that it will be useful,
+ * Terane is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  * 
  * You should have received a copy of the GNU General Public License
- * along with Diggle.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "storage.h"
@@ -23,16 +23,16 @@
  * _Segment_close: close the underlying DB handles.
  */
 static void
-_Segment_close (diggle_Segment *segment)
+_Segment_close (terane_Segment *segment)
 {
     int i, dbret;
-    diggle_Field *field;
+    terane_Field *field;
 
     /* close the documents db */
     if (segment->documents != NULL) {
         dbret = segment->documents->close (segment->documents, 0);
         if (dbret != 0)
-            PyErr_Format (diggle_Exc_Error, "Failed to close segment documents: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to close segment documents: %s",
                 db_strerror (dbret));
     }
     segment->documents = NULL;
@@ -45,7 +45,7 @@ _Segment_close (diggle_Segment *segment)
                 if (field->field != NULL) {
                     dbret = field->field->close (field->field, 0);
                     if (dbret != 0)
-                        PyErr_Format (diggle_Exc_Error, "Failed to close segment field '%s': %s",
+                        PyErr_Format (terane_Exc_Error, "Failed to close segment field '%s': %s",
                             PyString_AsString (field->name), db_strerror (dbret));
                 }
                 field->field = NULL;
@@ -62,26 +62,26 @@ _Segment_close (diggle_Segment *segment)
 }
 
 /*
- * diggle_Segment_close: close the underlying DB handles.
+ * terane_Segment_close: close the underlying DB handles.
  *
  * callspec: Segment.close()
  * parameters: None
  * returns: None
  * exceptions:
- *  diggle.db.storage.Error: failed to close a db in the Segment
+ *  terane.db.storage.Error: failed to close a db in the Segment
  */
 PyObject *
-diggle_Segment_close (diggle_Segment *self)
+terane_Segment_close (terane_Segment *self)
 {
     _Segment_close (self);
     Py_RETURN_NONE;
 }
 
 /*
- * diggle_Segment_dealloc: free resources for the Segment object.
+ * terane_Segment_dealloc: free resources for the Segment object.
  */
 static void
-_Segment_dealloc (diggle_Segment *self)
+_Segment_dealloc (terane_Segment *self)
 {
     _Segment_close (self);
     if (self->env != NULL)
@@ -97,7 +97,7 @@ _Segment_dealloc (diggle_Segment *self)
 }
 
 /*
- * diggle_Segment_new: allocate a new Segment object.
+ * terane_Segment_new: allocate a new Segment object.
  *
  * callspec: Segment(toc)
  * parameters:
@@ -105,21 +105,21 @@ _Segment_dealloc (diggle_Segment *self)
  *  id (long): The segment id
  * returns: A new Segment object
  * exceptions:
- *  diggle.db.storage.Error: failed to create/open the Segment
+ *  terane.db.storage.Error: failed to create/open the Segment
  */
 PyObject *
-diggle_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
+terane_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-    diggle_Segment *self;
+    terane_Segment *self;
     DB_TXN *txn = NULL;
     db_recno_t segment_id = 0;
     DB_BTREE_STAT *stats = NULL;
     int exists, dbret;
 
     /* allocate the Segment object */
-    self = (diggle_Segment *) type->tp_alloc (type, 0);
+    self = (terane_Segment *) type->tp_alloc (type, 0);
     if (self == NULL) {
-        PyErr_SetString (diggle_Exc_Error, "Failed to allocate Segment");
+        PyErr_SetString (terane_Exc_Error, "Failed to allocate Segment");
         return NULL;
     }
     self->toc = NULL;
@@ -131,7 +131,7 @@ diggle_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     self->nfields = 0;
 
     /* parse constructor parameters */
-    if (!PyArg_ParseTuple (args, "O!k", &diggle_TOCType, &self->toc, &segment_id))
+    if (!PyArg_ParseTuple (args, "O!k", &terane_TOCType, &self->toc, &segment_id))
         goto error;
     Py_INCREF (self->toc);
 
@@ -159,7 +159,7 @@ diggle_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     Py_INCREF (self->env);
     dbret = self->env->env->txn_begin (self->env->env, NULL, &txn, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to create transaction: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to create transaction: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -167,7 +167,7 @@ diggle_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     /* create the DB handle for the documents segment */
     dbret = db_create (&self->documents, self->env->env, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to create handle for _documents: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to create handle for _documents: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -176,7 +176,7 @@ diggle_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     dbret = self->documents->open (self->documents, txn, self->name,
         "_documents", DB_BTREE, DB_CREATE, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to open _documents: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to open _documents: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -186,7 +186,7 @@ diggle_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     if (dbret != 0) {
         if (stats)
             PyMem_Free (stats);
-        PyErr_Format (diggle_Exc_Error, "Failed to get document count: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to get document count: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -197,7 +197,7 @@ diggle_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     /* commit new databases */
     dbret = txn->commit (txn, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to commit transaction: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to commit transaction: %s",
             db_strerror (dbret));
         txn = NULL;
         goto error;
@@ -211,64 +211,64 @@ error:
     if (txn != NULL)
         txn->abort (txn);
     if (self)
-        _Segment_dealloc ((diggle_Segment *) self);
+        _Segment_dealloc ((terane_Segment *) self);
     return NULL;
 }
 
 /* Segment methods declaration */
 PyMethodDef _Segment_methods[] =
 {
-    { "get_field_meta", (PyCFunction) diggle_Segment_get_field_meta, METH_VARARGS,
+    { "get_field_meta", (PyCFunction) terane_Segment_get_field_meta, METH_VARARGS,
         "Get metadata for an inverted index." },
-    { "set_field_meta", (PyCFunction) diggle_Segment_set_field_meta, METH_VARARGS,
+    { "set_field_meta", (PyCFunction) terane_Segment_set_field_meta, METH_VARARGS,
         "Set metadata for an inverted index." },
-    { "new_doc", (PyCFunction) diggle_Segment_new_doc, METH_VARARGS,
+    { "new_doc", (PyCFunction) terane_Segment_new_doc, METH_VARARGS,
         "Create a new document." },
-    { "get_doc", (PyCFunction) diggle_Segment_get_doc, METH_VARARGS,
+    { "get_doc", (PyCFunction) terane_Segment_get_doc, METH_VARARGS,
         "Get a document blob by document ID." },
-    { "set_doc", (PyCFunction) diggle_Segment_set_doc, METH_VARARGS,
+    { "set_doc", (PyCFunction) terane_Segment_set_doc, METH_VARARGS,
         "Set a document blob value." },
-    { "delete_doc", (PyCFunction) diggle_Segment_delete_doc, METH_VARARGS,
+    { "delete_doc", (PyCFunction) terane_Segment_delete_doc, METH_VARARGS,
         "Delete a document blob." },
-    { "contains_doc", (PyCFunction) diggle_Segment_contains_doc, METH_VARARGS,
+    { "contains_doc", (PyCFunction) terane_Segment_contains_doc, METH_VARARGS,
         "Returns True if the segment contains the specified document." },
-    { "iter_docs", (PyCFunction) diggle_Segment_iter_docs, METH_VARARGS,
+    { "iter_docs", (PyCFunction) terane_Segment_iter_docs, METH_VARARGS,
         "Iterates through all documents in the index." },
-    { "count_docs", (PyCFunction) diggle_Segment_count_docs, METH_VARARGS,
+    { "count_docs", (PyCFunction) terane_Segment_count_docs, METH_VARARGS,
         "Returns the total number of documents in the index." },
-    { "first_doc", (PyCFunction) diggle_Segment_first_doc, METH_VARARGS,
+    { "first_doc", (PyCFunction) terane_Segment_first_doc, METH_VARARGS,
         "Return the first (lowest numbered) document." },
-    { "last_doc", (PyCFunction) diggle_Segment_last_doc, METH_VARARGS,
+    { "last_doc", (PyCFunction) terane_Segment_last_doc, METH_VARARGS,
         "Return the last (highest numbered) document." },
-    { "get_word", (PyCFunction) diggle_Segment_get_word, METH_VARARGS,
+    { "get_word", (PyCFunction) terane_Segment_get_word, METH_VARARGS,
         "Get a word in the inverted index." },
-    { "set_word", (PyCFunction) diggle_Segment_set_word, METH_VARARGS,
+    { "set_word", (PyCFunction) terane_Segment_set_word, METH_VARARGS,
         "Set a word in the inverted index." },
-    { "contains_word", (PyCFunction) diggle_Segment_contains_word, METH_VARARGS,
+    { "contains_word", (PyCFunction) terane_Segment_contains_word, METH_VARARGS,
         "Returns True if the segment contains the specified word." },
-    { "iter_words", (PyCFunction) diggle_Segment_iter_words, METH_VARARGS,
+    { "iter_words", (PyCFunction) terane_Segment_iter_words, METH_VARARGS,
         "Iterates through all words in the index." },
-    { "get_word_meta", (PyCFunction) diggle_Segment_get_word_meta, METH_VARARGS,
+    { "get_word_meta", (PyCFunction) terane_Segment_get_word_meta, METH_VARARGS,
         "Get metadata for a word in the inverted index." },
-    { "set_word_meta", (PyCFunction) diggle_Segment_set_word_meta, METH_VARARGS,
+    { "set_word_meta", (PyCFunction) terane_Segment_set_word_meta, METH_VARARGS,
         "Set metadata for a word in the inverted index." },
-    { "iter_words_meta", (PyCFunction) diggle_Segment_iter_words_meta, METH_VARARGS,
+    { "iter_words_meta", (PyCFunction) terane_Segment_iter_words_meta, METH_VARARGS,
         "Iterates through all words in the index." },
-    { "iter_words_meta_from", (PyCFunction) diggle_Segment_iter_words_meta_from, METH_VARARGS,
+    { "iter_words_meta_from", (PyCFunction) terane_Segment_iter_words_meta_from, METH_VARARGS,
         "Iterates through words in the index, starting from the specified word." },
-    { "iter_words_meta_range", (PyCFunction) diggle_Segment_iter_words_meta_range, METH_VARARGS,
+    { "iter_words_meta_range", (PyCFunction) terane_Segment_iter_words_meta_range, METH_VARARGS,
         "Iterates through all words in the index matching the prefix." },
-    { "close", (PyCFunction) diggle_Segment_close, METH_NOARGS,
+    { "close", (PyCFunction) terane_Segment_close, METH_NOARGS,
         "Close the DB Segment." },
     { NULL, NULL, 0, NULL }
 };
 
 /* Segment type declaration */
-PyTypeObject diggle_SegmentType = {
+PyTypeObject terane_SegmentType = {
     PyObject_HEAD_INIT(NULL)
     0,
     "storage.Segment",
-    sizeof (diggle_Segment),
+    sizeof (terane_Segment),
     0,                         /*tp_itemsize*/
     (destructor) _Segment_dealloc,
     0,                         /*tp_print*/
@@ -303,5 +303,5 @@ PyTypeObject diggle_SegmentType = {
     0,                         /* tp_dictoffset */
     0,                         /* tp_init */
     0,                         /* tp_alloc */
-    diggle_Segment_new
+    terane_Segment_new
 };

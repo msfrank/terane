@@ -1,30 +1,30 @@
 /*
  * Copyright 2010,2011 Michael Frank <msfrank@syntaxjockey.com>
  *
- * This file is part of Diggle.
+ * This file is part of Terane.
  *
- * Diggle is free software: you can redistribute it and/or modify
+ * Terane is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  * 
- * Diggle is distributed in the hope that it will be useful,
+ * Terane is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  * 
  * You should have received a copy of the GNU General Public License
- * along with Diggle.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "storage.h"
 
-/* compare two diggle_Field instances by name */
+/* compare two terane_Field instances by name */
 static int
 _Segment_cmp_fields (const void *v1, const void *v2)
 {
-    const diggle_Field *f1 = *(const diggle_Field **) v1;
-    const diggle_Field *f2 = *(const diggle_Field **) v2;
+    const terane_Field *f1 = *(const terane_Field **) v1;
+    const terane_Field *f2 = *(const terane_Field **) v2;
     return PyObject_Compare (f1->name, f2->name);
 }
 
@@ -32,17 +32,17 @@ _Segment_cmp_fields (const void *v1, const void *v2)
  * return the field specified by name, or NULL if it doesn't exist in the schema
  */
 DB *
-Segment_get_field_DB (diggle_Segment *segment, diggle_Txn *txn, PyObject *fieldname)
+Segment_get_field_DB (terane_Segment *segment, terane_Txn *txn, PyObject *fieldname)
 {
-    diggle_Field compar = {fieldname, NULL}, *compar_ptr = &compar;
-    diggle_Field **result = NULL;
-    diggle_Field *new = NULL, **fields = NULL;
+    terane_Field compar = {fieldname, NULL}, *compar_ptr = &compar;
+    terane_Field **result = NULL;
+    terane_Field *new = NULL, **fields = NULL;
     DB_TXN *field_txn = NULL;
     int dbret;
 
     /* search the field handle cache */
-    result = (diggle_Field **) bsearch (&compar_ptr, segment->fields, segment->nfields,
-        sizeof(diggle_Field *), _Segment_cmp_fields);
+    result = (terane_Field **) bsearch (&compar_ptr, segment->fields, segment->nfields,
+        sizeof(terane_Field *), _Segment_cmp_fields);
     /* we have the field handle cached, so return it */
     /* TODO: check whether the handle is stale (i.e. someone deleted the DB) */
     if (result && *result)
@@ -52,7 +52,7 @@ Segment_get_field_DB (diggle_Segment *segment, diggle_Txn *txn, PyObject *fieldn
     dbret = segment->env->env->txn_begin (segment->env->env,
         txn? txn->txn : NULL, &field_txn, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to create DB_TXN handle: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to create DB_TXN handle: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -68,18 +68,18 @@ Segment_get_field_DB (diggle_Segment *segment, diggle_Txn *txn, PyObject *fieldn
                 PyString_AsString (fieldname));
             goto error;
         default:
-            PyErr_Format (diggle_Exc_Error, "Failed to lookup field %s in schema: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to lookup field %s in schema: %s",
                 PyString_AsString (fieldname), db_strerror (dbret));
             goto error;
     }
 
-    /* allocate a new diggle_Field record */
-    new = PyMem_Malloc (sizeof (diggle_Field));
+    /* allocate a new terane_Field record */
+    new = PyMem_Malloc (sizeof (terane_Field));
     if (new == NULL) {
         PyErr_NoMemory ();
         goto error;
     }
-    memset (new, 0, sizeof (diggle_Field));
+    memset (new, 0, sizeof (terane_Field));
 
     /* increment the reference count for fieldname */
     Py_INCREF (fieldname);
@@ -90,17 +90,17 @@ Segment_get_field_DB (diggle_Segment *segment, diggle_Txn *txn, PyObject *fieldn
      * its easier to recover in a transactionally-safe way if this operation
      * fails.
      */
-    fields = PyMem_Malloc (sizeof (diggle_Field *) * (segment->nfields + 1));
+    fields = PyMem_Malloc (sizeof (terane_Field *) * (segment->nfields + 1));
     if (fields == NULL) {
         PyErr_NoMemory ();
         goto error;
     }
-    memcpy (fields, segment->fields, sizeof (diggle_Field *) * segment->nfields);
+    memcpy (fields, segment->fields, sizeof (terane_Field *) * segment->nfields);
 
     /* create the DB handle for the field */
     dbret = db_create (&new->field, segment->env->env, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to create handle for %s: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to create handle for %s: %s",
             PyString_AsString (fieldname), db_strerror (dbret));
         goto error;
     }
@@ -109,7 +109,7 @@ Segment_get_field_DB (diggle_Segment *segment, diggle_Txn *txn, PyObject *fieldn
     dbret = new->field->open (new->field, field_txn, segment->name,
         PyString_AsString (fieldname), DB_BTREE, DB_CREATE, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to open segment for %s: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to open segment for %s: %s",
             PyString_AsString (fieldname), db_strerror (dbret));
         goto error;
     }
@@ -117,7 +117,7 @@ Segment_get_field_DB (diggle_Segment *segment, diggle_Txn *txn, PyObject *fieldn
     /* commit database changes */
     dbret = field_txn->commit (field_txn, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to commit transaction: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to commit transaction: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -129,7 +129,7 @@ Segment_get_field_DB (diggle_Segment *segment, diggle_Txn *txn, PyObject *fieldn
     /* sort the new fields array in alphabetical order */
     segment->fields[segment->nfields] = new;
     segment->nfields++;
-    qsort (segment->fields, segment->nfields, sizeof(diggle_Field *), _Segment_cmp_fields);
+    qsort (segment->fields, segment->nfields, sizeof(terane_Field *), _Segment_cmp_fields);
 
     return new->field;
 
@@ -149,7 +149,7 @@ error:
 }
 
 /*
- * diggle_Segment_get_field_meta: Retrieve the metadata associated with the
+ * terane_Segment_get_field_meta: Retrieve the metadata associated with the
  *  specified field.
  *
  * callspec: Segment.get_field_meta(txn, fieldname)
@@ -159,12 +159,12 @@ error:
  * returns: a string containing the JSON-encoded metadata. 
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   diggle.db.storage.Error: A db error occurred when trying to get the record
+ *   terane.db.storage.Error: A db error occurred when trying to get the record
  */
 PyObject *
-diggle_Segment_get_field_meta (diggle_Segment *self, PyObject *args)
+terane_Segment_get_field_meta (terane_Segment *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     DBT key, data;
     DB *field;
@@ -201,7 +201,7 @@ diggle_Segment_get_field_meta (diggle_Segment *self, PyObject *args)
             break;
         default:
             /* some other db error, raise Error */
-            return PyErr_Format (diggle_Exc_Error, "Failed to get metadata for field %s: %s",
+            return PyErr_Format (terane_Exc_Error, "Failed to get metadata for field %s: %s",
                 PyString_AsString (fieldname), db_strerror (dbret));
     }
 
@@ -209,7 +209,7 @@ diggle_Segment_get_field_meta (diggle_Segment *self, PyObject *args)
 }
 
 /*
- * diggle_Segment_set_field_meta: Change the metadata associated with the
+ * terane_Segment_set_field_meta: Change the metadata associated with the
  *  specified field.
  *
  * callspec: Segment.set_word_meta(fieldname, metadata)
@@ -220,12 +220,12 @@ diggle_Segment_get_field_meta (diggle_Segment *self, PyObject *args)
  * returns: None
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   diggle.db.storage.Error: A db error occurred when trying to set the record
+ *   terane.db.storage.Error: A db error occurred when trying to set the record
  */
 PyObject *
-diggle_Segment_set_field_meta (diggle_Segment *self, PyObject *args)
+terane_Segment_set_field_meta (terane_Segment *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     const char *metadata = NULL;
     DBT key, data;
@@ -233,7 +233,7 @@ diggle_Segment_set_field_meta (diggle_Segment *self, PyObject *args)
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!O!s", &diggle_TxnType, &txn,
+    if (!PyArg_ParseTuple (args, "O!O!s", &terane_TxnType, &txn,
         &PyString_Type, &fieldname, &metadata))
         return NULL;
 
@@ -255,7 +255,7 @@ diggle_Segment_set_field_meta (diggle_Segment *self, PyObject *args)
             break;
         default:
             /* some other db error, raise Error */
-            return PyErr_Format (diggle_Exc_Error, "Failed to set metadata for field %s: %s",
+            return PyErr_Format (terane_Exc_Error, "Failed to set metadata for field %s: %s",
                 PyString_AsString (fieldname), db_strerror (dbret));
     }
 

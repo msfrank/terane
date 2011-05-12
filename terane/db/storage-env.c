@@ -1,20 +1,20 @@
 /*
  * Copyright 2010,2011 Michael Frank <msfrank@syntaxjockey.com>
  *
- * This file is part of Diggle.
+ * This file is part of Terane.
  *
- * Diggle is free software: you can redistribute it and/or modify
+ * Terane is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  * 
- * Diggle is distributed in the hope that it will be useful,
+ * Terane is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  * 
  * You should have received a copy of the GNU General Public License
- * along with Diggle.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "storage.h"
@@ -23,9 +23,9 @@
  * _Env_dealloc: free resources for the Env object.
  */
 static void
-_Env_dealloc (diggle_Env *self)
+_Env_dealloc (terane_Env *self)
 {
-    diggle_Env_close (self, NULL);
+    terane_Env_close (self, NULL);
     if (self->logger)
         Py_DECREF (self->logger);
     self->logger = NULL;
@@ -38,7 +38,7 @@ _Env_dealloc (diggle_Env *self)
 static void *
 _Env_checkpoint_thread (void *ptr)
 {
-    diggle_Env *env = (diggle_Env *) ptr;
+    terane_Env *env = (terane_Env *) ptr;
     int dbret;
 
     /* enable deferred cancellation */
@@ -49,7 +49,7 @@ _Env_checkpoint_thread (void *ptr)
         sleep (60);
         dbret = env->env->txn_checkpoint (env->env, 0, 0, 0);
         if (dbret != 0)
-            log_msg (DIGGLE_LOG_ERROR, "diggle.db.storage", "txn_checkpoint failed: %s",
+            log_msg (TERANE_LOG_ERROR, "terane.db.storage", "txn_checkpoint failed: %s",
                 db_strerror (dbret));
         pthread_testcancel ();
     }
@@ -57,7 +57,7 @@ _Env_checkpoint_thread (void *ptr)
 }
 
 /*
- * diggle_Env_new: allocate a new Env object.
+ * terane_Env_new: allocate a new Env object.
  *
  * callspec: Env(envdir, datadir, tmpdir, [cachesize, [logger]])
  * parameters:
@@ -71,16 +71,16 @@ _Env_checkpoint_thread (void *ptr)
  *  Exception: failed to create the DB_ENV handle
  */
 PyObject *
-diggle_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
+terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-    diggle_Env *self;
+    terane_Env *self;
     char *kwlist[] = {"envdir", "datadir", "tmpdir", "cachesize", "logger", NULL};
     char *envdir = NULL, *datadir = NULL, *tmpdir = NULL;
     unsigned int cachesize = 0;
     int dbret;
 
     /* allocate the Env object */
-    self = (diggle_Env *) type->tp_alloc (type, 0);
+    self = (terane_Env *) type->tp_alloc (type, 0);
     if (self == NULL)
         return NULL;
     /* create the DB_ENV handle */
@@ -125,10 +125,10 @@ diggle_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto error;
     }
     /* start the checkpoint thread */
-    dbret = pthread_create (&self->cp_thread, NULL, _Env_checkpoint_thread, self);
+    dbret = pthread_create (&self->checkpoint_thread, NULL, _Env_checkpoint_thread, self);
     if (dbret != 0) {
         PyErr_Format (PyExc_Exception, "Failed to start checkpoint thread: %s",
-            db_strerror (dbret));
+            strerror (dbret));
     }
 
     return (PyObject *) self;
@@ -138,12 +138,12 @@ error:
     if (self->logger)
         Py_DECREF (self->logger);
     if (self)
-        _Env_dealloc ((diggle_Env *) self);
+        _Env_dealloc ((terane_Env *) self);
     return NULL;
 }
 
 /*
- * diggle_Env_close: close the underlying DB_ENV handle.
+ * terane_Env_close: close the underlying DB_ENV handle.
  *
  * callspec: Env.close()
  * parameters: None
@@ -152,16 +152,16 @@ error:
  *  Exception: failed to close the DB_ENV handle
  */
 PyObject *
-diggle_Env_close (diggle_Env *self, PyObject *args)
+terane_Env_close (terane_Env *self, PyObject *args)
 {
     int dbret;
 
-    if (self->cp_thread > 0) {
+    if (self->checkpoint_thread > 0) {
         /* cancel the checkpoint thread */
-        pthread_cancel (self->cp_thread);
+        pthread_cancel (self->checkpoint_thread);
         /* wait for the checkpoint thread to finish */
-        pthread_join (self->cp_thread, NULL);
-        self->cp_thread = 0;
+        pthread_join (self->checkpoint_thread, NULL);
+        self->checkpoint_thread = 0;
     }
     if (self->env != NULL) {
         /* close the DB environment */
@@ -174,10 +174,10 @@ diggle_Env_close (diggle_Env *self, PyObject *args)
 }
 
 /*
- * diggle_Env_log: log a message.
+ * terane_Env_log: log a message.
  */
 void
-Env_log (diggle_Env *env, int level, const char *fmt, ...)
+Env_log (terane_Env *env, int level, const char *fmt, ...)
 {
     va_list ap;
     PyObject *message = NULL, *ret;
@@ -199,16 +199,16 @@ Env_log (diggle_Env *env, int level, const char *fmt, ...)
 /* Env methods declaration */
 PyMethodDef _Env_methods[] =
 {
-    { "close", (PyCFunction) diggle_Env_close, METH_NOARGS, "Close the DB Environment." },
+    { "close", (PyCFunction) terane_Env_close, METH_NOARGS, "Close the DB Environment." },
     { NULL, NULL, 0, NULL }
 };
 
 /* Env type declaration */
-PyTypeObject diggle_EnvType = {
+PyTypeObject terane_EnvType = {
     PyObject_HEAD_INIT(NULL)
     0,
     "storage.Env",
-    sizeof (diggle_Env),
+    sizeof (terane_Env),
     0,                         /*tp_itemsize*/
     (destructor) _Env_dealloc,
     0,                         /*tp_print*/
@@ -243,5 +243,5 @@ PyTypeObject diggle_EnvType = {
     0,                         /* tp_dictoffset */
     0,                         /* tp_init */
     0,                         /* tp_alloc */
-    diggle_Env_new
+    terane_Env_new
 };

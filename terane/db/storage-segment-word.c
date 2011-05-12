@@ -1,20 +1,20 @@
 /*
  * Copyright 2010,2011 Michael Frank <msfrank@syntaxjockey.com>
  *
- * This file is part of Diggle.
+ * This file is part of Terane.
  *
- * Diggle is free software: you can redistribute it and/or modify
+ * Terane is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  * 
- * Diggle is distributed in the hope that it will be useful,
+ * Terane is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  * 
  * You should have received a copy of the GNU General Public License
- * along with Diggle.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "storage.h"
@@ -43,8 +43,8 @@ _Segment_make_word_key (PyObject *word, PyObject *id)
     PyObject *encoded = NULL;
     char *word_str;
     Py_ssize_t word_len;
-    diggle_DID_num did_num;
-    diggle_DID_string did_string;
+    terane_DID_num did_num;
+    terane_DID_string did_string;
     DBT *key = NULL;
 
     assert (word != NULL);
@@ -80,19 +80,19 @@ _Segment_make_word_key (PyObject *word, PyObject *id)
     memset (key, 0, sizeof (DBT));
 
     /* create key in the form of '<' + word + '>' + id + '\0' */
-    key->data = PyMem_Malloc (word_len + DIGGLE_DID_STRING_LEN + 2);
+    key->data = PyMem_Malloc (word_len + TERANE_DID_STRING_LEN + 2);
     if (key->data == NULL) {
         PyErr_NoMemory ();
         PyMem_Free (key);
         Py_DECREF (encoded);
         return NULL;    /* raises MemoryError */
     }
-    key->size = word_len + DIGGLE_DID_STRING_LEN + 2;
+    key->size = word_len + TERANE_DID_STRING_LEN + 2;
     ((char *)key->data)[0] = '<';
     memcpy (key->data + 1, word_str, word_len);
     ((char *)key->data)[word_len + 1] = '>';
-    memcpy (key->data + word_len + 2, did_string, DIGGLE_DID_STRING_LEN);
-    ((char *)key->data)[word_len + DIGGLE_DID_STRING_LEN + 1] = '\0';
+    memcpy (key->data + word_len + 2, did_string, TERANE_DID_STRING_LEN);
+    ((char *)key->data)[word_len + TERANE_DID_STRING_LEN + 1] = '\0';
 
     Py_DECREF (encoded);
     return key;
@@ -221,7 +221,7 @@ _Segment_free_key (DBT *key)
 }
 
 /*
- * diggle_Segment_get_word:
+ * terane_Segment_get_word:
  *
  * callspec: Segment.get_word(txn, fieldname, word, id)
  * parameters:
@@ -232,12 +232,12 @@ _Segment_free_key (DBT *key)
  * returns: The JSON-encoded data
  * exceptions:
  *   KeyError: The specified field or record doesn't exist
- *   diggle.db.storage.Error: A db error occurred when trying to get the record
+ *   terane.db.storage.Error: A db error occurred when trying to get the record
  */
 PyObject *
-diggle_Segment_get_word (diggle_Segment *self, PyObject *args)
+terane_Segment_get_word (terane_Segment *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     PyObject *word = NULL;
     PyObject *id = NULL;
@@ -252,7 +252,7 @@ diggle_Segment_get_word (diggle_Segment *self, PyObject *args)
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
-    if (txn && txn->ob_type != &diggle_TxnType)
+    if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
     /* if the field doesn't exist set KeyError and return */
@@ -280,14 +280,14 @@ diggle_Segment_get_word (diggle_Segment *self, PyObject *args)
             return PyErr_Format (PyExc_KeyError, "Data doesn't exist");
         default:
             /* some other db error, raise Error */
-            return PyErr_Format (diggle_Exc_Error, "Failed to get data: %s",
+            return PyErr_Format (terane_Exc_Error, "Failed to get data: %s",
                 db_strerror (dbret));
     }
     return metadata;
 }
 
 /*
- * diggle_Segment_set_word:
+ * terane_Segment_set_word:
  *
  * callspec: Segment.set_word(txn, fieldname, word, id, data)
  * parameters:
@@ -299,12 +299,12 @@ diggle_Segment_get_word (diggle_Segment *self, PyObject *args)
  * returns: None
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   diggle.db.storage.Error: A db error occurred when trying to set the record
+ *   terane.db.storage.Error: A db error occurred when trying to set the record
  */
 PyObject *
-diggle_Segment_set_word (diggle_Segment *self, PyObject *args)
+terane_Segment_set_word (terane_Segment *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     PyObject *word = NULL;
     PyObject *id = NULL;
@@ -314,7 +314,7 @@ diggle_Segment_set_word (diggle_Segment *self, PyObject *args)
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!O!O!O!s", &diggle_TxnType, &txn,
+    if (!PyArg_ParseTuple (args, "O!O!O!O!s", &terane_TxnType, &txn,
         &PyString_Type, &fieldname, &PyUnicode_Type, &word, &PyLong_Type, &id,
         &metadata))
         return NULL;
@@ -340,14 +340,14 @@ diggle_Segment_set_word (diggle_Segment *self, PyObject *args)
             break;
         default:
             /* some other db error, raise Error */
-            return PyErr_Format (diggle_Exc_Error, "Failed to set data: %s",
+            return PyErr_Format (terane_Exc_Error, "Failed to set data: %s",
                 db_strerror (dbret));
     }
     Py_RETURN_NONE;
 }
 
 /*
- * diggle_Segment_contains_word: Determine whether the specified field contains
+ * terane_Segment_contains_word: Determine whether the specified field contains
  *  the specified word.
  *
  * callspec: Segment.contains_word(txn, fieldname, word)
@@ -358,12 +358,12 @@ diggle_Segment_set_word (diggle_Segment *self, PyObject *args)
  * returns: True if the word exists in the field, otherwise False.
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   diggle.db.storage.Error: A db error occurred when trying to find the record
+ *   terane.db.storage.Error: A db error occurred when trying to find the record
  */
 PyObject *
-diggle_Segment_contains_word (diggle_Segment *self, PyObject *args)
+terane_Segment_contains_word (terane_Segment *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     PyObject *word = NULL;
     DBT *key;
@@ -376,7 +376,7 @@ diggle_Segment_contains_word (diggle_Segment *self, PyObject *args)
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
-    if (txn && txn->ob_type != &diggle_TxnType)
+    if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
     /* if the field doesn't exist set KeyError and return */
@@ -399,7 +399,7 @@ diggle_Segment_contains_word (diggle_Segment *self, PyObject *args)
             break;
         default:
             /* some other db error, raise Exception */
-            PyErr_Format (diggle_Exc_Error, "Failed to find word: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to find word: %s",
                 db_strerror (dbret));
             break;
     }
@@ -412,9 +412,9 @@ diggle_Segment_contains_word (diggle_Segment *self, PyObject *args)
  * _Segment_next_word: return the (id,metadata) tuple from the current cursor item
  */
 static PyObject *
-_Segment_next_word (diggle_Iter *iter, DBT *key, DBT *data)
+_Segment_next_word (terane_Iter *iter, DBT *key, DBT *data)
 {
-    diggle_DID_num did_num;
+    terane_DID_num did_num;
     PyObject *id, *metadata, *tuple;
     char c;
 
@@ -441,10 +441,10 @@ _Segment_next_word (diggle_Iter *iter, DBT *key, DBT *data)
  * _Segment_skip_word: create a key to skip to the item specified by id.
  */
 static DBT *
-_Segment_skip_word (diggle_Iter *iter, PyObject *args)
+_Segment_skip_word (terane_Iter *iter, PyObject *args)
 {
-    diggle_DID_num did_num;
-    diggle_DID_string did_string;
+    terane_DID_num did_num;
+    terane_DID_string did_string;
     DBT *key = NULL;
 
     if (!PyArg_ParseTuple (args, "K", (unsigned PY_LONG_LONG *) &did_num))
@@ -457,8 +457,8 @@ _Segment_skip_word (diggle_Iter *iter, PyObject *args)
     if (key == NULL)
         return (void *) PyErr_NoMemory ();
     memset (key, 0, sizeof (DBT));
-    /* DIGGLE_DID_STRING_LEN includes the trailing '\0' */
-    key->size = iter->len + DIGGLE_DID_STRING_LEN;
+    /* TERANE_DID_STRING_LEN includes the trailing '\0' */
+    key->size = iter->len + TERANE_DID_STRING_LEN;
     /* iter->key is in the form of '<' + word + '>', without the '\0' */
     key->data = PyMem_Malloc (key->size);
     if (key->data == NULL) {
@@ -468,12 +468,12 @@ _Segment_skip_word (diggle_Iter *iter, PyObject *args)
     }
     /* create key in the form of '<' + word + '>' + id + '\0' */
     memcpy (key->data, iter->key, iter->len);
-    memcpy (key->data + iter->len, did_string, DIGGLE_DID_STRING_LEN);
+    memcpy (key->data + iter->len, did_string, TERANE_DID_STRING_LEN);
     return key;
 }
 
 /*
- * diggle_Segment_iter_words: Iterate through all document ids associated
+ * terane_Segment_iter_words: Iterate through all document ids associated
  *  with the specified word in the specified field.
  *
  * callspec: Segment.iter_words(txn, fieldname, word)
@@ -485,12 +485,12 @@ _Segment_skip_word (diggle_Iter *iter, PyObject *args)
  *  of (id,metadata).
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   diggle.db.storage.Error: A db error occurred when trying to get the record
+ *   terane.db.storage.Error: A db error occurred when trying to get the record
  */
 PyObject *
-diggle_Segment_iter_words (diggle_Segment *self, PyObject *args)
+terane_Segment_iter_words (terane_Segment *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     PyObject *word = NULL;
     DB *field = NULL;
@@ -498,7 +498,7 @@ diggle_Segment_iter_words (diggle_Segment *self, PyObject *args)
     DBC *cursor = NULL;
     int dbret;
     PyObject *iter = NULL;
-    diggle_Iter_ops ops = { .next = _Segment_next_word, .skip = _Segment_skip_word };
+    terane_Iter_ops ops = { .next = _Segment_next_word, .skip = _Segment_skip_word };
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OO!O!", &txn, &PyString_Type, &fieldname,
@@ -506,7 +506,7 @@ diggle_Segment_iter_words (diggle_Segment *self, PyObject *args)
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
-    if (txn && txn->ob_type != &diggle_TxnType)
+    if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
     /* if the field doesn't exist set KeyError and return */
@@ -523,7 +523,7 @@ diggle_Segment_iter_words (diggle_Segment *self, PyObject *args)
     dbret = field->cursor (field, txn? txn->txn : NULL, &cursor, 0);
     /* if cursor allocation failed, return Error */
     if (dbret != 0)
-        return PyErr_Format (diggle_Exc_Error, "Failed to allocate DB cursor: %s",
+        return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
     iter = Iter_new_range (cursor, &ops, key->data, key->size);
     _Segment_free_key (key);
@@ -533,7 +533,7 @@ diggle_Segment_iter_words (diggle_Segment *self, PyObject *args)
 }
 
 /*
- * diggle_Segment_get_word_meta: Retrieve the metadata associated with the
+ * terane_Segment_get_word_meta: Retrieve the metadata associated with the
  *  specified word in the specified field.
  *
  * callspec: Segment.get_word_meta(txn, fieldname, word)
@@ -544,12 +544,12 @@ diggle_Segment_iter_words (diggle_Segment *self, PyObject *args)
  * returns: a string containing the JSON-encoded metadata. 
  * exceptions:
  *   KeyError: The specified field or metadata doesn't exist
- *   diggle.db.storage.Error: A db error occurred when trying to get the record
+ *   terane.db.storage.Error: A db error occurred when trying to get the record
  */
 PyObject *
-diggle_Segment_get_word_meta (diggle_Segment *self, PyObject *args)
+terane_Segment_get_word_meta (terane_Segment *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     PyObject *word = NULL;
     DBT *key, data;
@@ -563,7 +563,7 @@ diggle_Segment_get_word_meta (diggle_Segment *self, PyObject *args)
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
-    if (txn && txn->ob_type != &diggle_TxnType)
+    if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
     /* if the field doesn't exist set KeyError and return */
@@ -591,14 +591,14 @@ diggle_Segment_get_word_meta (diggle_Segment *self, PyObject *args)
             return PyErr_Format (PyExc_KeyError, "Metadata doesn't exist");
         default:
             /* some other db error, raise Error */
-            return PyErr_Format (diggle_Exc_Error, "Failed to get metadata: %s",
+            return PyErr_Format (terane_Exc_Error, "Failed to get metadata: %s",
                 db_strerror (dbret));
     }
     return metadata;
 }
 
 /*
- * diggle_Segment_set_word_meta: Change the metadata associated with the
+ * terane_Segment_set_word_meta: Change the metadata associated with the
  *  specified word in the specified field.
  *
  * callspec: Segment.set_word_meta(txn, fieldname, word, metadata)
@@ -610,12 +610,12 @@ diggle_Segment_get_word_meta (diggle_Segment *self, PyObject *args)
  * returns: None
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   diggle.db.storage.Error: A db error occurred when trying to set the record
+ *   terane.db.storage.Error: A db error occurred when trying to set the record
  */
 PyObject *
-diggle_Segment_set_word_meta (diggle_Segment *self, PyObject *args)
+terane_Segment_set_word_meta (terane_Segment *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     PyObject *word = NULL;
     const char *metadata = NULL;
@@ -624,7 +624,7 @@ diggle_Segment_set_word_meta (diggle_Segment *self, PyObject *args)
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!O!O!s", &diggle_TxnType, &txn,
+    if (!PyArg_ParseTuple (args, "O!O!O!s", &terane_TxnType, &txn,
         &PyString_Type, &fieldname, &PyUnicode_Type, &word, &metadata))
         return NULL;
 
@@ -649,7 +649,7 @@ diggle_Segment_set_word_meta (diggle_Segment *self, PyObject *args)
             break;
         default:
             /* some other db error, raise Error */
-            return PyErr_Format (diggle_Exc_Error, "Failed to set metadata: %s",
+            return PyErr_Format (terane_Exc_Error, "Failed to set metadata: %s",
                 db_strerror (dbret));
     }
     Py_RETURN_NONE;
@@ -659,7 +659,7 @@ diggle_Segment_set_word_meta (diggle_Segment *self, PyObject *args)
  * _Segment_next_word_meta: return the (word,metadata) tuple from the current cursor item
  */
 static PyObject *
-_Segment_next_word_meta (diggle_Iter *iter, DBT *key, DBT *data)
+_Segment_next_word_meta (terane_Iter *iter, DBT *key, DBT *data)
 {
     PyObject *word, *metadata, *tuple;
 
@@ -685,7 +685,7 @@ _Segment_next_word_meta (diggle_Iter *iter, DBT *key, DBT *data)
 }
 
 /*
- * diggle_Segment_iter_words_meta: Iterate through all words in the specified
+ * terane_Segment_iter_words_meta: Iterate through all words in the specified
  *  field and return the metadata for each word.
  *
  * callspec: Segments.iter_words_meta(txn, fieldname)
@@ -696,25 +696,25 @@ _Segment_next_word_meta (diggle_Iter *iter, DBT *key, DBT *data)
  *  of (word,metadata).
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   diggle.db.storage.Error: A db error occurred when trying to set the record
+ *   terane.db.storage.Error: A db error occurred when trying to set the record
  */
 PyObject *
-diggle_Segment_iter_words_meta (diggle_Segment *self, PyObject *args)
+terane_Segment_iter_words_meta (terane_Segment *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     DBC *cursor = NULL;
     DB *field;
     int dbret;
     PyObject *iter = NULL;
-    diggle_Iter_ops ops = { .next = _Segment_next_word_meta };
+    terane_Iter_ops ops = { .next = _Segment_next_word_meta };
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OO!", &txn, &PyString_Type, &fieldname))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
-    if (txn && txn->ob_type != &diggle_TxnType)
+    if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
     /* if the field doesn't exist set KeyError and return */
@@ -726,7 +726,7 @@ diggle_Segment_iter_words_meta (diggle_Segment *self, PyObject *args)
     dbret = field->cursor (field, txn? txn->txn : NULL, &cursor, 0);
     /* if cursor allocation failed, return Error */
     if (dbret != 0)
-        return PyErr_Format (diggle_Exc_Error, "Failed to allocate DB cursor: %s",
+        return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
     iter = Iter_new_range (cursor, &ops, (void *)"!", 1);
     if (iter == NULL)
@@ -735,7 +735,7 @@ diggle_Segment_iter_words_meta (diggle_Segment *self, PyObject *args)
 }
 
 /*
- * diggle_Segment_iter_words_meta_from: Iterate through all words in the specified
+ * terane_Segment_iter_words_meta_from: Iterate through all words in the specified
  *  field, starting at the specified word, and return the metadata for each word.
  *
  * callspec: Segment.iter_word_meta_from(txn, fieldname, start)
@@ -747,12 +747,12 @@ diggle_Segment_iter_words_meta (diggle_Segment *self, PyObject *args)
  *  of (word,metadata).
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   diggle.db.storage.Error: A db error occurred when trying to set the record
+ *   terane.db.storage.Error: A db error occurred when trying to set the record
  */
 PyObject *
-diggle_Segment_iter_words_meta_from (diggle_Segment *self, PyObject *args)
+terane_Segment_iter_words_meta_from (terane_Segment *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     PyObject *start = NULL;
     DB *field = NULL;
@@ -760,7 +760,7 @@ diggle_Segment_iter_words_meta_from (diggle_Segment *self, PyObject *args)
     DBC *cursor = NULL;
     int dbret;
     PyObject *iter = NULL;
-    diggle_Iter_ops ops = { .next = _Segment_next_word_meta };
+    terane_Iter_ops ops = { .next = _Segment_next_word_meta };
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OO!O!", &txn, &PyString_Type, &fieldname,
@@ -768,7 +768,7 @@ diggle_Segment_iter_words_meta_from (diggle_Segment *self, PyObject *args)
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
-    if (txn && txn->ob_type != &diggle_TxnType)
+    if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
     /* if the field doesn't exist set KeyError and return */
@@ -786,7 +786,7 @@ diggle_Segment_iter_words_meta_from (diggle_Segment *self, PyObject *args)
     /* if cursor allocation failed, return Error */
     if (dbret != 0) {
         _Segment_free_key (key);
-        return PyErr_Format (diggle_Exc_Error, "Failed to allocate DB cursor: %s",
+        return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
     }
     iter = Iter_new_from (cursor, &ops, key->data, key->size);
@@ -797,7 +797,7 @@ diggle_Segment_iter_words_meta_from (diggle_Segment *self, PyObject *args)
 }
 
 /*
- * diggle_Segment_iter_word_meta_range: Iterate through all words matching the
+ * terane_Segment_iter_word_meta_range: Iterate through all words matching the
  *  specified prefix in the specified field and return the metadata for each word.
  *
  * callspec: Segment.iter_word_meta_range(fieldname, prefix)
@@ -809,12 +809,12 @@ diggle_Segment_iter_words_meta_from (diggle_Segment *self, PyObject *args)
  *  of (word,metadata).
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   diggle.db.storage.Error: A db error occurred when trying to set the record
+ *   terane.db.storage.Error: A db error occurred when trying to set the record
  */
 PyObject *
-diggle_Segment_iter_words_meta_range (diggle_Segment *self, PyObject *args)
+terane_Segment_iter_words_meta_range (terane_Segment *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     PyObject *prefix = NULL;
     DB *field = NULL;
@@ -822,7 +822,7 @@ diggle_Segment_iter_words_meta_range (diggle_Segment *self, PyObject *args)
     DBC *cursor = NULL;
     int dbret;
     PyObject *iter = NULL;
-    diggle_Iter_ops ops = { .next = _Segment_next_word_meta };
+    terane_Iter_ops ops = { .next = _Segment_next_word_meta };
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OO!O!", &txn, &PyString_Type, &fieldname,
@@ -830,7 +830,7 @@ diggle_Segment_iter_words_meta_range (diggle_Segment *self, PyObject *args)
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
-    if (txn && txn->ob_type != &diggle_TxnType)
+    if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
     /* if the field doesn't exist set KeyError and return */
@@ -848,7 +848,7 @@ diggle_Segment_iter_words_meta_range (diggle_Segment *self, PyObject *args)
     /* if cursor allocation failed, return Error */
     if (dbret != 0) {
         _Segment_free_key (key);
-        return PyErr_Format (diggle_Exc_Error, "Failed to allocate DB cursor: %s",
+        return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
     }
     iter = Iter_new_range (cursor, &ops, key->data, key->size - 1);

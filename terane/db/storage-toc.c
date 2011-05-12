@@ -1,20 +1,20 @@
 /*
  * Copyright 2010,2011 Michael Frank <msfrank@syntaxjockey.com>
  *
- * This file is part of Diggle.
+ * This file is part of Terane.
  *
- * Diggle is free software: you can redistribute it and/or modify
+ * Terane is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  * 
- * Diggle is distributed in the hope that it will be useful,
+ * Terane is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  * 
  * You should have received a copy of the GNU General Public License
- * along with Diggle.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "storage.h"
@@ -24,21 +24,21 @@
  * 
  * returns: An unsigned 64-bit integer identifier
  * exceptions:
- *  diggle.db.storage.Error: failed to allocate new id
+ *  terane.db.storage.Error: failed to allocate new id
  */
-diggle_DID_num
-TOC_new_DID (diggle_TOC *toc)
+terane_DID_num
+TOC_new_DID (terane_TOC *toc)
 {
     DBT key, data;
     DB_TXN *txn;
-    diggle_DID_num did_num;
-    diggle_DID_string did_string;
+    terane_DID_num did_num;
+    terane_DID_string did_string;
     int dbret;
 
     /* allocate a new transaction */
     dbret = toc->env->env->txn_begin (toc->env->env, NULL, &txn, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to create document id: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to create document id: %s",
             db_strerror (dbret));
         return 0;
     }
@@ -59,7 +59,7 @@ TOC_new_DID (diggle_TOC *toc)
             break;
         default:
             txn->abort (txn);
-            PyErr_Format (diggle_Exc_Error, "Failed to create document id: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to create document id: %s",
                 db_strerror (dbret));
             return 0;
     }
@@ -71,14 +71,14 @@ TOC_new_DID (diggle_TOC *toc)
     memset (&data, 0, sizeof (DBT));
     DID_num_to_string (did_num, did_string);
     data.data = did_string;
-    data.size = DIGGLE_DID_STRING_LEN;
+    data.size = TERANE_DID_STRING_LEN;
     dbret = toc->metadata->put (toc->metadata, txn, &key, &data, 0);
     switch (dbret) {
         case 0:
             break;
         default:
             txn->abort (txn);
-            PyErr_Format (diggle_Exc_Error, "Failed to create document id: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to create document id: %s",
                 db_strerror (dbret));
             return 0;
     }
@@ -89,7 +89,7 @@ TOC_new_DID (diggle_TOC *toc)
 }
 
 /*
- * diggle_TOC_get_metadata: retrieve a metadata item
+ * terane_TOC_get_metadata: retrieve a metadata item
  *
  * callspec: TOC.get_metadata(txn, id)
  * parameters:
@@ -98,12 +98,12 @@ TOC_new_DID (diggle_TOC *toc)
  * returns: A string representing the metadata value 
  * exceptions:
  *   KeyError: The document with the specified id doesn't exist
- *   diggle.db.storage.Error: A db error occurred when trying to retrieve the record
+ *   terane.db.storage.Error: A db error occurred when trying to retrieve the record
  */
 PyObject *
-diggle_TOC_get_metadata (diggle_TOC *self, PyObject *args)
+terane_TOC_get_metadata (terane_TOC *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     const char *id = NULL;
     DBT key, data;
     PyObject *metadata = NULL;
@@ -114,7 +114,7 @@ diggle_TOC_get_metadata (diggle_TOC *self, PyObject *args)
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
-    if (txn && txn->ob_type != &diggle_TxnType)
+    if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
     /* use the document id as the record number */
@@ -138,7 +138,7 @@ diggle_TOC_get_metadata (diggle_TOC *self, PyObject *args)
             break;
         default:
             /* some other db error, raise Exception */
-            PyErr_Format (diggle_Exc_Error, "Failed to get metadata %s: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to get metadata %s: %s",
                 (char *) key.data, db_strerror (dbret));
             break;
     }
@@ -146,7 +146,7 @@ diggle_TOC_get_metadata (diggle_TOC *self, PyObject *args)
 }
 
 /*
- * diggle_TOC_set_metadata: set metadata for the specified id
+ * terane_TOC_set_metadata: set metadata for the specified id
  *
  * callspec: TOC.set_metadata(txn, id, value)
  * parameters:
@@ -155,19 +155,19 @@ diggle_TOC_get_metadata (diggle_TOC *self, PyObject *args)
  *   value (string): Metadata to store
  * returns: None
  * exceptions:
- *   diggle.db.storage.Error: A db error occurred when trying to set the record
+ *   terane.db.storage.Error: A db error occurred when trying to set the record
  */
 PyObject *
-diggle_TOC_set_metadata (diggle_TOC *self, PyObject *args)
+terane_TOC_set_metadata (terane_TOC *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     const char *id = NULL;
     const char *metadata = NULL;
     DBT key, data;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!ss", &diggle_TxnType, &txn, &id, &metadata))
+    if (!PyArg_ParseTuple (args, "O!ss", &terane_TxnType, &txn, &id, &metadata))
         return NULL;
 
     memset (&key, 0, sizeof (DBT));
@@ -183,7 +183,7 @@ diggle_TOC_set_metadata (diggle_TOC *self, PyObject *args)
         case 0:
             break;
         default:
-            PyErr_Format (diggle_Exc_Error, "Failed to set metadata %s: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to set metadata %s: %s",
                 (char *) key.data, db_strerror (dbret));
             break;
     }
@@ -191,7 +191,7 @@ diggle_TOC_set_metadata (diggle_TOC *self, PyObject *args)
 }
 
 /*
- * diggle_TOC_get_field: get the pickled fieldspec for the field.
+ * terane_TOC_get_field: get the pickled fieldspec for the field.
  *
  * callspec: TOC.get_field(txn, fieldname)
  * parameters:
@@ -199,12 +199,12 @@ diggle_TOC_set_metadata (diggle_TOC *self, PyObject *args)
  *   fieldname (string): The field name
  * returns: string representing the pickled FieldType.
  * exceptions:
- *   diggle.db.storage.Error: A db error occurred when trying to get the field
+ *   terane.db.storage.Error: A db error occurred when trying to get the field
  */
 PyObject *
-diggle_TOC_get_field (diggle_TOC *self, PyObject *args)
+terane_TOC_get_field (terane_TOC *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     const char *fieldname = NULL;
     DBT key, data;
     PyObject *fieldspec = NULL;
@@ -215,7 +215,7 @@ diggle_TOC_get_field (diggle_TOC *self, PyObject *args)
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
-    if (txn && txn->ob_type != &diggle_TxnType)
+    if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
     /* use the document id as the record number */
@@ -238,7 +238,7 @@ diggle_TOC_get_field (diggle_TOC *self, PyObject *args)
             break;
         default:
             /* some other db error, raise Exception */
-            PyErr_Format (diggle_Exc_Error, "Failed to get field %s: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to get field %s: %s",
                 (char *) key.data, db_strerror (dbret));
             break;
     }
@@ -247,7 +247,7 @@ diggle_TOC_get_field (diggle_TOC *self, PyObject *args)
 }
 
 /*
- * diggle_TOC_add_field: add the field to the Store.
+ * terane_TOC_add_field: add the field to the Store.
  *
  * callspec: TOC.add_field(txn, fieldname, fieldspec)
  * parameters:
@@ -256,19 +256,19 @@ diggle_TOC_get_field (diggle_TOC *self, PyObject *args)
  *   pickledfield (string): String representing the pickled FieldType
  * returns: None
  * exceptions:
- *   diggle.db.storage.Error: A db error occurred when trying to add the field
+ *   terane.db.storage.Error: A db error occurred when trying to add the field
  */
 PyObject *
-diggle_TOC_add_field (diggle_TOC *self, PyObject *args)
+terane_TOC_add_field (terane_TOC *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     char *fieldname = NULL;
     char *pickledfield = NULL;
     DBT key, data;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!ss", &diggle_TxnType, &txn,
+    if (!PyArg_ParseTuple (args, "O!ss", &terane_TxnType, &txn,
         &fieldname, &pickledfield))
         return NULL;
 
@@ -287,7 +287,7 @@ diggle_TOC_add_field (diggle_TOC *self, PyObject *args)
             PyErr_Format (PyExc_KeyError, "Field %s already exists", fieldname);
             break;
         default:
-            PyErr_Format (diggle_Exc_Error, "Failed to set fieldspec for %s: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to set fieldspec for %s: %s",
                 fieldname, db_strerror (dbret));
             break;
     }
@@ -296,7 +296,7 @@ diggle_TOC_add_field (diggle_TOC *self, PyObject *args)
 }
 
 /*
- * diggle_TOC_remove_field: remove a field from the index
+ * terane_TOC_remove_field: remove a field from the index
  *
  * callspec: TOC.remove_field(txn, fieldname)
  * parameters:
@@ -304,10 +304,10 @@ diggle_TOC_add_field (diggle_TOC *self, PyObject *args)
  *   fieldname (string): The field name
  * returns: None
  * exceptions:
- *   diggle.db.storage.Error: A db error occurred when trying to remove the field
+ *   terane.db.storage.Error: A db error occurred when trying to remove the field
  */
 PyObject *
-diggle_TOC_remove_field (diggle_TOC *self, PyObject *args)
+terane_TOC_remove_field (terane_TOC *self, PyObject *args)
 {
     return PyErr_Format (PyExc_NotImplementedError, "TOC.remove_field() not implemented");
 }
@@ -316,7 +316,7 @@ diggle_TOC_remove_field (diggle_TOC *self, PyObject *args)
  * TOC_contains_field:
  */
 int
-TOC_contains_field (diggle_TOC *toc, DB_TXN *txn, PyObject *fieldname)
+TOC_contains_field (terane_TOC *toc, DB_TXN *txn, PyObject *fieldname)
 {
     DBT key;
     int dbret;
@@ -331,7 +331,7 @@ TOC_contains_field (diggle_TOC *toc, DB_TXN *txn, PyObject *fieldname)
         case DB_NOTFOUND:
             return 0;
         default:
-            PyErr_Format (diggle_Exc_Error, "Failed to lookup field %s in schema: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to lookup field %s in schema: %s",
                 PyString_AsString (fieldname), db_strerror (dbret));
             break;
     }
@@ -339,7 +339,7 @@ TOC_contains_field (diggle_TOC *toc, DB_TXN *txn, PyObject *fieldname)
 }
 
 /*
- * diggle_TOC_contains_field: return True if field exists in the schema
+ * terane_TOC_contains_field: return True if field exists in the schema
  *
  * callspec: TOC.contains_field(txn, fieldname)
  * parameters:
@@ -347,12 +347,12 @@ TOC_contains_field (diggle_TOC *toc, DB_TXN *txn, PyObject *fieldname)
  *   fieldname (string): The field name
  * returns: True if the field exists, otherwise False.
  * exceptions:
- *   diggle.db.storage.Error: A db error occurred when trying to get the fields
+ *   terane.db.storage.Error: A db error occurred when trying to get the fields
  */
 PyObject *
-diggle_TOC_contains_field (diggle_TOC *self, PyObject *args)
+terane_TOC_contains_field (terane_TOC *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     int ret;
 
@@ -361,7 +361,7 @@ diggle_TOC_contains_field (diggle_TOC *self, PyObject *args)
         return NULL;
     if ((PyObject *)txn == Py_None)
         txn = NULL;
-    if (txn && txn->ob_type != &diggle_TxnType)
+    if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
     ret = TOC_contains_field (self, txn? txn->txn : NULL, fieldname);
     if (ret > 0)
@@ -372,19 +372,19 @@ diggle_TOC_contains_field (diggle_TOC *self, PyObject *args)
 }
 
 /*
- * diggle_TOC_list_fields: return a list of the fields in the schema
+ * terane_TOC_list_fields: return a list of the fields in the schema
  *
  * callspec: TOC.list_fields(txn)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  * returns: a list of (fieldname,pickledfield) tuples.
  * exceptions:
- *   diggle.db.storage.Error: A db error occurred when trying to get the fields
+ *   terane.db.storage.Error: A db error occurred when trying to get the fields
  */
 PyObject *
-diggle_TOC_list_fields (diggle_TOC *self, PyObject *args)
+terane_TOC_list_fields (terane_TOC *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     DBC *cursor = NULL;
     PyObject *fields = NULL, *tuple = NULL, *fieldname = NULL, *pickledfield = NULL;
     DBT key, data;
@@ -395,7 +395,7 @@ diggle_TOC_list_fields (diggle_TOC *self, PyObject *args)
         return NULL;
     if ((PyObject *)txn == Py_None)
         txn = NULL;
-    if (txn && txn->ob_type != &diggle_TxnType)
+    if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
     /* allocate the list to return */
@@ -406,7 +406,7 @@ diggle_TOC_list_fields (diggle_TOC *self, PyObject *args)
     /* */
     dbret = self->schema->cursor (self->schema, txn? txn->txn : NULL, &cursor, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to open schema cursor: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to open schema cursor: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -439,7 +439,7 @@ diggle_TOC_list_fields (diggle_TOC *self, PyObject *args)
                 tuple = NULL;
                 break;
             default:
-                PyErr_Format (diggle_Exc_Error, "Failed to get next schema field: %s",
+                PyErr_Format (terane_Exc_Error, "Failed to get next schema field: %s",
                     db_strerror (dbret));
                 goto error;
         }
@@ -464,7 +464,7 @@ error:
 }
 
 /*
- * diggle_TOC_count_fields: Return the number of fields in the schema.
+ * terane_TOC_count_fields: Return the number of fields in the schema.
  *
  * callspec: TOC.count_fields(txn, slow=False)
  * parameters:
@@ -472,12 +472,12 @@ error:
  *   slow (boolean): If True, then perform a slower, more accurate count
  * returns: The number of fields in the schema. 
  * exceptions:
- *   diggle.db.storage.Error: A db error occurred when trying to get the record
+ *   terane.db.storage.Error: A db error occurred when trying to get the record
  */
 PyObject *
-diggle_TOC_count_fields (diggle_TOC *self, PyObject *args)
+terane_TOC_count_fields (terane_TOC *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     PyObject *slow = NULL;
     DB_BTREE_STAT *stats = NULL;
     PyObject *count = NULL;
@@ -488,7 +488,7 @@ diggle_TOC_count_fields (diggle_TOC *self, PyObject *args)
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
-    if (txn && txn->ob_type != &diggle_TxnType)
+    if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
     /* retrieve count of items in the schema */
@@ -501,7 +501,7 @@ diggle_TOC_count_fields (diggle_TOC *self, PyObject *args)
             count = PyLong_FromUnsignedLong ((unsigned long) stats->bt_nkeys);
             break;
         default:
-            PyErr_Format (diggle_Exc_Error, "Failed to get field count: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to get field count: %s",
                 db_strerror (dbret));
             break;
     }
@@ -511,25 +511,25 @@ diggle_TOC_count_fields (diggle_TOC *self, PyObject *args)
  }
 
 /*
- * diggle_TOC_new_segment: allocate a new Segment id.
+ * terane_TOC_new_segment: allocate a new Segment id.
  *
  * callspec: TOC.new_segment(txn)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  * returns: A long representing the segment id.
  * exceptions:
- *   diggle.db.storage.Error: A db error occurred when trying to allocate the segment.
+ *   terane.db.storage.Error: A db error occurred when trying to allocate the segment.
  */
 PyObject *
-diggle_TOC_new_segment (diggle_TOC *self, PyObject *args)
+terane_TOC_new_segment (terane_TOC *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     db_recno_t segment_id = 0;
     DBT key, data;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!", &diggle_TxnType, &txn))
+    if (!PyArg_ParseTuple (args, "O!", &terane_TxnType, &txn))
         return NULL;
 
     /* add the fieldspec to the schema */
@@ -540,7 +540,7 @@ diggle_TOC_new_segment (diggle_TOC *self, PyObject *args)
         case 0:
             break;
         default:
-            PyErr_Format (diggle_Exc_Error, "Failed to allocate new segment: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to allocate new segment: %s",
                 db_strerror (dbret));
             return NULL;
     }
@@ -553,7 +553,7 @@ diggle_TOC_new_segment (diggle_TOC *self, PyObject *args)
  * TOC_contains_segment: return true if segment exists in the TOC
  */
 int
-TOC_contains_segment (diggle_TOC *toc, diggle_Txn *txn, db_recno_t segment_id)
+TOC_contains_segment (terane_TOC *toc, terane_Txn *txn, db_recno_t segment_id)
 {
     DBT key;
     int dbret;
@@ -568,7 +568,7 @@ TOC_contains_segment (diggle_TOC *toc, diggle_Txn *txn, db_recno_t segment_id)
         case DB_NOTFOUND:
             return 0;
         default:
-            PyErr_Format (diggle_Exc_Error, "Failed to lookup segment %lu in segments: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to lookup segment %lu in segments: %s",
                 (unsigned long int) segment_id, db_strerror (dbret));
             break;
     }
@@ -579,7 +579,7 @@ TOC_contains_segment (diggle_TOC *toc, diggle_Txn *txn, db_recno_t segment_id)
  * _TOC_next_segment: return the segment id from the current cursor item
  */
 static PyObject *
-_TOC_next_segment (diggle_Iter *iter, DBT *key, DBT *data)
+_TOC_next_segment (terane_Iter *iter, DBT *key, DBT *data)
 {
     db_recno_t segmentid = 0;
 
@@ -588,7 +588,7 @@ _TOC_next_segment (diggle_Iter *iter, DBT *key, DBT *data)
 }
 
 /*
- * diggle_TOC_iter_segments: iterate through all segments.
+ * terane_TOC_iter_segments: iterate through all segments.
  *
  * callspec: TOC.iter_segments(txn)
  * parameters:
@@ -596,15 +596,15 @@ _TOC_next_segment (diggle_Iter *iter, DBT *key, DBT *data)
  * returns: a new Iter object.  Each iteration returns a long representing the
  *  segment id.
  * exceptions:
- *   diggle.db.storage.Error: A db error occurred when trying to create the iterator
+ *   terane.db.storage.Error: A db error occurred when trying to create the iterator
  */
 PyObject *
-diggle_TOC_iter_segments (diggle_TOC *self, PyObject *args)
+terane_TOC_iter_segments (terane_TOC *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     DBC *cursor = NULL;
     PyObject *iter = NULL;
-    diggle_Iter_ops ops = { .next = _TOC_next_segment };
+    terane_Iter_ops ops = { .next = _TOC_next_segment };
     int dbret;
 
     /* parse parameters */
@@ -612,14 +612,14 @@ diggle_TOC_iter_segments (diggle_TOC *self, PyObject *args)
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
-    if (txn && txn->ob_type != &diggle_TxnType)
+    if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
     
     /* create a new cursor */
     dbret = self->segments->cursor (self->segments, txn? txn->txn : NULL, &cursor, 0);
     /* if cursor allocation failed, return Error */
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to allocate segment cursor: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to allocate segment cursor: %s",
             db_strerror (dbret));
         return NULL;
     }
@@ -630,7 +630,7 @@ diggle_TOC_iter_segments (diggle_TOC *self, PyObject *args)
 }
 
 /*
- * diggle_TOC_count_segments: return the number of segments in the TOC.
+ * terane_TOC_count_segments: return the number of segments in the TOC.
  *
  * callspec: TOC.count_segments(txn, slow=False)
  * parameters:
@@ -638,12 +638,12 @@ diggle_TOC_iter_segments (diggle_TOC *self, PyObject *args)
  *   slow (boolean): If True, then perform a slower, more accurate count
  * returns: The number of segments in the TOC
  * exceptions:
- *   diggle.db.storage.Error: A db error occurred when trying count the segments
+ *   terane.db.storage.Error: A db error occurred when trying count the segments
  */
 PyObject *
-diggle_TOC_count_segments (diggle_TOC *self, PyObject *args)
+terane_TOC_count_segments (terane_TOC *self, PyObject *args)
 {
-    diggle_Txn *txn = NULL;
+    terane_Txn *txn = NULL;
     PyObject *slow = NULL;
     DB_QUEUE_STAT *stats = NULL;
     PyObject *count = NULL;
@@ -654,7 +654,7 @@ diggle_TOC_count_segments (diggle_TOC *self, PyObject *args)
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
-    if (txn && txn->ob_type != &diggle_TxnType)
+    if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
     /* retrieve count of items in the schema */
@@ -665,7 +665,7 @@ diggle_TOC_count_segments (diggle_TOC *self, PyObject *args)
             count = PyLong_FromUnsignedLong ((unsigned long int) stats->qs_nkeys);
             break;
         default:
-            PyErr_Format (diggle_Exc_Error, "Failed to get segment count: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to get segment count: %s",
                 db_strerror (dbret));
             break;
     }
@@ -678,7 +678,7 @@ diggle_TOC_count_segments (diggle_TOC *self, PyObject *args)
  * _TOC_close: close the underlying DB handles.
  */
 static void
-_TOC_close (diggle_TOC *toc)
+_TOC_close (terane_TOC *toc)
 {
     int dbret;
 
@@ -686,7 +686,7 @@ _TOC_close (diggle_TOC *toc)
     if (toc->metadata != NULL) {
         dbret = toc->metadata->close (toc->metadata, 0);
         if (dbret != 0)
-            PyErr_Format (diggle_Exc_Error, "Failed to close _metadata: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to close _metadata: %s",
                 db_strerror (dbret));
     }
     toc->metadata = NULL;
@@ -695,7 +695,7 @@ _TOC_close (diggle_TOC *toc)
     if (toc->schema != NULL) {
         dbret = toc->schema->close (toc->schema, 0);
         if (dbret != 0)
-            PyErr_Format (diggle_Exc_Error, "Failed to close _schema: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to close _schema: %s",
                 db_strerror (dbret));
     }
     toc->schema = NULL;
@@ -704,33 +704,33 @@ _TOC_close (diggle_TOC *toc)
     if (toc->segments != NULL) {
         dbret = toc->segments->close (toc->segments, 0);
         if (dbret != 0)
-            PyErr_Format (diggle_Exc_Error, "Failed to close _segments: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to close _segments: %s",
                 db_strerror (dbret));
     }
     toc->segments = NULL;
 }
 
 /*
- * diggle_TOC_close: close the underlying DB handles.
+ * terane_TOC_close: close the underlying DB handles.
  *
  * callspec: TOC.close()
  * parameters: None
  * returns: None
  * exceptions:
- *  diggle.db.storage.Error: failed to close a db in the TOC
+ *  terane.db.storage.Error: failed to close a db in the TOC
  */
 PyObject *
-diggle_TOC_close (diggle_TOC *self)
+terane_TOC_close (terane_TOC *self)
 {
     _TOC_close (self);
     Py_RETURN_NONE;
 }
 
 /*
- * diggle_TOC_dealloc: free resources for the TOC object.
+ * terane_TOC_dealloc: free resources for the TOC object.
  */
 static void
-_TOC_dealloc (diggle_TOC *self)
+_TOC_dealloc (terane_TOC *self)
 {
     _TOC_close (self);
     if (self->env != NULL)
@@ -743,7 +743,7 @@ _TOC_dealloc (diggle_TOC *self)
 }
 
 /*
- * diggle_TOC_new: allocate a new TOC object.
+ * terane_TOC_new: allocate a new TOC object.
  *
  * callspec: TOC(env, name)
  * parameters:
@@ -751,21 +751,21 @@ _TOC_dealloc (diggle_TOC *self)
  *  name (string): The name of the Index
  * returns: A new TOC object
  * exceptions:
- *  diggle.db.storage.Error: failed to create/open the TOC
+ *  terane.db.storage.Error: failed to create/open the TOC
  */
 PyObject *
-diggle_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
+terane_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-    diggle_TOC *self;
+    terane_TOC *self;
     char *kwlist[] = {"env", "name", NULL};
     char *tocname = NULL;
     DB_TXN *txn = NULL;
     int dbret;
 
     /* allocate the TOC object */
-    self = (diggle_TOC *) type->tp_alloc (type, 0);
+    self = (terane_TOC *) type->tp_alloc (type, 0);
     if (self == NULL) {
-        PyErr_SetString (diggle_Exc_Error, "Failed to allocate TOC");
+        PyErr_SetString (terane_Exc_Error, "Failed to allocate TOC");
         return NULL;
     }
     self->name = NULL;
@@ -775,7 +775,7 @@ diggle_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     /* parse constructor parameters */
     if (!PyArg_ParseTupleAndKeywords (args, kwds, "O!O!", kwlist,
-        &diggle_EnvType, &self->env, &PyString_Type, &self->name))
+        &terane_EnvType, &self->env, &PyString_Type, &self->name))
         goto error;
     Py_INCREF (self->env);
     Py_INCREF (self->name);
@@ -791,7 +791,7 @@ diggle_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     /* wrap db creation in a transaction */
     dbret = self->env->env->txn_begin (self->env->env, NULL, &txn, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to create DB_TXN handle: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to create DB_TXN handle: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -799,7 +799,7 @@ diggle_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     /* create the DB handle for the metadata store */
     dbret = db_create (&self->metadata, self->env->env, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to create handle for _metadata: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to create handle for _metadata: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -807,7 +807,7 @@ diggle_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     dbret = self->metadata->open (self->metadata, txn, tocname, "_metadata",
         DB_BTREE, DB_CREATE, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to open _metadata: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to open _metadata: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -815,7 +815,7 @@ diggle_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     /* create the DB handle for the schema store */
     dbret = db_create (&self->schema, self->env->env, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to create handle for _schema: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to create handle for _schema: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -823,7 +823,7 @@ diggle_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     dbret = self->schema->open (self->schema, txn, tocname, "_schema",
         DB_BTREE, DB_CREATE, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to open _schema: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to open _schema: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -831,7 +831,7 @@ diggle_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     /* create the DB handle for the segments store */
     dbret = db_create (&self->segments, self->env->env, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to create handle for _segments: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to create handle for _segments: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -839,7 +839,7 @@ diggle_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     dbret = self->segments->open (self->segments, txn, tocname, "_segments",
         DB_RECNO, DB_CREATE, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to open _segments: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to open _segments: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -847,7 +847,7 @@ diggle_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     /* commit new databases */
     dbret = txn->commit (txn, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to commit transaction: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to commit transaction: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -864,46 +864,46 @@ error:
     if (tocname != NULL)
         PyMem_Free (tocname);
     if (self)
-        _TOC_dealloc ((diggle_TOC *) self);
+        _TOC_dealloc ((terane_TOC *) self);
     return NULL;
 }
 
 /* TOC methods declaration */
 PyMethodDef _TOC_methods[] =
 {
-    { "get_metadata", (PyCFunction) diggle_TOC_get_metadata, METH_VARARGS,
+    { "get_metadata", (PyCFunction) terane_TOC_get_metadata, METH_VARARGS,
         "Get a TOC metadata value." },
-    { "set_metadata", (PyCFunction) diggle_TOC_set_metadata, METH_VARARGS,
+    { "set_metadata", (PyCFunction) terane_TOC_set_metadata, METH_VARARGS,
         "Set a TOC metadata value." },
-    { "get_field", (PyCFunction) diggle_TOC_get_field, METH_VARARGS,
+    { "get_field", (PyCFunction) terane_TOC_get_field, METH_VARARGS,
         "Get a field in the TOC." },
-    { "add_field", (PyCFunction) diggle_TOC_add_field, METH_VARARGS,
+    { "add_field", (PyCFunction) terane_TOC_add_field, METH_VARARGS,
         "Add a field to the TOC." },
-    { "remove_field", (PyCFunction) diggle_TOC_remove_field, METH_VARARGS,
+    { "remove_field", (PyCFunction) terane_TOC_remove_field, METH_VARARGS,
         "Remove a field from the TOC." },
-    { "contains_field", (PyCFunction) diggle_TOC_contains_field, METH_VARARGS,
+    { "contains_field", (PyCFunction) terane_TOC_contains_field, METH_VARARGS,
         "Return True if the field exists in the TOC." },
-    { "list_fields", (PyCFunction) diggle_TOC_list_fields, METH_VARARGS,
+    { "list_fields", (PyCFunction) terane_TOC_list_fields, METH_VARARGS,
         "Return a list of all fields in the TOC." },
-    { "count_fields", (PyCFunction) diggle_TOC_count_fields, METH_VARARGS,
+    { "count_fields", (PyCFunction) terane_TOC_count_fields, METH_VARARGS,
         "Return the count of fields in the TOC." },
-    { "new_segment", (PyCFunction) diggle_TOC_new_segment, METH_VARARGS,
+    { "new_segment", (PyCFunction) terane_TOC_new_segment, METH_VARARGS,
         "Allocate a new segment ID." },
-    { "iter_segments", (PyCFunction) diggle_TOC_iter_segments, METH_VARARGS,
+    { "iter_segments", (PyCFunction) terane_TOC_iter_segments, METH_VARARGS,
         "Iterate all segment IDs in the TOC." },
-    { "count_segments", (PyCFunction) diggle_TOC_count_segments, METH_VARARGS,
+    { "count_segments", (PyCFunction) terane_TOC_count_segments, METH_VARARGS,
         "Return the count of segments in the TOC." },
-    { "close", (PyCFunction) diggle_TOC_close, METH_NOARGS,
+    { "close", (PyCFunction) terane_TOC_close, METH_NOARGS,
         "Close the TOC." },
     { NULL, NULL, 0, NULL }
 };
 
 /* TOC type declaration */
-PyTypeObject diggle_TOCType = {
+PyTypeObject terane_TOCType = {
     PyObject_HEAD_INIT(NULL)
     0,
     "storage.TOC",
-    sizeof (diggle_TOC),
+    sizeof (terane_TOC),
     0,                         /*tp_itemsize*/
     (destructor) _TOC_dealloc,
     0,                         /*tp_print*/
@@ -938,5 +938,5 @@ PyTypeObject diggle_TOCType = {
     0,                         /* tp_dictoffset */
     0,                         /* tp_init */
     0,                         /* tp_alloc */
-    diggle_TOC_new
+    terane_TOC_new
 };

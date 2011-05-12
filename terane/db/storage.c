@@ -3,15 +3,15 @@
 /* storage module function table */
 static PyMethodDef storage_functions[] =
 {
-    { "get_logfd", diggle__get_logfd, METH_NOARGS,
+    { "get_logfd", terane__get_logfd, METH_NOARGS,
         "Return the reading end of the logger channel." },
     { NULL, NULL, 0, NULL }
 };
 
-PyObject *diggle_Exc_Deadlock = NULL;
-PyObject *diggle_Exc_LockTimeout = NULL;
-PyObject *diggle_Exc_DocExists = NULL;
-PyObject *diggle_Exc_Error = NULL;
+PyObject *terane_Exc_Deadlock = NULL;
+PyObject *terane_Exc_LockTimeout = NULL;
+PyObject *terane_Exc_DocExists = NULL;
+PyObject *terane_Exc_Error = NULL;
 
 /* storage module init function */
 PyMODINIT_FUNC
@@ -35,46 +35,46 @@ initstorage (void)
     }
 
     /* verify the object types are ready to load */
-    if (PyType_Ready (&diggle_EnvType) < 0)
+    if (PyType_Ready (&terane_EnvType) < 0)
         return;
-    if (PyType_Ready (&diggle_TOCType) < 0)
+    if (PyType_Ready (&terane_TOCType) < 0)
         return;
-    if (PyType_Ready (&diggle_SegmentType) < 0)
+    if (PyType_Ready (&terane_SegmentType) < 0)
         return;
-    if (PyType_Ready (&diggle_TxnType) < 0)
+    if (PyType_Ready (&terane_TxnType) < 0)
         return;
-    if (PyType_Ready (&diggle_IterType) < 0)
+    if (PyType_Ready (&terane_IterType) < 0)
         return;
 
     /* initialize the storage module */
-    m = Py_InitModule3 ("storage", storage_functions, "Manipulate the diggle database");
+    m = Py_InitModule3 ("storage", storage_functions, "Manipulate the terane database");
 
     /* load the types into the module */
-    Py_INCREF (&diggle_EnvType);
-    PyModule_AddObject (m, "Env", (PyObject *) &diggle_EnvType);
-    Py_INCREF (&diggle_TOCType);
-    PyModule_AddObject (m, "TOC", (PyObject *) &diggle_TOCType);
-    Py_INCREF (&diggle_SegmentType);
-    PyModule_AddObject (m, "Segment", (PyObject *) &diggle_SegmentType);
-    Py_INCREF (&diggle_TxnType);
-    PyModule_AddObject (m, "Txn", (PyObject *) &diggle_TxnType);
-    Py_INCREF (&diggle_IterType);
-    PyModule_AddObject (m, "Iter", (PyObject *) &diggle_IterType);
+    Py_INCREF (&terane_EnvType);
+    PyModule_AddObject (m, "Env", (PyObject *) &terane_EnvType);
+    Py_INCREF (&terane_TOCType);
+    PyModule_AddObject (m, "TOC", (PyObject *) &terane_TOCType);
+    Py_INCREF (&terane_SegmentType);
+    PyModule_AddObject (m, "Segment", (PyObject *) &terane_SegmentType);
+    Py_INCREF (&terane_TxnType);
+    PyModule_AddObject (m, "Txn", (PyObject *) &terane_TxnType);
+    Py_INCREF (&terane_IterType);
+    PyModule_AddObject (m, "Iter", (PyObject *) &terane_IterType);
 
     /* create exceptions */
-    diggle_Exc_Deadlock = PyErr_NewException("storage.Deadlock", NULL, NULL);
-    Py_INCREF (diggle_Exc_Deadlock);
-    PyModule_AddObject (m, "Deadlock", diggle_Exc_Deadlock);
+    terane_Exc_Deadlock = PyErr_NewException("storage.Deadlock", NULL, NULL);
+    Py_INCREF (terane_Exc_Deadlock);
+    PyModule_AddObject (m, "Deadlock", terane_Exc_Deadlock);
 
-    diggle_Exc_LockTimeout = PyErr_NewException("storage.LockTimeout", NULL, NULL);
-    Py_INCREF (diggle_Exc_LockTimeout);
-    PyModule_AddObject (m, "LockTimeout", diggle_Exc_LockTimeout);
+    terane_Exc_LockTimeout = PyErr_NewException("storage.LockTimeout", NULL, NULL);
+    Py_INCREF (terane_Exc_LockTimeout);
+    PyModule_AddObject (m, "LockTimeout", terane_Exc_LockTimeout);
 
-    diggle_Exc_DocExists = PyErr_NewException("storage.DocExists", NULL, NULL);
-    Py_INCREF (diggle_Exc_DocExists);
-    PyModule_AddObject (m, "DocExists", diggle_Exc_DocExists);
+    terane_Exc_DocExists = PyErr_NewException("storage.DocExists", NULL, NULL);
+    Py_INCREF (terane_Exc_DocExists);
+    PyModule_AddObject (m, "DocExists", terane_Exc_DocExists);
 
-    diggle_Exc_Error = PyErr_NewException("storage.Error", NULL, NULL);
-    Py_INCREF (diggle_Exc_Error);
-    PyModule_AddObject (m, "Error", diggle_Exc_Error);
+    terane_Exc_Error = PyErr_NewException("storage.Error", NULL, NULL);
+    Py_INCREF (terane_Exc_Error);
+    PyModule_AddObject (m, "Error", terane_Exc_Error);
 }

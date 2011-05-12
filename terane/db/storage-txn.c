@@ -1,20 +1,20 @@
 /*
  * Copyright 2010,2011 Michael Frank <msfrank@syntaxjockey.com>
  *
- * This file is part of Diggle.
+ * This file is part of Terane.
  *
- * Diggle is free software: you can redistribute it and/or modify
+ * Terane is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  * 
- * Diggle is distributed in the hope that it will be useful,
+ * Terane is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  * 
  * You should have received a copy of the GNU General Public License
- * along with Diggle.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include "storage.h"
@@ -23,9 +23,9 @@
  * _Txn_discard: discard the invalid Txn handle, and all child handles.
  */
 static void
-_Txn_discard (diggle_Txn *txn)
+_Txn_discard (terane_Txn *txn)
 {
-    diggle_Txn *curr, *next;
+    terane_Txn *curr, *next;
 
     if (txn == NULL)
         return;
@@ -47,17 +47,17 @@ _Txn_discard (diggle_Txn *txn)
  * parameters: None
  * returns: 0 if the operation succeeded, otherwise < 0 on error
  * exceptions:
- *  diggle.db.storage:Deadlock: deadlock was detected.
- *  diggle.db.storage:LockTimeout: timed out trying to grab the lock.
- *  diggle.db.storage:Error: the commit failed.
+ *  terane.db.storage:Deadlock: deadlock was detected.
+ *  terane.db.storage:LockTimeout: timed out trying to grab the lock.
+ *  terane.db.storage:Error: the commit failed.
  */
 static int
-_Txn_commit (diggle_Txn *txn)
+_Txn_commit (terane_Txn *txn)
 {
     int dbret;
 
     if (txn->txn == NULL) {
-        PyErr_Format (diggle_Exc_Error, "Failed to commit transaction: DB_TXN handle is NULL");
+        PyErr_Format (terane_Exc_Error, "Failed to commit transaction: DB_TXN handle is NULL");
         return -1;
     }
     /* try to commit the transaction */
@@ -72,13 +72,13 @@ _Txn_commit (diggle_Txn *txn)
         case 0:
             return 0;
         case DB_LOCK_DEADLOCK:
-            PyErr_Format (diggle_Exc_Deadlock, "Failed to commit transaction: %s", db_strerror (dbret));
+            PyErr_Format (terane_Exc_Deadlock, "Failed to commit transaction: %s", db_strerror (dbret));
             break;
         case DB_LOCK_NOTGRANTED:
-            PyErr_Format (diggle_Exc_LockTimeout, "Failed to commit transaction: %s", db_strerror (dbret));
+            PyErr_Format (terane_Exc_LockTimeout, "Failed to commit transaction: %s", db_strerror (dbret));
             break;
         default:
-            PyErr_Format (diggle_Exc_Error, "Failed to commit transaction: %s", db_strerror (dbret));
+            PyErr_Format (terane_Exc_Error, "Failed to commit transaction: %s", db_strerror (dbret));
             break;
     }
     return -1;
@@ -90,15 +90,15 @@ _Txn_commit (diggle_Txn *txn)
  * parameters: None
  * returns: 0 if the operation succeeded, otherwise < 0 on error
  * exceptions:
- *  diggle.db.storage:Error: the abort failed.
+ *  terane.db.storage:Error: the abort failed.
  */
 static int
-_Txn_abort (diggle_Txn *txn)
+_Txn_abort (terane_Txn *txn)
 {
     int dbret;
 
     if (txn->txn == NULL) {
-        PyErr_Format (diggle_Exc_Error, "Failed to abort transaction: DB_TXN handle is NULL");
+        PyErr_Format (terane_Exc_Error, "Failed to abort transaction: DB_TXN handle is NULL");
         return -1;
     }
     dbret = txn->txn->abort (txn->txn);
@@ -112,7 +112,7 @@ _Txn_abort (diggle_Txn *txn)
         case 0:
             return 0;
         default:
-            PyErr_Format (diggle_Exc_Error, "Failed to abort transaction: %s", db_strerror (dbret));
+            PyErr_Format (terane_Exc_Error, "Failed to abort transaction: %s", db_strerror (dbret));
             break;
     }
     return -1;
@@ -122,7 +122,7 @@ _Txn_abort (diggle_Txn *txn)
  * _Txn_dealloc: free resources for the Txn object.
  */
 static void
-_Txn_dealloc (diggle_Txn *self)
+_Txn_dealloc (terane_Txn *self)
 {
     if (self->txn != NULL)
         _Txn_abort (self);
@@ -132,32 +132,32 @@ _Txn_dealloc (diggle_Txn *self)
 }
 
 /*
- * diggle_Txn_new: allocate a new Txn object.
+ * terane_Txn_new: allocate a new Txn object.
  *
  * callspec: Txn(env[,parent])
  * parameters:
- *  env (diggle.db.storage:Env): The database environment
- *  parent (diggle.db.storage:Txn): A parent Txn
- * returns: A new diggle.db.storage:Txn object
+ *  env (terane.db.storage:Env): The database environment
+ *  parent (terane.db.storage:Txn): A parent Txn
+ * returns: A new terane.db.storage:Txn object
  * exceptions:
- *  diggle.db.storage:Error: failed to create the DB_TXN handle
+ *  terane.db.storage:Error: failed to create the DB_TXN handle
  */
 PyObject *
-diggle_Txn_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
+terane_Txn_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-    diggle_Txn *self;
+    terane_Txn *self;
     char *kwlist[] = {"env", "parent", NULL};
-    diggle_Env *env = NULL;
-    diggle_Txn *parent = NULL;
+    terane_Env *env = NULL;
+    terane_Txn *parent = NULL;
     int dbret;
 
     /* allocate the Txn object */
-    self = (diggle_Txn *) type->tp_alloc (type, 0);
+    self = (terane_Txn *) type->tp_alloc (type, 0);
     if (self == NULL)
         return NULL;
     /* parse constructor parameters */
     if (!PyArg_ParseTupleAndKeywords (args, kwds, "O!|O!", kwlist,
-        &diggle_EnvType, &env, &diggle_TxnType, &parent))
+        &terane_EnvType, &env, &terane_TxnType, &parent))
         goto error;
     /* add a reference to the Env object */
     Py_INCREF (env);
@@ -165,7 +165,7 @@ diggle_Txn_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     /* create the DB_TXN handle */
     dbret = env->env->txn_begin (env->env, parent ? parent->txn : NULL, &self->txn, 0);
     if (dbret != 0) {
-        PyErr_Format (diggle_Exc_Error, "Failed to create DB_TXN: %s", db_strerror (dbret));
+        PyErr_Format (terane_Exc_Error, "Failed to create DB_TXN: %s", db_strerror (dbret));
         goto error;
     }
     /* if there is a parent Txn, then add self to parent's list of children */
@@ -174,7 +174,7 @@ diggle_Txn_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
         if (parent->children == NULL)
             parent->children = self;
         else {
-            diggle_Txn *prev = parent->children;
+            terane_Txn *prev = parent->children;
             while (prev->next)
                 prev = prev->next;
             prev->next = self;
@@ -184,58 +184,58 @@ diggle_Txn_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 
 /* if there was an error, clean up and bail out */
 error:
-    _Txn_dealloc ((diggle_Txn *) self);
+    _Txn_dealloc ((terane_Txn *) self);
     return NULL;
 }
 
 /*
- * diggle_Txn_commit: commit the transaction operations.
+ * terane_Txn_commit: commit the transaction operations.
  *
  * callspec: Txn.commit()
  * parameters: None
  * returns: None
  * exceptions:
- *  diggle.db.storage:Deadlock: deadlock was detected.
- *  diggle.db.storage:LockTimeout: timed out trying to grab the lock.
- *  diggle.db.storage:Error: the commit failed.
+ *  terane.db.storage:Deadlock: deadlock was detected.
+ *  terane.db.storage:LockTimeout: timed out trying to grab the lock.
+ *  terane.db.storage:Error: the commit failed.
  */
 PyObject *
-diggle_Txn_commit (diggle_Txn *self)
+terane_Txn_commit (terane_Txn *self)
 {
     _Txn_commit (self);
     Py_RETURN_NONE;
 }
 
 /*
- * diggle_Txn_abort: abort the transaction operations.
+ * terane_Txn_abort: abort the transaction operations.
  *
  * callspec: Txn.abort()
  * parameters: None
  * returns: None
  * exceptions:
- *  diggle.db.storage:Error: the abort failed.
+ *  terane.db.storage:Error: the abort failed.
  */
 PyObject *
-diggle_Txn_abort (diggle_Txn *self)
+terane_Txn_abort (terane_Txn *self)
 {
     _Txn_abort (self);
     Py_RETURN_NONE;
 }
 
 /*
- * diggle_Txn_enter: Enter the transaction context.
+ * terane_Txn_enter: Enter the transaction context.
  *
  * callspec: Txn.__enter__()
  * parameters: None
  * returns: The Txn instance.
  * exceptions:
- *  diggle.db.storage:Error: the Txn instance is invalid.
+ *  terane.db.storage:Error: the Txn instance is invalid.
  */
 PyObject *
-diggle_Txn_enter (diggle_Txn *self)
+terane_Txn_enter (terane_Txn *self)
 {
     if (self->txn == NULL) {
-        PyErr_Format (diggle_Exc_Error, "Failed to enter transaction context: DB_TXN handle is NULL");
+        PyErr_Format (terane_Exc_Error, "Failed to enter transaction context: DB_TXN handle is NULL");
         Py_RETURN_NONE;
     }
     Py_INCREF (self);
@@ -243,7 +243,7 @@ diggle_Txn_enter (diggle_Txn *self)
 }
 
 /*
- * diggle_Txn_exit: Leave the transaction context.
+ * terane_Txn_exit: Leave the transaction context.
  *
  * callspec: Txn.__exit__(type, value, tb)
  * parameters:
@@ -252,12 +252,12 @@ diggle_Txn_enter (diggle_Txn *self)
  *   tb: The exception traceback
  * returns: False
  * exceptions:
- *  diggle.db.storage:Deadlock: deadlock was detected.
- *  diggle.db.storage:LockTimeout: timed out trying to grab the lock.
- *  diggle.db.storage:Error: the commit or abort failed.
+ *  terane.db.storage:Deadlock: deadlock was detected.
+ *  terane.db.storage:LockTimeout: timed out trying to grab the lock.
+ *  terane.db.storage:Error: the commit or abort failed.
  */
 PyObject *
-diggle_Txn_exit (diggle_Txn *self, PyObject *args)
+terane_Txn_exit (terane_Txn *self, PyObject *args)
 {
     PyObject *type = NULL, *value = NULL, *tb = NULL;
 
@@ -274,19 +274,19 @@ diggle_Txn_exit (diggle_Txn *self, PyObject *args)
 /* Txn methods declaration */
 PyMethodDef _Txn_methods[] =
 {
-    { "commit", (PyCFunction) diggle_Txn_commit, METH_NOARGS, "Close the DB Txn." },
-    { "abort", (PyCFunction) diggle_Txn_abort, METH_NOARGS, "Close the DB Txn." },
-    { "__enter__", (PyCFunction) diggle_Txn_enter, METH_NOARGS, "Enter the DB Txn context." },
-    { "__exit__", (PyCFunction) diggle_Txn_exit, METH_VARARGS, "Exit the DB Txn context." },
+    { "commit", (PyCFunction) terane_Txn_commit, METH_NOARGS, "Close the DB Txn." },
+    { "abort", (PyCFunction) terane_Txn_abort, METH_NOARGS, "Close the DB Txn." },
+    { "__enter__", (PyCFunction) terane_Txn_enter, METH_NOARGS, "Enter the DB Txn context." },
+    { "__exit__", (PyCFunction) terane_Txn_exit, METH_VARARGS, "Exit the DB Txn context." },
     { NULL, NULL, 0, NULL }
 };
 
 /* Txn type declaration */
-PyTypeObject diggle_TxnType = {
+PyTypeObject terane_TxnType = {
     PyObject_HEAD_INIT(NULL)
     0,
     "storage.Txn",
-    sizeof (diggle_Txn),
+    sizeof (terane_Txn),
     0,                         /*tp_itemsize*/
     (destructor) _Txn_dealloc,
     0,                         /*tp_print*/
@@ -321,5 +321,5 @@ PyTypeObject diggle_TxnType = {
     0,                         /* tp_dictoffset */
     0,                         /* tp_init */
     0,                         /* tp_alloc */
-    diggle_Txn_new
+    terane_Txn_new
 };
