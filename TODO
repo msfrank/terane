@@ -12,13 +12,8 @@ for next release
    index.
  * make TOC.count_segments() and TOC.count_fields() more accurate, by
    implementing internal counters.
- * implement filters for more application logs.
- * sort results based on multiple fields.
- * process XMLRPC search requests in a threadpool, separate from event adds.
  * build a configuration template system, so the most common input sources
    are simple to configure and standardized.
  * parse nagios events.
  * parse postfix events.
  * parse mysql server and slow query events.
- * implement a logging channel for C module, possibly using an anonymous pipe,
-   so we can safely send log messages to the loggers module.
