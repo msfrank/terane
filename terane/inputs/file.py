@@ -15,7 +15,8 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, sys, time
+import os, sys, time, datetime, socket
+from dateutil.tz import tzutc
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred
 from terane.plugins import Plugin
@@ -96,8 +97,13 @@ class FileInput(Input):
         return failure
 
     def _write(self, line):
+        # if the line consists entirely of whitespace, then drop it
+        if line == '' or line.isspace():
+            return
         logger.debug("[input:%s] received line: %s" % (self.name,line))
-        self.on_received_event.signal({'input':self.name, '_raw':line})
+        ts = datetime.datetime.now(tzutc())
+        hostname = socket.getfqdn()
+        self.on_received_event.signal({'input':self.name, '_raw':line, 'ts':ts, 'hostname':hostname})
 
     def stopService(self):
         if self._file:
