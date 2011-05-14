@@ -93,6 +93,7 @@ setup(
             'datetime=terane.filters.datetime:DatetimeFilterPlugin',
             'apache_combined=terane.filters.apache:ApacheCombinedFilterPlugin',
             'apache_common=terane.filters.apache:ApacheCommonFilterPlugin',
+            'mysql_server=terane.filters.mysql:MysqlServerFilterPlugin',
             ],
         },
 )
