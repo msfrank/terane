@@ -41,6 +41,7 @@ setup(
         'terane.commands.server',
         'terane.commands.tail',
         'terane.db',
+        'terane.dql',
         'terane.filters',
         'terane.inputs',
         'terane.lib',
