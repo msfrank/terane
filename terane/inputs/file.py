@@ -74,10 +74,16 @@ class FileInput(Input):
             # open the file if necessary
             if self._file == None:
                 self._file = open(self._path, 'r')
-                self._prevstats = os.stat(self._path)
-                self._position = self._prevstats.st_size
+                _currstats = os.stat(self._path)
+                # if this is the first file open, then start reading from
+                # the end of the file
+                if self._prevstats == None:
+                    self._position = _currstats.st_size
+                # otherwise start reading from the beginning of the file
+                else:
+                    self._position = 0
                 self._skipcount = 0
-                _currstats = self._prevstats
+                self._prevstats = _currstats
             # get the current file stats
             else:
                 _currstats = os.stat(self._path)
