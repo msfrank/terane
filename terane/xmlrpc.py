@@ -21,7 +21,7 @@ from twisted.web.xmlrpc import XMLRPC
 from twisted.web.server import Site
 from terane.plugins import Plugin
 from terane.dql import parseQuery, ParsingSyntaxError
-from terane.db.plan import SearchPlan, TailPlan
+from terane.db.plan import SearchPlan, TailPlan, ListIndicesPlan
 from terane.stats import stats
 from terane.loggers import getLogger
 
@@ -91,6 +91,16 @@ class XMLRPCDispatcher(XMLRPC):
             return list(results)
         except ParsingSyntaxError, e:
             raise FaultBadRequest(e)
+        except BaseException, e:
+            self.logexception(e)
+            raise FaultInternalError()
+
+    @useThread
+    def xmlrpc_listIndices(self):
+        try:
+            plan = ListIndicesPlan()
+            # return RPC result
+            return list(plan.execute())
         except BaseException, e:
             self.logexception(e)
             raise FaultInternalError()

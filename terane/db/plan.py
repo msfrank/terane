@@ -198,6 +198,14 @@ class TailPlan(ExecutionPlan):
     def explain(self):
         pass
 
+class ListIndicesPlan(ExecutionPlan):
+    def __init__(self):
+        self.indices = tuple(db._indices.keys())
+        self.fields = None
+
+    def execute(self):
+        return Results(self, [{'index':{'value':v}} for v in self.indices])
+
 class Results(object):
     def __init__(self, plan, *results, **meta):
         logger.debug("Results.__init__(): collating search results")

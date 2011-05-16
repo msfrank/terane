@@ -58,16 +58,16 @@ class Grokker(object):
         reactor.run()
         return 0
 
-    def listIndicesResult(self, result):
+    def listIndicesResult(self, results):
         meta = results.pop(0)
         if len(results) > 0:
             for row in results: print "%s" % (row['index'])
         reactor.stop()
  
-    def showIndexResult(self, result):
+    def showIndexResult(self, results):
         pass
 
-    def explainQueryResult(self, result):
+    def explainQueryResult(self, results):
         pass
 
     def printError(self, failure):
