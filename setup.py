@@ -37,6 +37,7 @@ setup(
     packages=[
         'terane',
         'terane.commands',
+        'terane.commands.grok',
         'terane.commands.search',
         'terane.commands.server',
         'terane.commands.tail',
@@ -74,6 +75,7 @@ setup(
         ],
     entry_points={
         'console_scripts': [
+            'terane-grok=terane.commands.grok:grok_main',
             'terane-server=terane.commands.server:server_main',
             'terane-search=terane.commands.search:search_main',
             'terane-tail=terane.commands.tail:tail_main',
