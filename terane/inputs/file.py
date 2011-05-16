@@ -40,7 +40,7 @@ class FileInput(Input):
         self._file = None
         self._prevstats = None
         self._position = None
-        self._ignoreline = False
+        self._skipcount = 0
         self._errno = None
         Input.__init__(self)
 
@@ -76,7 +76,7 @@ class FileInput(Input):
                 self._file = open(self._path, 'r')
                 self._prevstats = os.stat(self._path)
                 self._position = self._prevstats.st_size
-                self._ignoreline = False
+                self._skipcount = 0
                 _currstats = self._prevstats
             # get the current file stats
             else:
@@ -91,9 +91,9 @@ class FileInput(Input):
         f = self._file
         try:
             if self._prevstats.st_dev != _currstats.st_dev:
-                raise Exception("[input:%s] vfs device changed" % self._path)
+                raise Exception("[input:%s] vfs device changed" % self.name)
             if self._prevstats.st_ino != _currstats.st_ino:
-                raise Exception("[input:%s] vfs inode changed" % self._path)
+                raise Exception("[input:%s] vfs inode changed" % self.name)
         except Exception, e:
             logger.info(str(e))
             _currstats = os.fstat(self._file.fileno())
@@ -102,7 +102,7 @@ class FileInput(Input):
         # check if the file has shrunk
         if self._position > _currstats.st_size:
             logger.info("[input:%s] file shrank by %i bytes" %
-                (self._path, self._position - _currstats.st_size))
+                (self.name, self._position - _currstats.st_size))
             # reset position to the new end of the file
             self._position = _currstats.st_size
             return
@@ -134,12 +134,14 @@ class FileInput(Input):
             # 1. we have reached the end of the file, and the last line did
             #    not end with a newline.  if we switched to reading from a new
             #    file (e.g. the file was rotated), and we are not currently in
-            #    ignore mode due to a long line, then we consider this data a 
-            #    full event and write it.  if we are still in ignore mode, then
-            #    the data is dropped.  when we open the new file on the next
-            #    iteration of _tail(), _ignorefile is reset to False.
+            #    ignore mode (_skipcount is greater than 0) due to a long line,
+            #    then we consider this data a full event and write it.  if we
+            #    are still in ignore mode, then the data is dropped.  when we
+            #    open the new file on the next iteration of _tail(), _skipcount
+            #    is reset to 0.
             # 2. the line exceeds the maximum acceptable length for an event.
-            #    we set _ignoreline to True, which causes data to be dropped
+            #    we enable ignore mode (if its not already enabled) by adding
+            #    the length of the line to _skipcount.  data will thus be dropped
             #    until we reach the next newline.
             # 3. we have reached the end of the file, and the last line did
             #    not end with a newline.  if we are still reading from this
@@ -147,21 +149,25 @@ class FileInput(Input):
             #    loop without writing data.
             if not line.endswith('\n'):
                 # case 1: we switched to reading from a new file
-                if self._file == None and not self._ignoreline:
+                if self._file == None and self._skipcount == 0:
                     self._write(line)
                 # case 2: line exceeds _linemax, drop data until the next newline
                 elif len(line) == self._linemax:
-                    self._ignoreline = True
+                    self._skipcount += len(line)
                 # case 3: event has not been completely written to disk yet
                 else:
                     continue
             # if the line is newline-terminated
             else:
                 # if we weren't ignoring the current line, then write it
-                if not self._ignoreline:
+                if self._skipcount == 0:
                     self._write(line)
-                # we found the start of the new event, so stop ignoring data
-                self._ignoreline = False
+                else:
+                    self._skipcount += len(line)
+                    logger.debug("[input:%s] dropped long line (%i bytes)" %
+                        (self.name,self._skipcount))
+                    # we found the start of the new event, so stop ignoring data
+                    self._skipcount = 0
 
         # save the old file stats
         self._prevstats = _currstats
