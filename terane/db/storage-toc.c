@@ -675,6 +675,44 @@ terane_TOC_count_segments (terane_TOC *self, PyObject *args)
 }
 
 /*
+ * terane_TOC_delete_segment: remove the segment from the TOC.
+ *
+ * callspec: TOC.delete_segment(txn, segment)
+ * parameters:
+ *   txn (Txn): A Txn object to wrap the operation in, or None
+ *   id (long): The identifier of the Segment to delete
+ * returns: None
+ * exceptions:
+ *   terane.db.storage.Error: A db error occurred when trying count the segments
+ */PyObject *
+terane_TOC_delete_segment (terane_TOC *self, PyObject *args)
+{
+    terane_Txn *txn = NULL;
+    unsigned long segment_id= 0;
+    DBT key;
+    int dbret;
+
+    /* parse parameters */
+    if (!PyArg_ParseTuple (args, "O!k", &txn, &terane_TxnType, &segment_id))
+        return NULL;
+
+    /* delete segment id from the TOC */
+    memset (&key, 0, sizeof (DBT));
+    key.data = &segment_id;
+    key.size = sizeof (unsigned long);
+    dbret = self->segments->del (self->segments, txn->txn, &key, 0);
+    switch (dbret) {
+        case 0:
+            break;
+        default:
+            PyErr_Format (terane_Exc_Error, "Failed to delete segment: %s",
+                db_strerror (dbret));
+            break;
+    }
+    Py_RETURN_NONE;
+}
+
+/*
  * _TOC_close: close the underlying DB handles.
  */
 static void
@@ -893,6 +931,8 @@ PyMethodDef _TOC_methods[] =
         "Iterate all segment IDs in the TOC." },
     { "count_segments", (PyCFunction) terane_TOC_count_segments, METH_VARARGS,
         "Return the count of segments in the TOC." },
+    { "delete_segment", (PyCFunction) terane_TOC_delete_segment, METH_VARARGS,
+        "Delete the segment from the TOC." },
     { "close", (PyCFunction) terane_TOC_close, METH_NOARGS,
         "Close the TOC." },
     { NULL, NULL, 0, NULL }

@@ -90,6 +90,7 @@ typedef struct _terane_Segment {
     unsigned long ndocuments;
     terane_Field **fields;
     int nfields;
+    int deleted;
 } terane_Segment;
 
 typedef unsigned PY_LONG_LONG terane_DID_num;
@@ -121,11 +122,15 @@ PyObject *terane_TOC_new_segment (terane_TOC *toc, PyObject *args);
 int TOC_contains_segment (terane_TOC *toc, terane_Txn *txn, db_recno_t segment_id);
 PyObject *terane_TOC_iter_segments (terane_TOC *toc, PyObject *args);
 PyObject *terane_TOC_count_segments (terane_TOC *toc, PyObject *args);
+PyObject *terane_TOC_delete_segment (terane_TOC *toc, PyObject *args);
+PyObject *terane_TOC_close (terane_TOC *toc);
 
 PyObject *terane_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds);
 PyObject *terane_Segment_get_field_meta (terane_Segment *self, PyObject *args);
 PyObject *terane_Segment_set_field_meta (terane_Segment *self, PyObject *args);
 DB *Segment_get_field_DB (terane_Segment *store, terane_Txn *txn, PyObject *fieldname);
+PyObject *terane_Segment_delete (terane_Segment *self);
+PyObject *terane_Segment_close (terane_Segment *self);
 
 PyObject *terane_Segment_new_doc (terane_Segment *self, PyObject *args);
 PyObject *terane_Segment_get_doc (terane_Segment *self, PyObject *args);
@@ -146,7 +151,6 @@ PyObject *terane_Segment_set_word_meta (terane_Segment *self, PyObject *args);
 PyObject *terane_Segment_iter_words_meta (terane_Segment *self, PyObject *args);
 PyObject *terane_Segment_iter_words_meta_from (terane_Segment *self, PyObject *args);
 PyObject *terane_Segment_iter_words_meta_range (terane_Segment *self, PyObject *args);
-PyObject *terane_Segment_close (terane_Segment *self);
 
 PyObject *Iter_new (PyObject *parent, DBC *cursor, terane_Iter_ops *ops);
 PyObject *Iter_new_range (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void *key, size_t len);

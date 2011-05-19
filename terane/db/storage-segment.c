@@ -59,7 +59,27 @@ _Segment_close (terane_Segment *segment)
     }
     segment->fields = NULL;
     segment->nfields = 0;
+
+    /* if this segment is marked to be deleted */
+    if (segment->deleted) {
+        dbret = segment->env->env->dbremove (segment->env->env, NULL,
+            segment->name, NULL, DB_AUTO_COMMIT);
+        if (dbret != 0)
+            PyErr_Format (terane_Exc_Error, "Failed to delete segment: %s",
+                db_strerror (dbret));
+    }
 }
+
+/*
+ * terane_Segment_delete: Mark the Segment for deletion.
+ */
+PyObject *
+terane_Segment_delete (terane_Segment *self)
+{
+    self->deleted = 1;
+    Py_RETURN_NONE;
+}
+
 
 /*
  * terane_Segment_close: close the underlying DB handles.
@@ -129,6 +149,7 @@ terane_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     self->ndocuments = 0;
     self->fields = NULL;
     self->nfields = 0;
+    self->deleted = 0;
 
     /* parse constructor parameters */
     if (!PyArg_ParseTuple (args, "O!k", &terane_TOCType, &self->toc, &segment_id))
@@ -258,6 +279,8 @@ PyMethodDef _Segment_methods[] =
         "Iterates through words in the index, starting from the specified word." },
     { "iter_words_meta_range", (PyCFunction) terane_Segment_iter_words_meta_range, METH_VARARGS,
         "Iterates through all words in the index matching the prefix." },
+    { "delete", (PyCFunction) terane_Segment_delete, METH_NOARGS,
+        "Mark the DB Segment for deletion.  Actual deletion will not occur until the Segment is deallocated." },
     { "close", (PyCFunction) terane_Segment_close, METH_NOARGS,
         "Close the DB Segment." },
     { NULL, NULL, 0, NULL }
