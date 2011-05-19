@@ -189,8 +189,7 @@ class FileInput(Input):
         ts = datetime.datetime.now(tzutc())
         hostname = socket.getfqdn()
         fields = {'input':self.name, '_raw':line, 'ts':ts, 'hostname':hostname}
-        # FIXME: uncomment this when we are done testing!!!
-        #self.on_received_event.signal(fields)
+        self.on_received_event.signal(fields)
 
     def _error(self, failure):
         logger.debug("[input:%s] tail error: %s" % (self.name,str(failure)))
