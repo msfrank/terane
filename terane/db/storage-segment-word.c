@@ -525,7 +525,7 @@ terane_Segment_iter_words (terane_Segment *self, PyObject *args)
     if (dbret != 0)
         return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
-    iter = Iter_new_range (cursor, &ops, key->data, key->size);
+    iter = Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size);
     _Segment_free_key (key);
     if (iter == NULL)
         cursor->close (cursor);
@@ -728,7 +728,7 @@ terane_Segment_iter_words_meta (terane_Segment *self, PyObject *args)
     if (dbret != 0)
         return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
-    iter = Iter_new_range (cursor, &ops, (void *)"!", 1);
+    iter = Iter_new_range ((PyObject *) self, cursor, &ops, (void *)"!", 1);
     if (iter == NULL)
         cursor->close (cursor);
     return iter;
@@ -789,7 +789,7 @@ terane_Segment_iter_words_meta_from (terane_Segment *self, PyObject *args)
         return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
     }
-    iter = Iter_new_from (cursor, &ops, key->data, key->size);
+    iter = Iter_new_from ((PyObject *) self, cursor, &ops, key->data, key->size);
     _Segment_free_key (key);
     if (iter == NULL)
         cursor->close (cursor);
@@ -851,7 +851,7 @@ terane_Segment_iter_words_meta_range (terane_Segment *self, PyObject *args)
         return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
     }
-    iter = Iter_new_range (cursor, &ops, key->data, key->size - 1);
+    iter = Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size - 1);
     if (iter == NULL)
         cursor->close (cursor);
     _Segment_free_key (key);

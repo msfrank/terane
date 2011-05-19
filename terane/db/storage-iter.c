@@ -58,7 +58,7 @@ _Iter_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
  *  Exception: cursor was invalid
  */
 PyObject *
-Iter_new (DBC *cursor, terane_Iter_ops *ops)
+Iter_new (PyObject *parent, DBC *cursor, terane_Iter_ops *ops)
 {
     terane_Iter *iter;
 
@@ -74,6 +74,8 @@ Iter_new (DBC *cursor, terane_Iter_ops *ops)
     iter = (terane_Iter *) _Iter_new (&terane_IterType, NULL, NULL);
     if (iter == NULL)
         return NULL;
+    Py_INCREF (parent);
+    iter->parent = parent;
     iter->cursor = cursor;
     iter->itype = TERANE_ITER_ALL;
     iter->next = ops->next;
@@ -90,11 +92,11 @@ Iter_new (DBC *cursor, terane_Iter_ops *ops)
  *  Exception: cursor was invalid
  */
 PyObject *
-Iter_new_range (DBC *cursor, terane_Iter_ops *ops, void *key, size_t len)
+Iter_new_range (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void *key, size_t len)
 {
     terane_Iter *iter;
 
-    iter = (terane_Iter *) Iter_new (cursor, ops);
+    iter = (terane_Iter *) Iter_new (parent, cursor, ops);
     if (iter == NULL)
         return NULL;
     iter->itype = TERANE_ITER_RANGE;
@@ -117,11 +119,11 @@ Iter_new_range (DBC *cursor, terane_Iter_ops *ops, void *key, size_t len)
  *  Exception: cursor was invalid
  */
 PyObject *
-Iter_new_from (DBC *cursor, terane_Iter_ops *ops, void *key, size_t len)
+Iter_new_from (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void *key, size_t len)
 {
     terane_Iter *iter;
 
-    iter = (terane_Iter *) Iter_new (cursor, ops);
+    iter = (terane_Iter *) Iter_new (parent, cursor, ops);
     if (iter == NULL)
         return NULL;
     iter->itype = TERANE_ITER_FROM;
@@ -330,6 +332,9 @@ terane_Iter_close (terane_Iter *self, PyObject *args)
         }
         self->cursor = NULL;
     }
+    if (self->parent)
+        Py_DECREF (self->parent);
+    self->parent = NULL;
     if (self->key)
         PyMem_Free (self->key);
     self->key = NULL;

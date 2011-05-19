@@ -46,6 +46,7 @@ typedef struct _terane_TOC {
 /* Iter object declaration */
 typedef struct _terane_Iter {
     PyObject_HEAD
+    PyObject *parent;
     DBC *cursor;
     int initialized;
     int itype;
@@ -147,9 +148,9 @@ PyObject *terane_Segment_iter_words_meta_from (terane_Segment *self, PyObject *a
 PyObject *terane_Segment_iter_words_meta_range (terane_Segment *self, PyObject *args);
 PyObject *terane_Segment_close (terane_Segment *self);
 
-PyObject *Iter_new (DBC *cursor, terane_Iter_ops *ops);
-PyObject *Iter_new_range (DBC *cursor, terane_Iter_ops *ops, void *key, size_t len);
-PyObject *Iter_new_from (DBC *cursor, terane_Iter_ops *ops, void *key, size_t len);
+PyObject *Iter_new (PyObject *parent, DBC *cursor, terane_Iter_ops *ops);
+PyObject *Iter_new_range (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void *key, size_t len);
+PyObject *Iter_new_from (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void *key, size_t len);
 PyObject *terane_Iter_skip (terane_Iter *self, PyObject *args);
 PyObject *terane_Iter_reset (terane_Iter *self, PyObject *args);
 PyObject *terane_Iter_close (terane_Iter *self, PyObject *args);

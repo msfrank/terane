@@ -320,7 +320,7 @@ terane_Segment_iter_docs (terane_Segment *self, PyObject *args)
             db_strerror (dbret));
         return NULL;
     }
-    iter = Iter_new (cursor, &ops);
+    iter = Iter_new ((PyObject *) self, cursor, &ops);
     if (iter == NULL)
         cursor->close (cursor);
     return iter;
