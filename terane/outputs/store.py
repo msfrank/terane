@@ -34,9 +34,9 @@ class StoreOutput(Output):
 
     def configure(self, section):
         self._indexName = section.getString("index name", self.name)
+        self._segRotation = section.getInt("segment rotation policy", 0)
         self._segRetention = section.getInt("segment retention policy", 0)
         self._segOptimize = section.getBoolean("optimize segments", False)
-        self._indexRetention = section.getInt("index retention policy", 0)
         
     def startService(self):
         self._index = db.getIndex(self._indexName)
@@ -58,14 +58,14 @@ class StoreOutput(Output):
         logger.debug("[output:%s] storing event: %s" % (self.name,str(fields)))
         self._index.add(fields)
         # if the current segment contains more events than specified by
-        # _segRetention, then rotate the index to generate a new segment.
-        segment = self._index.current()
-        if self._segRetention > 0 and segment.count_docs() >= self._segRetention:
+        # _segRotation, then rotate the index to generate a new segment.
+        segment,segmentid = self._index.current()
+        if self._segRotation > 0 and segment.count_docs() >= self._segRotation:
             self._index.rotate()
-            # if _segOptimize is true, then optimize the segment.
-            #if self._segOptimize == True:
-            #    segment.optimize()
-        # FIXME: if the index contains more events than specified by _indexRetention,
-        # then delete the oldest segment.
-        #if self._indexRetention > 0 and self._index.doc_count() > self._indexRetention:
-        #    self._index.delete(self._index.segment(0))
+            # if the index contains more segments than specified by _segRetention,
+            # then delete the oldest segment.
+            if self._segRetention > 0:
+                segments = self._index.segments()
+                if len(segments) > self._segRetention:
+                    for segment,segmentid in segments[0:len(segments)-self._segRetention]:
+                        self._index.delete(segment, segmentid)
