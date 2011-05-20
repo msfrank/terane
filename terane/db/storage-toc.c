@@ -693,7 +693,7 @@ terane_TOC_delete_segment (terane_TOC *self, PyObject *args)
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!k", &txn, &terane_TxnType, &segment_id))
+    if (!PyArg_ParseTuple (args, "O!k", &terane_TxnType, &txn, &segment_id))
         return NULL;
 
     /* delete segment id from the TOC */
