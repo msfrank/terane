@@ -436,7 +436,7 @@ class PostingReader(WhooshMatcher):
 class MultiReader(WhooshMultiReader):
 
     def __init__(self, ix):
-        readers = [SegmentReader(ix, s) for s in ix._segments]
+        readers = [SegmentReader(ix, s) for s,_ in ix._segments]
         WhooshMultiReader.__init__(self, readers)
         self.schema = ix.schema
         offsets = []

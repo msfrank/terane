@@ -80,12 +80,12 @@ class Index(WhooshIndex):
                 segment = Segment(self._toc, segmentid)
                 # get document count from each segment
                 self._size += segment.count_docs(None, True)
-                self._segments.append(segment)
+                self._segments.append((segment, segmentid))
             if self._segments == []:
                 with Txn(self._env) as txn:
                     segmentid = self._toc.new_segment(txn)
-                self._current = Segment(self._toc, segmentid)
-                self._segments.append(self._current)
+                segment = Segment(self._toc, segmentid)
+                self._segments.append((segment, segmentid))
                 logger.info("created first segment for new index '%s'" % name)
             else:
                 logger.info("found %i documents in %i segments for index '%s'" % (
@@ -99,10 +99,17 @@ class Index(WhooshIndex):
                 pass
             # get the last document id
             try:
-                self._lastid, unused = self._current.last_doc(None)
+                self._lastid, unused = self._segments[-1][0].last_doc(None)
             except IndexError:
-                # IndexError indicates an empty index.  in this case, self._lastid is 0.
-                self._lastid = 0
+                # the latest segment could be new, in which case it would
+                # have no documents.  in this case, check the second to last
+                # segment.
+                try:
+                    self._lastid, unused = self._segments[-2][0].last_doc(None)
+                except IndexError:
+                    # if we still get IndexError, then we have an empty
+                    # index.  in this case, set self._lastid to 0.
+                    self._lastid = 0
             logger.debug("last document id is %s" % self._lastid)
             # check for the ts field
             if 'ts' in self.schema:
@@ -253,6 +260,12 @@ class Index(WhooshIndex):
         """
         return self._current
 
+    def segments(self):
+        """
+        Return a list of (Segment, segment id) tuples.
+        """
+        return list(self._segments)
+
     def rotate(self):
         """
         Allocate a new Segment, making it the new current segment.
@@ -260,16 +273,9 @@ class Index(WhooshIndex):
         with Txn(self._env) as txn:
             segmentid = self._toc.new_segment(txn)
         segment = Segment(self._toc, segmentid)
-        self._segments.append(segment)
-        self._current = segment
-        logger.debug("rotated current segment, new segment is %s.%i" % (
-            self.name, segmentid))
-
-    def segment(self, segmentid):
-        """
-        Return the Segment referenced by the segmentid.
-        """
-        raise NotImplemented("Index.segment() not implemented")
+        self._segments.append((segment,segmentid))
+        self._current = (segment,segmentid)
+        logger.debug("rotated current segment, new segment is %s.%i" % (self.name, segmentid))
 
     def optimize(self, segment):
         """
@@ -279,11 +285,18 @@ class Index(WhooshIndex):
         """
         raise NotImplemented("Index.optimize() not implemented")
 
-    def delete(self, segment):
+    def delete(self, segment, segmentid):
         """
         Delete the specified Segment.
         """
-        raise NotImplemented("Index.delete() not implemented")
+        # remove the segment from the segment list
+        self._segments.remove((segment,segmentid))
+        # remove the segment from the TOC.  this also marks the segment
+        # for eventual physical deletion, when the Segment is deallocated.
+        with Txn(self._env) as txn:
+            self._toc.delete_segment(txn, segmentid)
+        segment.delete()
+        logger.debug("deleted segment %s.%i" % (self.name, segmentid))
 
     def close(self):
         """
@@ -294,7 +307,7 @@ class Index(WhooshIndex):
         with Txn(self._env) as txn:
             self._toc.set_metadata(txn, 'last-modified', str(self._lastmodified))
         # close each underlying segment
-        for segment in self._segments:
+        for segment,segmentid in self._segments:
             segment.close()
         self._segments = list()
         # close the TOC
