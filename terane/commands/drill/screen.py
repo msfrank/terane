@@ -6,15 +6,14 @@ class ViewMode(object):
     def __init__(self, screen):
         self._screen = screen
         self._modechange = False
+        screen._inwin.erase()
         log("switched to view mode")
 
     def process(self, ch):
         if self._modechange:
             if ch == ord(':'):
-                log("changing mode")
                 self._screen._mode = CommandMode(self._screen)
             else:
-                log("not changing mode")
                 self._modechange = False
         else:
             if ch == ESC:
@@ -29,11 +28,14 @@ class ViewMode(object):
 class CommandMode(object):
     def __init__(self, screen):
         self._screen = screen
+        self._modechange = False
         log("switched to command mode")
 
     def process(self, ch):
-        if ch == ord('q'):
-            self._screen.quit()
+        if ch == ESC:
+            self._screen._mode = ViewMode(self._screen)
+        else:
+            self._screen._inwin.addch(ch)
 
 class Screen(object):
     def __init__(self, screen):
