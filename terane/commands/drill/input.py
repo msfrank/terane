@@ -45,11 +45,19 @@ class CommandMode(object):
         logger.debug("processing command: '%s'" % line)
         self._input._mode = ViewMode(self._input)
 
+    def _backspace(self):
+        if self._pos <= 1:
+            return
+        self._pos -= 1
+        self._input._inwin.delch(0, self._pos)
+        self._input._inwin.move(0, self._pos)
+        self._input._inwin.refresh()
+
     def process(self, ch):
         if ch == ascii.ESC:
             self._input._mode = ViewMode(self._input)
         elif ch == ascii.BS or ch == ascii.DEL:
-            logger.debug("delete")
+            self._backspace()
         elif ch == ascii.LF or ch == ascii.CR:
             self._docommand()
         elif ascii.isprint(ch):
