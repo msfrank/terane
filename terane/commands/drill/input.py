@@ -10,6 +10,7 @@ class ViewMode(object):
         self._input = input
         self._modechange = False
         input._inwin.erase()
+        input._inwin.refresh()
         logger.debug("switched to view mode")
 
     def process(self, ch):
@@ -32,15 +33,25 @@ class CommandMode(object):
     def __init__(self, input):
         self._input = input
         self._modechange = False
+        self._input._inwin.erase()
         self._input._inwin.addch(0, 0, ord(':'))
         self._pos = 1
         self._input._inwin.move(0, self._pos)
         self._input._inwin.refresh()
         logger.debug("switched to command mode")
 
+    def _docommand(self):
+        line = self._input._inwin.instr(0, 1).strip()
+        logger.debug("processing command: '%s'" % line)
+        self._input._mode = ViewMode(self._input)
+
     def process(self, ch):
         if ch == ascii.ESC:
             self._input._mode = ViewMode(self._input)
+        elif ch == ascii.BS or ch == ascii.DEL:
+            logger.debug("delete")
+        elif ch == ascii.LF or ch == ascii.CR:
+            self._docommand()
         elif ascii.isprint(ch):
             self._input._inwin.addch(0, self._pos, ch)
             self._pos += 1

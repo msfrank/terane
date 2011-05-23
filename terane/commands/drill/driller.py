@@ -25,7 +25,7 @@ from terane.loggers import startLogging
 class Driller(object):
     def configure(self, settings):
         # load configuration
-        section = settings.section("search")
+        section = settings.section("drill")
         self.host = section.getString("host", 'localhost:7080')
         self.debug = section.getBoolean("debug", False)
         self.file = settings.args()[0]
