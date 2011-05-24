@@ -23,9 +23,11 @@ class ViewMode(object):
             if ch == ascii.ESC:
                 self._modechange = True
             elif ch == ord('k'):
-                self._input._output.up()
+                self._input._output.scrollUp()
             elif ch == ord('j'):
-                self._input._output.down()
+                self._input._output.scrollDown()
+            elif ch == ord('c'):
+                self._input._output.toggleCollapsed()
             elif ch == ord('q'):
                 reactor.stop()
 

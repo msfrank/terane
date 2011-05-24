@@ -15,12 +15,15 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, sys, curses
+import os, sys, curses, xmlrpclib
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.internet import reactor
+from twisted.web.xmlrpc import Proxy
 from terane.commands.drill.input import Input
 from terane.commands.drill.output import Output
-from terane.loggers import startLogging
+from terane.loggers import startLogging, getLogger
+
+logger = getLogger('terane.commands.drill.driller')
 
 class Driller(object):
     def configure(self, settings):
@@ -28,7 +31,7 @@ class Driller(object):
         section = settings.section("drill")
         self.host = section.getString("host", 'localhost:7080')
         self.debug = section.getBoolean("debug", False)
-        self.file = settings.args()[0]
+        self.query = ' '.join(settings.args())
 
     def run(self):
         try:
@@ -36,15 +39,13 @@ class Driller(object):
             curses.cbreak()
             curses.noecho()
             stdscr.keypad(1)
-            try:
-                curses.start_color()
-            except:
-                pass
-            output = Output(stdscr)
-            with file(self.file, 'r') as f:
-                output.append(f.readlines())
-            input = Input(stdscr, output)
-            reactor.addReader(input)
+            self._output = Output(stdscr)
+            self._input = Input(stdscr, self._output)
+            reactor.addReader(self._input)
+            proxy = Proxy("http://%s/XMLRPC" % self.host, allowNone=True)
+            deferred = proxy.callRemote('search', self.query)
+            deferred.addCallback(self.printResult)
+            deferred.addErrback(self.printError)
             reactor.run()
         finally:
             stdscr.keypad(0)
@@ -59,3 +60,17 @@ class Driller(object):
         else:
             startLogging(None)
         return 0
+        
+    def printResult(self, results):
+        meta = results.pop(0)
+        if len(results) > 0:
+            for doc in results:
+                self._output.append(doc)
+
+    def printError(self, failure):
+        try:
+            raise failure.value
+        except xmlrpclib.Fault, e:
+            logger.debug("search failed: %s (code %i)" % (e.faultString,e.faultCode))
+        except BaseException, e:
+            logger.debug("search failed: %s" % str(e))
