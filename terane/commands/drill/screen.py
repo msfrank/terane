@@ -23,17 +23,20 @@ class Screen(object):
 
     def doRead(self):
         try:
+            logger.debug("processing key...")
             command = self._input.process()
             if command != None:
                 logger.debug("handling command %s" % command)
+            else:
+                logger.debug("processed key")
         except ResizeScreen:
             # determine the new screen dimensions
-            self.height,self.width = h,w = self._stdscr.getmaxyx()
-            logger.debug("screen is %i x %i" % (self.width,self.height))
+            self.height,self.width = self._stdscr.getmaxyx()
+            logger.debug("resized screen to %i x %i" % (self.width,self.height))
             # refresh the screen
             self.refresh()
         except GetchError:
-            pass
+            logger.debug("getch returned error")
 
     def connectionLost(self, reason):
         pass
@@ -42,10 +45,10 @@ class Screen(object):
         return "terane.commands.drill.screen"
 
     def refresh(self):
-        self._input.refresh(self.height - 1, 0, 1, self.width)
         if len(self._windows) > 0:
             curr = self._windows[0]
             curr.refresh(0, 0, self.height - 1, self.width)
+        self._input.refresh(self.height - 1, 0, 1, self.width)
 
     def setWindow(self, window):
         self._windows = [window,]

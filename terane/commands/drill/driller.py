@@ -19,7 +19,7 @@ import os, sys, curses
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.internet import reactor
 from terane.commands.drill.screen import Screen
-#from terane.commands.drill.search import Searcher
+from terane.commands.drill.search import Searcher
 from terane.loggers import startLogging, getLogger
 
 logger = getLogger('terane.commands.drill.driller')
@@ -40,8 +40,8 @@ class Driller(object):
             curses.noecho()
             stdscr.keypad(1)
             self._screen = Screen(stdscr)
-            #if self.query != '':
-            #    searcher = Searcher(self._screen, self.host, self.query)
+            if self.query != '':
+                searcher = Searcher(self._screen, self.host, self.query)
             reactor.run()
         finally:
             stdscr.keypad(0)
