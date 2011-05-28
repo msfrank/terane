@@ -15,12 +15,11 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, sys, curses, xmlrpclib
+import os, sys, curses
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.internet import reactor
-from twisted.web.xmlrpc import Proxy
-from terane.commands.drill.input import Input
-from terane.commands.drill.output import Output
+from terane.commands.drill.screen import Screen
+#from terane.commands.drill.search import Searcher
 from terane.loggers import startLogging, getLogger
 
 logger = getLogger('terane.commands.drill.driller')
@@ -35,17 +34,14 @@ class Driller(object):
 
     def run(self):
         try:
+            # initialize curses
             stdscr = curses.initscr()
             curses.cbreak()
             curses.noecho()
             stdscr.keypad(1)
-            self._output = Output(stdscr)
-            self._input = Input(stdscr, self._output)
-            reactor.addReader(self._input)
-            proxy = Proxy("http://%s/XMLRPC" % self.host, allowNone=True)
-            deferred = proxy.callRemote('search', self.query)
-            deferred.addCallback(self.printResult)
-            deferred.addErrback(self.printError)
+            self._screen = Screen(stdscr)
+            #if self.query != '':
+            #    searcher = Searcher(self._screen, self.host, self.query)
             reactor.run()
         finally:
             stdscr.keypad(0)
@@ -60,17 +56,3 @@ class Driller(object):
         else:
             startLogging(None)
         return 0
-        
-    def printResult(self, results):
-        meta = results.pop(0)
-        if len(results) > 0:
-            for doc in results:
-                self._output.append(doc)
-
-    def printError(self, failure):
-        try:
-            raise failure.value
-        except xmlrpclib.Fault, e:
-            logger.debug("search failed: %s (code %i)" % (e.faultString,e.faultCode))
-        except BaseException, e:
-            logger.debug("search failed: %s" % str(e))
