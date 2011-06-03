@@ -30,6 +30,7 @@ class Searcher(object):
         self._query = query
         self._meta = None
         self._results = None
+        self._win = None
         self._pad = None
         self._width = None
         self._height = None
@@ -54,6 +55,11 @@ class Searcher(object):
             logger.debug("search failed: %s" % str(e))
 
     def refresh(self, y, x, height, width):
+        if self._win == None or (height,width) != self._win.getmaxyx():
+            self._win.clear()
+            self._win.refresh()
+            logger.debug("allocated new window of size %i x %i" % (width, height))
+            self._win = curses.newwin(y, x, height, width)
         # calculate the height of the output
         lineh = 0
         for r in self._results:
@@ -74,8 +80,8 @@ class Searcher(object):
         else:
             logger.debug("keeping current output pad of size %i x %i" % (self._width,self._height))
         # refresh the output window
-        self._pad.refresh(self._pos, 0, y, x, height - 1, width - 1)
-        logger.debug("refresh: spos=%i,%i pos=%i,%i size=%ix%i" % (0,self._pos,x,y,width-1,height-1))
+        self._pad.refresh(self._pos, 0, y, x, height, width)
+        logger.debug("refresh: spos=%i,%i pos=%i,%i size=%ix%i" % (0,self._pos,x,y,width,height))
 
 class Result(object):
     def __init__(self, fields):

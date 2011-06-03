@@ -17,7 +17,24 @@ class Screen(object):
         self._input = Input()
         # do the initial refresh
         self.refresh()
-    
+        # set up the WINCH signal handler
+        self._oldWinch = signal.signal(signal.SIGWINCH, self._handleWinch)
+        logger.debug("old SIGWINCH handler: %s" % self._oldWinch)
+
+    def _handleWinch(self, signum, frame):
+        logger.debug("caught SIGWINCH")
+        reactor.callLater(0, self._resizeScreen)
+
+    def _resizeScreen(self):
+        # determine the new screen dimensions
+
+        self._stdscr.touchwin()
+        self._stdscr.refresh()
+        self.height,self.width = self._stdscr.getmaxyx()
+        logger.debug("_resizeScreen: resized screen to %i x %i" % (self.width,self.height))
+        # refresh the screen
+        self.refresh()
+
     def fileno(self):
         return 0
 
@@ -31,8 +48,10 @@ class Screen(object):
                 logger.debug("processed key")
         except ResizeScreen:
             # determine the new screen dimensions
+            self._stdscr.touchwin()
+            self._stdscr.refresh()
             self.height,self.width = self._stdscr.getmaxyx()
-            logger.debug("resized screen to %i x %i" % (self.width,self.height))
+            logger.debug("doRead: resized screen to %i x %i" % (self.width,self.height))
             # refresh the screen
             self.refresh()
         except GetchError:
@@ -47,8 +66,8 @@ class Screen(object):
     def refresh(self):
         if len(self._windows) > 0:
             curr = self._windows[0]
-            curr.refresh(0, 0, self.height - 1, self.width)
-        self._input.refresh(self.height - 1, 0, 1, self.width)
+            curr.refresh(0, 0, self.height - 2, self.width - 1)
+        self._input.refresh(self.height - 1, 0, 1, self.width - 1)
 
     def setWindow(self, window):
         self._windows = [window,]
