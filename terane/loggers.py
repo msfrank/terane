@@ -20,7 +20,6 @@ from Queue import Queue
 from logging import Logger, Handler, Formatter, StreamHandler, FileHandler
 from logging import getLogger as _getLogger
 from logging import NOTSET, DEBUG, INFO, WARNING, ERROR
-from twisted.application.service import Service
 
 class NullHandler(Handler):
     """
