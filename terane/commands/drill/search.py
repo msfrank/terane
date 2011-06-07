@@ -25,7 +25,8 @@ from terane.loggers import getLogger
 logger = getLogger('terane.commands.drill.driller')
 
 class Searcher(urwid.WidgetWrap):
-    def __init__(self, host, query):
+    def __init__(self, loop, host, query):
+        self._loop = loop
         self._host = host
         self._query = query
         self._meta = None
@@ -47,10 +48,10 @@ class Searcher(urwid.WidgetWrap):
     def _displayResult(self, results):
         self._meta = results.pop(0)
         for r in results:
-            default = fields['default']
-            ts = parse(fields['ts']).strftime("%d %b %Y %H:%M:%S")
+            default = r['default']
+            ts = parse(r['ts']).strftime("%d %b %Y %H:%M:%S")
             self._walker.append(urwid.Text("%s: %s" % (ts, default)))
-        self._listbox._invalidate()
+        self._loop.draw_screen()
 
     def _getError(self, failure):
         reactor.callFromThread(self._displayError, failure)
@@ -64,5 +65,4 @@ class Searcher(urwid.WidgetWrap):
         except BaseException, e:
             logger.debug("search failed: %s" % str(e))
             self._walker.append(urwid.Text("search failed: %s" % str(e)))
-        self._listbox.set_focus(0)
-
+        self._loop.draw_screen()

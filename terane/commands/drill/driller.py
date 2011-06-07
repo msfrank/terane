@@ -33,12 +33,12 @@ class Driller(object):
         self.query = ' '.join(settings.args())
 
     def run(self):
-        screen = Screen()
-        if self.query != '':
-            searcher = Searcher(self.host, self.query)
-            screen.setWindow(searcher)
         ev = urwid.TwistedEventLoop(reactor=reactor)
+        screen = Screen()
         loop = urwid.MainLoop(screen, unhandled_input=self.unhandled_input, event_loop=ev)
+        if self.query != '':
+            searcher = Searcher(loop, self.host, self.query)
+            screen.setWindow(searcher)
         loop.run()
         logger.debug("exited urwid main loop")
         if self.debug == True:
