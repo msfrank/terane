@@ -15,89 +15,54 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, sys, curses, xmlrpclib, dateutil.parser
+import os, sys, urwid
+from dateutil.parser import parse
+from xmlrpclib import Fault
 from twisted.internet import reactor
 from twisted.web.xmlrpc import Proxy
 from terane.loggers import getLogger
 
 logger = getLogger('terane.commands.drill.driller')
 
-class Searcher(object):
-    def __init__(self, screen, host, query):
-        self._screen = screen
-        screen.setWindow(self)
+class Searcher(urwid.WidgetWrap):
+    def __init__(self, host, query):
         self._host = host
         self._query = query
         self._meta = None
         self._results = None
-        self._win = None
-        self._pad = None
-        self._width = None
-        self._height = None
         self._pos = 0
         # make the search request
         proxy = Proxy("http://%s/XMLRPC" % self._host, allowNone=True)
         deferred = proxy.callRemote('search', self._query)
         deferred.addCallback(self._getResult)
         deferred.addErrback(self._getError)
+        # build the listbox widget
+        self._walker = urwid.SimpleListWalker([])
+        self._listbox = urwid.ListBox(self._walker)
+        urwid.WidgetWrap.__init__(self, self._listbox)
         
     def _getResult(self, results):
+        reactor.callFromThread(self._displayResult, results)
+
+    def _displayResult(self, results):
         self._meta = results.pop(0)
-        self._results = [Result(r) for r in results]
-        self._screen.refresh()
+        for r in results:
+            default = fields['default']
+            ts = parse(fields['ts']).strftime("%d %b %Y %H:%M:%S")
+            self._walker.append(urwid.Text("%s: %s" % (ts, default)))
+        self._listbox._invalidate()
 
     def _getError(self, failure):
+        reactor.callFromThread(self._displayError, failure)
+
+    def _displayError(self, failure):
         try:
             raise failure.value
-        except xmlrpclib.Fault, e:
+        except Fault, e:
             logger.debug("search failed: %s (code %i)" % (e.faultString,e.faultCode))
+            self._walker.append(urwid.Text("search failed: %s (code %i)" % (e.faultString,e.faultCode)))
         except BaseException, e:
             logger.debug("search failed: %s" % str(e))
+            self._walker.append(urwid.Text("search failed: %s" % str(e)))
+        self._listbox.set_focus(0)
 
-    def refresh(self, y, x, height, width):
-        if self._win == None or (height,width) != self._win.getmaxyx():
-            self._win.clear()
-            self._win.refresh()
-            logger.debug("allocated new window of size %i x %i" % (width, height))
-            self._win = curses.newwin(y, x, height, width)
-        # calculate the height of the output
-        lineh = 0
-        for r in self._results:
-            r._resize(width)
-            lineh += r.height
-        # if the screen width has changed, or the line
-        # height exceeds the output window height, then
-        # redraw the lines to the output window
-        if width != self._width or lineh > height:
-            self._pad = curses.newpad(lineh, width)
-            self._width = width
-            self._height = lineh
-            logger.debug("allocated new output pad of size %i x %i" % (width, lineh))
-            i = 0
-            for r in self._results:
-                r.draw(self._pad, i, 0)
-                i += r.height
-        else:
-            logger.debug("keeping current output pad of size %i x %i" % (self._width,self._height))
-        # refresh the output window
-        self._pad.refresh(self._pos, 0, y, x, height, width)
-        logger.debug("refresh: spos=%i,%i pos=%i,%i size=%ix%i" % (0,self._pos,x,y,width,height))
-
-class Result(object):
-    def __init__(self, fields):
-        default = fields['default']
-        ts = dateutil.parser.parse(fields['ts']).strftime("%d %b %Y %H:%M:%S")
-        self._line = "%s: %s" % (ts, default)
-        self.width = 0
-        self.height = 0
-
-    def _resize(self, screenw):
-        if len(self._line) == 0:
-            self.width, self.height = screenw, 1
-        else:
-            q,r = divmod(len(self._line), screenw)
-            if r > 0: q += 1
-            self.width, self.height = screenw, q
-
-    def draw(self, win, y, x):
-        win.addstr(y, x, self._line)

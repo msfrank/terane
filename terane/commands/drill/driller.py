@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, sys, curses
+import os, sys, urwid
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.internet import reactor
 from terane.commands.drill.screen import Screen
@@ -33,21 +33,14 @@ class Driller(object):
         self.query = ' '.join(settings.args())
 
     def run(self):
-        try:
-            # initialize curses
-            stdscr = curses.initscr()
-            curses.cbreak()
-            curses.noecho()
-            stdscr.keypad(1)
-            self._screen = Screen(stdscr)
-            if self.query != '':
-                searcher = Searcher(self._screen, self.host, self.query)
-            reactor.run()
-        finally:
-            stdscr.keypad(0)
-            curses.echo()
-            curses.nocbreak()
-            curses.endwin()
+        screen = Screen()
+        if self.query != '':
+            searcher = Searcher(self.host, self.query)
+            screen.setWindow(searcher)
+        ev = urwid.TwistedEventLoop(reactor=reactor)
+        loop = urwid.MainLoop(screen, unhandled_input=self.unhandled_input, event_loop=ev)
+        loop.run()
+        logger.debug("exited urwid main loop")
         if self.debug == True:
             handler = StreamHandler()
             handler.setLevel(DEBUG)
@@ -56,3 +49,6 @@ class Driller(object):
         else:
             startLogging(None)
         return 0
+
+    def unhandled_input(self, unhandled):
+        logger.debug("caught unhandled input '%s'" % str(unhandled))

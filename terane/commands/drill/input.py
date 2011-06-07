@@ -1,112 +1,103 @@
-import os, sys, curses
-from curses import ascii
+import os, sys, urwid
 from twisted.internet import reactor
 from terane.loggers import getLogger
 
 logger = getLogger('terane.commands.drill.input')
 
+class ModeChanged(BaseException):
+    def __init__(self, mode):
+        self.mode = mode
+
 class ViewMode(object):
     def __init__(self, input):
         logger.debug("switched to view mode")
         self._input = input
+        self._input._invalidate()
 
-    def pos(self):
-        return 0
+    def render(self, size, focus):
+        (maxcol,) = size
+        cursor = None
+        if focus:
+            cursor = self.get_cursor_coords(size)
+        return urwid.TextCanvas([' '], maxcol=maxcol, cursor=cursor)
 
-    def draw(self):
-        self._input._win.erase()
-        self._input._win.refresh()
-
-    def process(self, ch):
-        if ch == ord(':'):
-            self._input._mode = CommandMode(self._input)
-            self._input._mode.draw()
-        elif ch == ord('k'):
+    def keypress(self, size, key):
+        if key == ':':
+            raise ModeChanged(CommandMode(self._input))
+        elif key == 'k':
             logger.debug("scroll window up")
-        elif ch == ord('j'):
+        elif key == 'j':
             logger.debug("scroll window down")
-        elif ch == ord('c'):
+        elif key == 'c':
             logger.debug("toggle collapsed")
-        elif ch == ord('q'):
+        elif key == 'q':
+            #raise urwid.ExitMainLoop()
             reactor.stop()
+        else:
+            logger.debug("caught unhandled key '%s'" % key)
         return None
+
+    def get_cursor_coords(self, size):
+        return (0, 0)
 
 class CommandMode(object):
     def __init__(self, input):
         logger.debug("switched to command mode")
         self._input = input
-        self._pad = curses.newpad(1, self._input.width)
-        self._pad.addch(0, 0, ord(':'))
-        self._pos = 1
+        self._input._invalidate()
+        self._buffer = []
         self._offset = 0
 
-    def pos(self):
-        return self._pos
-
-    def draw(self):
-        self._input._win.erase()
-        self._input._win.move(0, self._pos)
-        self._pad.refresh(0, self._offset,
-            self._input.y, self._input.x,
-            self._input.y + self._input.height, self._input.x + self._input.width
-            )
+    def render(self, size, focus):
+        (maxcol,) = size
+        cursor = None
+        if focus:
+            cursor = self.get_cursor_coords(size)
+        return urwid.TextCanvas([':' + ''.join(self._buffer)], maxcol=maxcol, cursor=cursor)
 
     def _docommand(self):
-        line = self._pad.instr(0, 1).strip()
+        line = ''.join(self._buffer)
+        line = line.strip()
         logger.debug("processing command: '%s'" % line)
-        self._input._mode = ViewMode(self._input)
-        self._input._mode.draw()
+        raise ModeChanged(ViewMode(self._input))
 
     def _backspace(self):
-        return
-        if self._pos <= 1:
-            return
-        self._pos -= 1
-        self._input._win.delch(0, self._pos)
-        self._input._win.move(0, self._pos)
-        self._input._win.refresh()
+        if len(self._buffer) > 0:
+            self._buffer.pop()
 
-    def process(self, ch):
-        if ch == ascii.ESC:
-            self._input._mode = ViewMode(self._input)
-            self._input._mode.draw()
-        elif ch == ascii.BS or ch == ascii.DEL:
+    def keypress(self, size, key):
+        if key == 'esc':
+            raise ModeChanged(ViewMode(self._input))
+        elif key == 'backspace' or key == 'delete':
             self._backspace()
-        elif ch == ascii.LF or ch == ascii.CR:
+        elif key == 'enter' or key == 'return':
             self._docommand()
-        elif ascii.isprint(ch):
-            self._pad.addch(0, self._offset + self._pos, ch)
-            self._pos += 1
-            self.draw()
-        return None
+        elif len(key) == 1:
+            self._buffer.append(key)
+        self._input._invalidate()
 
-class GetchError(Exception):
-    pass
+    def get_cursor_coords(self, size):
+        (maxcol,) = size
+        return (1 + len(self._buffer), 0)
 
-class ResizeScreen(Exception):
-    pass
-
-class Input(object):
+class Input(urwid.FlowWidget):
     def __init__(self):
-        self._win = None
         self._mode = ViewMode(self)
-        self.x = 0
-        self.y = 0
-        self.width = 0
-        self.height = 0
 
-    def refresh(self, y, x, height, width):
-        self.x = x
-        self.y = y
-        if width != self.width:
-            self.width = width
-        self._win = curses.newwin(self.height, self.width, self.y, self.x)
-        self._mode.draw()
+    def selectable(self):
+        return True
 
-    def process(self):
-        ch = self._win.getch(0, self._mode.pos())
-        if ch == -1:
-            raise GetchError()
-        if ch == curses.KEY_RESIZE:
-            raise ResizeScreen()
-        return self._mode.process(ch)
+    def rows(self, size, focus=False):
+        return 1
+
+    def render(self, size, focus=False):
+        return self._mode.render(size, focus)
+
+    def keypress(self, size, key):
+        try:
+            return self._mode.keypress(size, key)
+        except ModeChanged, e:
+            self._mode = e.mode
+
+    def get_cursor_coords(self, size):
+        return self._mode.get_cursor_coords(size)
