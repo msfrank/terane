@@ -24,18 +24,10 @@ class ViewMode(object):
     def keypress(self, size, key):
         if key == ':':
             raise ModeChanged(CommandMode(self._input))
-        elif key == 'k':
-            logger.debug("scroll window up")
-        elif key == 'j':
-            logger.debug("scroll window down")
-        elif key == 'c':
-            logger.debug("toggle collapsed")
         elif key == 'q':
-            #raise urwid.ExitMainLoop()
             reactor.stop()
-        else:
-            logger.debug("caught unhandled key '%s'" % key)
-        return None
+            return None
+        return key
 
     def get_cursor_coords(self, size):
         return (0, 0)
@@ -94,6 +86,10 @@ class Input(urwid.FlowWidget):
         return self._mode.render(size, focus)
 
     def keypress(self, size, key):
+        # ignore window resize event
+        if key == 'window resize':
+            return None
+        # forward keypress to mode
         try:
             return self._mode.keypress(size, key)
         except ModeChanged, e:

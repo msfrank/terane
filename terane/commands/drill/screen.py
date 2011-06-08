@@ -6,15 +6,18 @@ logger = getLogger('terane.commands.drill.screen')
 
 class Screen(urwid.WidgetWrap):
     def __init__(self):
-        self._windows = []
         self._blank = urwid.SolidFill()
         self._input = Input()
         self._frame = urwid.Frame(self._blank, footer=self._input)
         self._frame.set_focus('footer')
         urwid.WidgetWrap.__init__(self, self._frame)
+        self._windows = []
 
     def keypress(self, size, key):
-        return self._input.keypress(size, key)
+        key = self._input.keypress(size, key)
+        if key != None and len(self._windows) > 0:
+            return self._windows[0].keypress(size, key)
+        return key
 
     def mouse_event(self, size, event, button, col, row, focus):
         pass
