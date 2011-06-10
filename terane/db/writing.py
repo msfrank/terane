@@ -52,7 +52,7 @@ class WriterExpired(Exception):
 class IndexWriter(WhooshIndexWriter):
     def __init__(self, ix):
         self._ix = ix
-        self._segment = ix._current
+        self._segment = ix._current[0]
         self._txn = Txn(ix._env)
 
     def add_field(self, fieldname, fieldspec):
