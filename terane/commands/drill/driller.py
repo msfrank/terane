@@ -18,6 +18,7 @@
 import os, sys, urwid
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.internet import reactor
+from terane.commands.drill.ui import ui
 from terane.commands.drill.screen import Screen
 from terane.commands.drill.search import Searcher
 from terane.loggers import startLogging, getLogger
@@ -26,6 +27,7 @@ logger = getLogger('terane.commands.drill.driller')
 
 class Driller(object):
     def configure(self, settings):
+        self._screen = None
         # load configuration
         section = settings.section("drill")
         self.host = section.getString("host", 'localhost:7080')
@@ -33,13 +35,12 @@ class Driller(object):
         self.query = ' '.join(settings.args())
 
     def run(self):
-        ev = urwid.TwistedEventLoop(reactor=reactor)
-        screen = Screen()
-        loop = urwid.MainLoop(screen, unhandled_input=self.unhandled_input, event_loop=ev)
+        self._screen = Screen()
+        ui.setroot(self._screen)
         if self.query != '':
-            searcher = Searcher(loop, self.host, self.query)
-            screen.setWindow(searcher)
-        loop.run()
+            searcher = Searcher(self.host, self.query)
+            self._screen.setWindow(searcher)
+        ui.run()
         logger.debug("exited urwid main loop")
         if self.debug == True:
             handler = StreamHandler()
@@ -49,6 +50,3 @@ class Driller(object):
         else:
             startLogging(None)
         return 0
-
-    def unhandled_input(self, unhandled):
-        logger.debug("caught unhandled input '%s'" % str(unhandled))
