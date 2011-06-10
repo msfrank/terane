@@ -27,7 +27,7 @@ logger = getLogger('terane.commands.drill.driller')
 class SearchResult(urwid.WidgetWrap):
     def __init__(self, fields):
         self._fields = fields
-        self._text = urwid.Text('')
+        self._text = urwid.Text('', wrap='any')
         urwid.WidgetWrap.__init__(self, self._text)
 
     def format_text(self, collapsed=True, hidefields=[]):
@@ -60,19 +60,15 @@ class SearcherListbox(urwid.WidgetWrap):
 
     def keypress(self, size, key):
         if key == 'up' or key == 'k':
-            logger.debug("scroll up")
             self._listbox.keypress(size, 'up')
             return None
         if key == 'page up' or key == 'ctrl u':
-            logger.debug("page up")
             self._listbox.keypress(size, 'page up')
             return None
         if key == 'down' or key == 'j':
-            logger.debug("scroll down")
             self._listbox.keypress(size, 'down')
             return None
         if key == 'page down' or key == 'ctrl d':
-            logger.debug("page down")
             self._listbox.keypress(size, 'page down')
             return None
         if key == 'c':
