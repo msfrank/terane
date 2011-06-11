@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, sys, dateutil.parser, xmlrpclib
+import os, sys, dateutil.parser, datetime, xmlrpclib
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.web.xmlrpc import Proxy
 from twisted.internet import reactor
@@ -65,7 +65,13 @@ class Grokker(object):
         reactor.stop()
  
     def showIndexResult(self, results):
-        pass
+        meta = results.pop(0)
+        print "size: %i" % meta['size']
+        ts = meta['last-modified']
+        print "last-modified: %s (%i)" % (datetime.datetime.fromtimestamp(ts).isoformat(), ts)
+        print "last-id: %i" % meta['last-id']
+        print "fields: %s" % ', '.join([row['field'] for row in results])
+        reactor.stop()
 
     def explainQueryResult(self, results):
         pass

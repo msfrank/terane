@@ -35,6 +35,16 @@ class PlanExecutionError(Exception):
     pass
 
 class ExecutionPlan(object):
+    """
+    Defines the interface for execution plans.
+    """
+
+    fields = None
+
+    reverse = False
+
+    sorting = None
+
     def execute(self):
         pass
 
@@ -201,10 +211,26 @@ class TailPlan(ExecutionPlan):
 class ListIndicesPlan(ExecutionPlan):
     def __init__(self):
         self.indices = tuple(db._indices.keys())
-        self.fields = None
 
     def execute(self):
         return Results(self, [{'index':{'value':v}} for v in self.indices])
+
+class ShowIndexPlan(ExecutionPlan):
+    def __init__(self, name):
+        self.name = name
+        try:
+            self.index = db._indices[name]
+        except KeyError, e:
+            raise PlanConfigurationError("unknown index '%s'" % e)
+
+    def execute(self):
+        meta = {}
+        meta['name'] = self.name
+        meta['size'] = self.index.doc_count()
+        meta['last-modified'] = self.index.last_modified()
+        meta['last-id'] = self.index.last_id()
+        schema = [{'field':{'value':name}} for name in self.index.schema.names()]
+        return Results(self, schema, **meta)
 
 class Results(object):
     def __init__(self, plan, *results, **meta):
@@ -215,7 +241,7 @@ class Results(object):
         self._results = []
         for r in results:
             self._results.extend(list(r))
-        if len(results) > 1:
+        if len(results) > 1 and self._plan.sorting != None:
             def keyfn(item):
                 if len(self._plan.sorting) == 1:
                     if self._plan.sorting[0] in item:
