@@ -18,6 +18,7 @@
 import os, sys, urwid
 from dateutil.parser import parse
 from xmlrpclib import Fault
+from csv import DictWriter
 from twisted.web.xmlrpc import Proxy
 from terane.commands.drill.ui import ui, useMainThread
 from terane.loggers import getLogger
@@ -26,17 +27,17 @@ logger = getLogger('terane.commands.drill.driller')
 
 class SearchResult(urwid.WidgetWrap):
     def __init__(self, fields):
-        self._fields = fields
+        self.fields = fields
         self._text = urwid.Text('', wrap='any')
         urwid.WidgetWrap.__init__(self, self._text)
 
     def format_text(self, collapsed=True, hidefields=[]):
-            default = self._fields['default']
-            ts = parse(self._fields['ts']).strftime("%d %b %Y %H:%M:%S")
+            default = self.fields['default']
+            ts = parse(self.fields['ts']).strftime("%d %b %Y %H:%M:%S")
             if collapsed:
                 self._text.set_text("%s: %s" % (ts, default))
             else:
-                fields = self._fields.copy()
+                fields = self.fields.copy()
                 del fields['default']
                 del fields['ts']
                 fields = sorted(["  %s=%s" % (k,v) for k,v in fields.items() if k not in hidefields])
@@ -46,6 +47,7 @@ class SearchResult(urwid.WidgetWrap):
 class SearcherListbox(urwid.WidgetWrap):
     def __init__(self):
         self._results = urwid.SimpleListWalker([])
+        self._fields = []
         self._collapsed = True
         self._hidefields = []
         self._filters = []
@@ -57,6 +59,7 @@ class SearcherListbox(urwid.WidgetWrap):
         r = SearchResult(r)
         r.format_text(self._collapsed, self._hidefields)
         self._results.append(r)
+        self._fields += [f for f in r.fields.keys() if f not in self._fields]
 
     def keypress(self, size, key):
         if key == 'up' or key == 'k':
@@ -77,6 +80,19 @@ class SearcherListbox(urwid.WidgetWrap):
                 r.format_text(self._collapsed, self._hidefields)
             return None
         if key.startswith('command'):
+            cmd = key.split()[1:]
+            if cmd[0] == 'write':
+                with file(cmd[1], 'wb') as f:
+                    # set the field order
+                    specialfields = ['ts','input','hostname','id','default']
+                    fields = [field for field in sorted(self._fields) if field not in specialfields]
+                    fields = specialfields + fields
+                    writer = DictWriter(f, fields)
+                    # write the header row
+                    writer.writerow(dict([(fname,fname) for fname in fields]))
+                    # write each result row
+                    for r in self._results:
+                        writer.writerow(r.fields)
             return None
         return key       
 
@@ -99,6 +115,7 @@ class Searcher(urwid.WidgetWrap):
         self._meta = results.pop(0)
         for r in results:
             self._body.append(r)
+        # redraw the listbox widget
         ui.redraw()
 
     @useMainThread
