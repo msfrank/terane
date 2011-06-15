@@ -48,9 +48,6 @@ class ExecutionPlan(object):
     def execute(self):
         pass
 
-    def explain(self):
-        pass
-
 class SearchPlan(ExecutionPlan):
 
     def __init__(self, query, indices=None, limit=100, restrictions=None, sorting=None, reverse=False, fields=None):
@@ -119,14 +116,28 @@ class SearchPlan(ExecutionPlan):
         except Exception, e:
             raise PlanExecutionError(str(e))
 
-    def explain(self):
+class ExplainQueryPlan(SearchPlan):
+
+    def execute(self):
         """
         Describe how the search plan would work.
 
         :returns: The explanation, as a :class:`Results` object with a single row.
         :rtype: :class:`Results`
         """
-        pass
+        try:
+            estimate = 0
+            estimate_min = 0
+            fields = []
+            for i in self.indices:
+                fields += [f for f in i.schema.names() if not f in fields]
+                reader = i.reader()
+                estimate += self.query.estimate_size(reader)
+                estimate_min += self.query.estimate_min_size(reader)
+            return Results(self, fields, estimate=estimate, estimate_min=estimate_min)
+        except Exception, e:
+            raise PlanExecutionError(str(e))
+
 
 class TailPlan(ExecutionPlan):
 
@@ -204,9 +215,6 @@ class TailPlan(ExecutionPlan):
             return Results(self, *rlist, runtime=runtime, last=last)
         except Exception, e:
             raise PlanExecutionError(str(e))
-
-    def explain(self):
-        pass
 
 class ListIndicesPlan(ExecutionPlan):
     def __init__(self):
