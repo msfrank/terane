@@ -16,27 +16,27 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import os, sys, traceback
-from terane.commands.drill.driller import Driller
+from terane.commands.console.console import Console
 from terane.settings import Settings, ConfigureError
 
-def drill_main():
+def console_main():
     try:
         settings = Settings(usage="%prog [options...] [query]")
-        settings.addOption("-H","--host", ("drill","host"),
+        settings.addOption("-H","--host", ("console","host"),
             help="Connect to terane server HOST", metavar="HOST"
             )
-        settings.addOption("-e","--execute", ("drill","execute command"),
+        settings.addOption("-e","--execute", ("console","execute command"),
             help="Execute CMD after startup", metavar="CMD"
             )
-        settings.addSwitch("-d","--debug", ("drill","debug"),
+        settings.addSwitch("-d","--debug", ("console","debug"),
             help="Print debugging information"
             )
         # load configuration
         settings.load()
         # create the Searcher and run it
-        driller = Driller()
-        driller.configure(settings)
-        return driller.run()
+        console = Console()
+        console.configure(settings)
+        return console.run()
     except ConfigureError, e:
         print e
     except Exception, e:

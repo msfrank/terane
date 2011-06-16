@@ -18,15 +18,15 @@
 import os, sys, urwid
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.internet import reactor
-from terane.commands.drill.input import Input
-from terane.commands.drill.search import Searcher
-from terane.commands.drill.outfile import Outfile
-from terane.commands.drill.ui import ui
+from terane.commands.console.input import Input
+from terane.commands.console.search import Searcher
+from terane.commands.console.outfile import Outfile
+from terane.commands.console.ui import ui
 from terane.loggers import startLogging, getLogger
 
-logger = getLogger('terane.commands.drill.driller')
+logger = getLogger('terane.commands.console.console')
 
-class Driller(urwid.WidgetWrap):
+class Console(urwid.WidgetWrap):
     def __init__(self):
         self._blank = urwid.SolidFill()
         self._input = Input()
@@ -37,7 +37,7 @@ class Driller(urwid.WidgetWrap):
 
     def configure(self, settings):
         # load configuration
-        section = settings.section("drill")
+        section = settings.section("console")
         self.host = section.getString("host", 'localhost:7080')
         self.executecmd = section.getString('execute command', None)
         self.debug = section.getBoolean("debug", False)
@@ -73,6 +73,8 @@ class Driller(urwid.WidgetWrap):
         elif cmd == 'load':
             outfile = Outfile(args[0])
             self.setWindow(outfile)
+        elif cmd == 'quit':
+            reactor.stop()
         # forward other commands to the active window
         elif len(self._windows) > 0:
             return self._windows[0].command(cmd, args)

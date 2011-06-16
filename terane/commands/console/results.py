@@ -20,7 +20,7 @@ from dateutil.parser import parse
 from csv import DictWriter
 from terane.loggers import getLogger
 
-logger = getLogger('terane.commands.drill.results')
+logger = getLogger('terane.commands.console.results')
 
 class Result(urwid.WidgetWrap):
     def __init__(self, fields):
@@ -77,7 +77,7 @@ class ResultsListbox(urwid.WidgetWrap):
                 r.format_text(self._collapsed, self._hidefields)
             return None
 
-    def writecsv(self, f):
+    def savecsv(self, f):
         # set the field order
         specialfields = ['ts','input','hostname','id','default']
         fields = [field for field in sorted(self._fields) if field not in specialfields]

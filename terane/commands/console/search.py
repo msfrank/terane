@@ -20,11 +20,11 @@ from dateutil.parser import parse
 from xmlrpclib import Fault
 from csv import DictWriter
 from twisted.web.xmlrpc import Proxy
-from terane.commands.drill.results import ResultsListbox
-from terane.commands.drill.ui import ui, useMainThread
+from terane.commands.console.results import ResultsListbox
+from terane.commands.console.ui import ui, useMainThread
 from terane.loggers import getLogger
 
-logger = getLogger('terane.commands.drill.search')
+logger = getLogger('terane.commands.console.search')
 
 class Searcher(urwid.WidgetWrap):
     def __init__(self, host, query):

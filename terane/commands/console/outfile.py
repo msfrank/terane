@@ -17,10 +17,10 @@
 
 import os, sys, urwid
 from csv import DictReader
-from terane.commands.drill.results import ResultsListbox
+from terane.commands.console.results import ResultsListbox
 from terane.loggers import getLogger
 
-logger = getLogger('terane.commands.drill.outfile')
+logger = getLogger('terane.commands.console.outfile')
 
 class Outfile(urwid.WidgetWrap):
     def __init__(self, path):

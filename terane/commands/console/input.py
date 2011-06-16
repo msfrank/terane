@@ -19,7 +19,7 @@ import os, sys, urwid
 from twisted.internet import reactor
 from terane.loggers import getLogger
 
-logger = getLogger('terane.commands.drill.input')
+logger = getLogger('terane.commands.console.input')
 
 
 class Input(urwid.FlowWidget):

@@ -19,7 +19,7 @@ import os, sys, urwid, functools
 from twisted.internet import reactor
 from terane.loggers import getLogger
 
-logger = getLogger('terane.commands.drill.ui')
+logger = getLogger('terane.commands.console.ui')
 
 class UIManager(object):
     def __init__(self):
