@@ -20,6 +20,7 @@ from logging import StreamHandler, DEBUG, Formatter
 from twisted.internet import reactor
 from terane.commands.drill.input import Input
 from terane.commands.drill.search import Searcher
+from terane.commands.drill.outfile import Outfile
 from terane.commands.drill.ui import ui
 from terane.loggers import startLogging, getLogger
 
@@ -69,11 +70,12 @@ class Driller(urwid.WidgetWrap):
         elif cmd == 'search':
             searcher = Searcher(self.host, ' '.join(args))
             self.setWindow(searcher)
-        elif cmd == 'tail':
-            pass
+        elif cmd == 'load':
+            outfile = Outfile(args[0])
+            self.setWindow(outfile)
         # forward other commands to the active window
         elif len(self._windows) > 0:
-            return self._windows[0].command(cmd)
+            return self._windows[0].command(cmd, args)
         return None
 
     def mouse_event(self, size, event, button, col, row, focus):
