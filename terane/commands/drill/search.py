@@ -131,3 +131,6 @@ class Searcher(urwid.WidgetWrap):
             logger.debug(errtext)
             self._frame.set_body(urwid.Filler(urwid.Text(errtext, align='center')))
         ui.redraw()
+
+    def command(self, cmd, args):
+        pass

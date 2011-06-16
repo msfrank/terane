@@ -25,6 +25,9 @@ def drill_main():
         settings.addOption("-H","--host", ("drill","host"),
             help="Connect to terane server HOST", metavar="HOST"
             )
+        settings.addOption("-e","--execute", ("drill","execute command"),
+            help="Execute CMD after startup", metavar="CMD"
+            )
         settings.addSwitch("-d","--debug", ("drill","debug"),
             help="Print debugging information"
             )
