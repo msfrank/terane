@@ -18,8 +18,7 @@
 import os, sys, urwid
 from dateutil.parser import parse
 from csv import DictWriter
-from terane.commands.console.filters import Contains, Matches
-from terane.commands.console.ui import ui
+from terane.commands.console import filters
 from terane.loggers import getLogger
 
 logger = getLogger('terane.commands.console.results')
@@ -158,10 +157,27 @@ class ResultsListbox(urwid.WidgetWrap):
             self.popfilter()
 
     def pushfilter(self, args):
-        if args[0] == 'contains':
-            f = Contains(None, args[1])
+        # parse filter arguments
+        if len(args) < 3:
+            return
+        field = args[0]
+        filtertype = args[1]
+        if filtertype == '*': ftype = None
+        params = args[2:]
+        # create the new filter
+        if filtertype == 'is':
+            f = filters.Is(field, params)
+        elif filtertype == 'contains':
+            f = filters.Contains(field, params)
+        elif filtertype == 'matches':
+            f = filters.Matches(field, params)
+        elif filtertype == 'gt':
+            f = filters.GreaterThan(field, params)
+        elif filtertype == 'lt':
+            f = filters.LessThan(field, params)
         else:
             return
+        # run each result through the new filter chain
         self.filters.append(f)
         for r in self._results:
             r.reformat(self)

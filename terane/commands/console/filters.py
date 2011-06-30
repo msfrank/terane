@@ -17,10 +17,28 @@
 
 import re
 
-class Matches(object):
-    def __init__(self, field, regex):
+class Is(object):
+    def __init__(self, field, params):
         self._field = field
-        self._regex = re.compile(regex)
+        self._value = params[0]
+
+    def __call__(self, fields):
+        if self._field == None:
+            for k,v in fields.items():
+                if v == self._value:
+                    return True
+        else:
+            try:
+                if fields[self._field] == self._value:
+                    return True
+            except:
+                pass
+        return False
+
+class Matches(object):
+    def __init__(self, field, params):
+        self._field = field
+        self._regex = re.compile(params[0])
 
     def __call__(self, fields):
         if self._field == None:
@@ -36,9 +54,9 @@ class Matches(object):
         return False
 
 class Contains(object):
-    def __init__(self, field, sub):
+    def __init__(self, field, params):
         self._field = field
-        self._sub = sub
+        self._sub = params[0]
 
     def __call__(self, fields):
         if self._field == None:
@@ -52,5 +70,55 @@ class Contains(object):
             except:
                 pass
         return False
+                
+class GreaterThan(object):
+    def __init__(self, field, params):
+        self._field = field
+        value = params[0]
+        if value.find('.') > -1:
+            self._type = float
+        else:
+            self._type = int
+        self._value = self._type(value)
 
+    def __call__(self, fields):
+        if self._field == None:
+            for k,v in fields.items():
+                try:
+                    if self._type(v) > self._value:
+                        return True
+                except:
+                    pass
+        else:
+            try:
+                if self._type(fields[self._field]) > self._value:
+                    return True
+            except:
+                pass
+        return False
 
+class LessThan(object):
+    def __init__(self, field, params):
+        self._field = field
+        value = params[0]
+        if value.find('.') > -1:
+            self._type = float
+        else:
+            self._type = int
+        self._value = self._type(value)
+
+    def __call__(self, fields):
+        if self._field == None:
+            for k,v in fields.items():
+                try:
+                    if self._type(v) < self._value:
+                        return True
+                except:
+                    pass
+        else:
+            try:
+                if self._type(fields[self._field]) < self._value:
+                    return True
+            except:
+                pass
+        return False
