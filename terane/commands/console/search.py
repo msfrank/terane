@@ -62,7 +62,6 @@ class Searcher(urwid.WidgetWrap):
         ui.redraw()
 
     def command(self, cmd, args):
-        if cmd == 'save':
-            with file(args[0], 'w') as f:
-                self._results.savecsv(f)
+        if self._results != None:
+            return self._results.command(cmd, args)
         return None

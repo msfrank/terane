@@ -25,23 +25,23 @@ logger = getLogger('terane.commands.console.outfile')
 class Outfile(urwid.WidgetWrap):
     def __init__(self, path):
         self._path = path
-        self._results = ResultsListbox()
-        self._frame = urwid.Frame(self._results)
+        self._results = None
         # load data from path
         try:
             with file(self._path, 'r') as f:
                 logger.debug("opened outfile %s" % self._path)
                 reader = DictReader(f)
+                self._results = ResultsListbox()
                 for row in reader:
                     self._results.append(row)
+            urwid.WidgetWrap.__init__(self, self._results)
         except BaseException, e:
             errtext = "load failed: %s" % str(e)
             logger.debug(errtext)
-            self._frame.set_body(urwid.Filler(urwid.Text(errtext, align='center')))
-        urwid.WidgetWrap.__init__(self, self._frame)
+            error = urwid.Filler(urwid.Text(errtext, align='center'))
+            urwid.WidgetWrap.__init__(self, error)
 
     def command(self, cmd, args):
-        if cmd == 'save':
-            with file(args[0], 'w') as f:
-                self._results.savecsv(f)
+        if self._results != None:
+            return self._results.command(cmd, args)
         return None
