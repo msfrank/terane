@@ -18,6 +18,8 @@
 import os, sys, urwid
 from dateutil.parser import parse
 from csv import DictWriter
+from terane.commands.console.filters import Contains, Matches
+from terane.commands.console.ui import ui
 from terane.loggers import getLogger
 
 logger = getLogger('terane.commands.console.results')
@@ -25,36 +27,102 @@ logger = getLogger('terane.commands.console.results')
 class Result(urwid.WidgetWrap):
     def __init__(self, fields):
         self.fields = fields
+        self.visible = True
         self._text = urwid.Text('', wrap='any')
         urwid.WidgetWrap.__init__(self, self._text)
 
-    def format_text(self, collapsed=True, hidefields=[]):
+    def reformat(self, resultslist):
+            # if any filter fails, then don't display the result
+            for f in resultslist.filters:
+                if f(self.fields) == False:
+                    self.visible = False
+                    return
+            self.visible = True
+            # we always display these fields
             default = self.fields['default']
             ts = parse(self.fields['ts']).strftime("%d %b %Y %H:%M:%S")
-            if collapsed:
+            # if we are collapsed, only show ts and default
+            if resultslist.collapsed:
                 self._text.set_text("%s: %s" % (ts, default))
+            # otherwise show all fields
             else:
                 fields = self.fields.copy()
                 del fields['default']
                 del fields['ts']
-                fields = sorted(["  %s=%s" % (k,v) for k,v in fields.items() if k not in hidefields])
+                fields = sorted(["  %s=%s" % (k,v) for k,v in fields.items() if k not in resultslist.hidefields])
                 text = "%s: %s\n" % (ts,default) + "\n".join(fields) + "\n"
                 self._text.set_text(text)
 
+class ResultsListWalker(urwid.ListWalker):
+    def __init__(self):
+        self.results = []
+        self.pos = 0
+
+    def append(self, result):
+        self.results.append(result)
+        self._modified()
+
+    def __iter__(self):
+        return iter(self.results)
+
+    def get_focus(self):
+        if len(self.results) == 0:
+            focus = (None, None)
+        else:
+            focus = (self.results[self.pos], self.pos)
+        logger.debug("get_focus: %s (pos %i)" % focus)
+        return focus
+
+    def set_focus(self, position):
+        self.pos = position
+        logger.debug("set_focus: %s (pos %i)" % (self.results[self.pos], self.pos))
+        self._modified()
+
+    def reset_focus(self):
+        widget,position = self.get_next(0)
+        if not position == None:
+            self.set_focus(position)
+
+    def get_next(self, position):
+        try:
+            if position == None:
+                return (None, None)
+            while True:
+                position += 1
+                widget = self.results[position]
+                if widget.visible:
+                    break
+            logger.debug("get_next: %s (pos %i)" % (widget,position))
+            return (widget, position)
+        except IndexError:
+            return (None, None)
+
+    def get_prev(self, position):
+        if position == None:
+            return (None, None)
+        while position > 0:
+            position -= 1
+            widget = self.results[position]
+            if widget.visible:
+                logger.debug("get_prev: %s (pos %i)" % (widget,position))
+                return (widget, position)
+        logger.debug("get_prev: None (pos None)")
+        return (None, None)
+
 class ResultsListbox(urwid.WidgetWrap):
     def __init__(self):
-        self._results = urwid.SimpleListWalker([])
+        self._results = ResultsListWalker()
         self._fields = []
-        self._collapsed = True
-        self._hidefields = []
-        self._filters = []
+        self.collapsed = True
+        self.hidefields = []
+        self.filters = []
         # build the listbox widget
         self._listbox = urwid.ListBox(self._results)
         urwid.WidgetWrap.__init__(self, self._listbox)
  
     def append(self, r):
         r = Result(r)
-        r.format_text(self._collapsed, self._hidefields)
+        r.reformat(self)
         self._results.append(r)
         self._fields += [f for f in r.fields.keys() if f not in self._fields]
 
@@ -72,10 +140,43 @@ class ResultsListbox(urwid.WidgetWrap):
             self._listbox.keypress(size, 'page down')
             return None
         if key == 'c':
-            self._collapsed = not self._collapsed
+            self.collapsed = not self.collapsed
             for r in self._results:
-                r.format_text(self._collapsed, self._hidefields)
+                r.reformat(self)
             return None
+
+    def command(self, cmd, args):
+        if cmd == 'save':
+            logger.debug("saving search to %s" % args[0])
+            with file(args[0], 'w') as f:
+                self.savecsv(f)
+        if cmd == 'filter':
+            logger.debug("pushing filter: %s" % ' '.join(args))
+            self.pushfilter(args)
+        if cmd == 'pop':
+            logger.debug("popping filter")
+            self.popfilter()
+
+    def pushfilter(self, args):
+        if args[0] == 'contains':
+            f = Contains(None, args[1])
+        else:
+            return
+        self.filters.append(f)
+        for r in self._results:
+            r.reformat(self)
+        self._results.reset_focus()
+        self._results._modified()
+
+    def popfilter(self):
+        try:
+            self.filters.pop(-1)
+        except:
+            return
+        for r in self._results:
+            r.reformat(self)
+        self._results.reset_focus()
+        self._results._modified()
 
     def savecsv(self, f):
         # set the field order
