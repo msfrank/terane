@@ -78,6 +78,22 @@ class XMLRPCDispatcher(XMLRPC):
             raise FaultInternalError()
 
     @useThread
+    def xmlrpc_explain(self, query, indices=None, limit=100, reverse=False, fields=None):
+        try:
+            # create a new execution plan
+            plan = ExplainQueryPlan(parseQuery(unicode(query)), indices, limit, None, ("ts",), reverse, fields)
+            # execute the plan
+            results = plan.execute()
+            # return RPC result
+            return list(results)
+        except ParsingSyntaxError, e:
+            raise FaultBadRequest(e)
+        except BaseException, e:
+            self.logexception(e)
+            raise FaultInternalError()
+
+
+    @useThread
     def xmlrpc_tail(self, query, last, indices=None, limit=100, fields=None):
         try:
             tails.value += 1
