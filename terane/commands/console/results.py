@@ -69,12 +69,10 @@ class ResultsListWalker(urwid.ListWalker):
             focus = (None, None)
         else:
             focus = (self.results[self.pos], self.pos)
-        logger.debug("get_focus: %s (pos %i)" % focus)
         return focus
 
     def set_focus(self, position):
         self.pos = position
-        logger.debug("set_focus: %s (pos %i)" % (self.results[self.pos], self.pos))
         self._modified()
 
     def reset_focus(self):
@@ -91,7 +89,6 @@ class ResultsListWalker(urwid.ListWalker):
                 widget = self.results[position]
                 if widget.visible:
                     break
-            logger.debug("get_next: %s (pos %i)" % (widget,position))
             return (widget, position)
         except IndexError:
             return (None, None)
@@ -103,9 +100,7 @@ class ResultsListWalker(urwid.ListWalker):
             position -= 1
             widget = self.results[position]
             if widget.visible:
-                logger.debug("get_prev: %s (pos %i)" % (widget,position))
                 return (widget, position)
-        logger.debug("get_prev: None (pos None)")
         return (None, None)
 
 class ResultsListbox(urwid.WidgetWrap):
