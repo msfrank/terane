@@ -1,3 +1,10 @@
+Release 0.0.7
+-------------
+
+ * implemented segment retention policy.
+ * file input plugin now correctly handles vfs changes.
+ * implemented showIndex, listIndices XMLRPC methods.
+ * added a mysql server log filter plugin.
 
 Release 0.0.6
 -------------
