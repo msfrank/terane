@@ -28,6 +28,7 @@ logger = getLogger('terane.commands.console.search')
 
 class Searcher(urwid.WidgetWrap):
     def __init__(self, host, query):
+        self.title = query
         self._host = host
         self._query = query
         self._results = ResultsListbox()

@@ -24,6 +24,7 @@ logger = getLogger('terane.commands.console.outfile')
 
 class Outfile(urwid.WidgetWrap):
     def __init__(self, path):
+        self.title = path
         self._path = path
         self._results = None
         # load data from path
