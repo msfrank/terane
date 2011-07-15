@@ -63,6 +63,8 @@ class Console(urwid.WidgetWrap):
             self._windows.prevWindow()
         elif cmd == 'next':
             self._windows.nextWindow()
+        elif cmd == 'jump':
+            self._windows.jumpToWindow(args)
         elif cmd == 'close':
             self._windows.closeWindow()
         # actions
@@ -202,6 +204,18 @@ class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
         window = self._windows[self._currwin][0]
         self._frame.set_body(window)
         self._frame.set_focus('footer')
+
+    def jumpToWindow(self, args):
+        try:
+            dest = int(args[0])
+        except:
+            return
+        for i in range(0, len(self._windows)):
+            if dest == self._windows[i][1]:
+                self._currwin = i
+                self._frame.set_body(self._windows[i][0])
+                self._frame.set_focus('footer')
+                break
 
     def closeWindow(self):
         window = self._frame.get_body()
