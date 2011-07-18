@@ -99,6 +99,7 @@ setup(
             'apache_combined=terane.filters.apache:ApacheCombinedFilterPlugin',
             'apache_common=terane.filters.apache:ApacheCommonFilterPlugin',
             'mysql_server=terane.filters.mysql:MysqlServerFilterPlugin',
+            'nagios=terane.filters.nagios:NagiosFilterPlugin',
             ],
         },
 )
