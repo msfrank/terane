@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import datetime
+from datetime import datetime
 from terane.plugins import Plugin
 from terane.filters import Filter, FilterError, StopFiltering
 from terane.loggers import getLogger
@@ -50,11 +50,11 @@ class NagiosFilter(Filter):
             raise FilterError("incoming line '%s' didn't start with timestamp" % line)
         # parse the event timestamp
         try:
-            ts,line = line.split(']', 1)
+            ts,line = line[1:].split(']', 1)
         except:
             raise FilterError("incoming line '%s' didn't start with timestamp" % line)
         try:
-            fields['ts'] = datetime.datetime.fromtimestamp(float(ts))
+            fields['ts'] = datetime.fromtimestamp(float(ts))
         except Exception, e:
             raise FilterError("%s cannot be converted into a timestamp: %s" % (ts, e))
         # determine the event type
