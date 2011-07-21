@@ -193,12 +193,12 @@ class SyslogFilter(Filter):
         m = self._TAGmatcher.match(tag)
         if m == None:
             raise FilterError("[filter:%s] line has an invalid tag" % self.name)
-        tag = m.groups()
-        if tag[0] != None and tag[1] != None:
-            fields['syslog_tag'] = tag[0]
-            fields['syslog_pid'] = tag[1]
-        elif tag[2] != None:
-            fields['syslog_tag'] = tag[2]
+        data = m.groups()
+        if data[0] != None and data[1] != None:
+            fields['syslog_tag'] = data[0]
+            fields['syslog_pid'] = data[1]
+        elif data[2] != None:
+            fields['syslog_tag'] = data[2]
         else:
             raise FilterError("[filter:%s] line has an invalid tag" % self.name)
         fields['default'] = content
