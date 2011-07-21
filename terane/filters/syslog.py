@@ -42,9 +42,9 @@ class SyslogFilter(Filter):
                 try:
                     facilities = [_facilities[f] for f in facilities.split(',') if not f == '']
                 except KeyError, e:
-                    raise InputError("[input:%s] selector %s has invalid facility %s" % (self.name,selector,e))
+                    raise InputError("[filter:%s] selector %s has invalid facility %s" % (self.name,selector,e))
                 except Exception, e:
-                    raise InputError("[input:%s] failed to parse facilities for selector %s: %s" % (self.name,selector,e))
+                    raise InputError("[filter:%s] failed to parse facilities for selector %s: %s" % (self.name,selector,e))
             # parse the severity, first checking for a modifier
             if severity[0] in ('=','!'):
                 modifier = severity[0]
@@ -67,7 +67,7 @@ class SyslogFilter(Filter):
                 self._selected -= delset
             else:
                 if severity not in _severities:
-                    raise InputError("[input:%s] selector %s has invalid severity %s" % (self.name,selector,severity))
+                    raise InputError("[filter:%s] selector %s has invalid severity %s" % (self.name,selector,severity))
                 severity = _severities[severity]
                 # log msgs of the specified severity for the specified facilities
                 if modifier == '=':
@@ -97,15 +97,15 @@ class SyslogFilter(Filter):
                     self._selected |= addset
 
     def configure(self, section):
+        self._filematcher = re.compile(r'(?P<ts>[A-Za-z]{3} [ \d]\d \d\d:\d\d\:\d\d) (?P<hostname>\S*) (?P<default>.*)')
         self._PRImatcher = re.compile(r'<(?P<pri>[0-9]{1,3})>')
         self._TIMESTAMPmatcher = re.compile(r'(?P<timestamp>[A-Za-z]{3} [ \d]\d \d\d:\d\d\:\d\d )')
         self._selected = set()
         # parse each selector, separated by semicolons
         selectors = section.getString('syslog selectors', '').strip()
-        if selectors == '':
-            raise ConfigureError("[filter:%s] missing required parameter 'syslog selectors'" % self.name)
-        for selector in [s.strip() for s in selectors.split(';') if not s == '']:
-            self._updateselected(selector)
+        if not selectors == '':
+            for selector in [s.strip() for s in selectors.split(';') if not s == '']:
+                self._updateselected(selector)
 
     def infields(self):
         # this filter requires the following incoming fields
@@ -113,34 +113,52 @@ class SyslogFilter(Filter):
 
     def outfields(self):
         # this filter guarantees values for the following outgoing fields
-        return set(('facility', 'severity'))
+        return set()
 
     def filter(self, fields):
+        if fields['_raw'][0].isdigit():
+            return self._filterSyslog(fields)
+        return self._filterFile(fields)
+
+    def _filterFile(self, fields):
+        m = self._filematcher.match(fields['_raw'])
+        if m == None:
+            raise FilterError("[filter:%s] line '%s' is not in syslog format" % (self.name,line))
+        ts,hostname,default = m.group('ts','hostname','default')
+        if ts == None or hostname == None or default == None:
+            raise FilterError("[filter:%s] line '%s' is not in syslog format" % (self.name,line))
+        # parse the timestamp
         try:
-            data = fields['_raw']
-        except:
-            raise FilterError("input is missing '_raw' field" % self._infield)
+            fields['ts'] = dateutil.parser.parse(ts)
+        except Exception, e:
+            raise FilterError("[filter:%s] failed to parse ts '%s': %s" % (self.name, ts, e))
+        fields['hostname'] = hostname
+        fields['default'] = default
+        return fields
+
+    def _filterSyslog(self, fields):
+        data = fields['_raw']
         # parse the PRI section
         m = self._PRImatcher.match(data)
         if m == None:
-            raise FilterError("discarding msg with invalid PRI section")
+            raise FilterError("[filter:%s] line has invalid PRI section" % self.name)
         pri = m.group('pri')
         # trim the PRI section off
         data = data[len(pri)+2:]
         # make sure that the PRI value is in decimal (a leading '0' would indicate octal)
         if len(pri) > 1 and pri[0] == '0':
-            raise FilterError("discarding msg with invalid PRI section")
+            raise FilterError("[filter:%s] line has invalid PRI section" % self.name)
         # verify that we are interested in this particular priority
         pri = int(pri)
         if not pri in self._selected:
-            raise StopFiltering("not interested in msg with priority %i" % pri)
+            raise StopFiltering("[filter:%s] not interested in msg with priority %i" % (self.name,pri))
         # parse the facility and severity from the priority
         facility = pri / 8
         severity = pri % 8
         if facility < 0 or facility > 23:
-            raise FilterError("discarding msg with invalid facility %i" % facility)
+            raise FilterError("[filter:%s] line has invalid facility %i" % (self.name,facility))
         if severity < 0 or severity > 7:
-            raise FilterError("discarding msg with invalid severity %i" % severity)
+            raise FilterError("[filter:%s] line has invalid severity %i" % (self.name,severity))
         # notify each input about the new syslog message
         fields['facility'] = facility
         fields['severity'] = severity
@@ -151,22 +169,22 @@ class SyslogFilter(Filter):
         # this is a BSD syslog message
         m = self._TIMESTAMPmatcher.match(data)
         if m == None:
-            raise FilterError("[filter:%s] message has an invalid timestamp" % self.name)
+            raise FilterError("[filter:%s] line has an invalid timestamp" % self.name)
         timestamp = m.group('timestamp')
         if timestamp == None:
-            raise FilterError("[filter:%s] message has an invalid timestamp" % self.name)
+            raise FilterError("[filter:%s] line has an invalid timestamp" % self.name)
         # trim the TIMESTAMP section off
         data = data[len(timestamp):]
         # parse the timestamp
         try:
             fields['ts'] = dateutils.parser.parse(timestamp).isoformat()
         except Exception, e:
-            raise FilterError("failed to parse date '%s': %s" % (timestamp, e))
+            raise FilterError("[filter:%s] failed to parse date '%s': %s" % (self.name, timestamp, e))
         # the remainder of the data consists of the HOSTNAME, a space, then the MSG
         try:
             hostname,default = data.split(' ', 1)
         except:
-            raise FilterError("[filter:%s] message has no body")
+            raise FilterError("[filter:%s] line has no syslog body")
         fields['hostname'] = hostname
         fields['default'] = default
         return fields

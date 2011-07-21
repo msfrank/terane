@@ -93,7 +93,6 @@ setup(
             ],
         'terane.plugin.filter': [
             'syslog=terane.filters.syslog:SyslogFilterPlugin',
-            'messages=terane.filters.messages:MessagesFilterPlugin',
             'regex=terane.filters.regex:RegexFilterPlugin',
             'dt=terane.filters.dt:DatetimeFilterPlugin',
             'apache_combined=terane.filters.apache:ApacheCombinedFilterPlugin',
