@@ -97,9 +97,10 @@ class SyslogFilter(Filter):
                     self._selected |= addset
 
     def configure(self, section):
-        self._filematcher = re.compile(r'(?P<ts>[A-Za-z]{3} [ \d]\d \d\d:\d\d\:\d\d) (?P<hostname>\S*) (?P<default>.*)')
+        self._filematcher = re.compile(r'(?P<ts>[A-Za-z]{3} [ \d]\d \d\d:\d\d\:\d\d) (?P<hostname>\S*) (?P<msg>.*)')
         self._PRImatcher = re.compile(r'<(?P<pri>[0-9]{1,3})>')
         self._TIMESTAMPmatcher = re.compile(r'(?P<timestamp>[A-Za-z]{3} [ \d]\d \d\d:\d\d\:\d\d )')
+        self._TAGmatcher = re.compile(r'^(\S+)\[(\d+)\]:$|^(\S+):$')
         self._selected = set()
         # parse each selector, separated by semicolons
         selectors = section.getString('syslog selectors', '').strip()
@@ -123,18 +124,17 @@ class SyslogFilter(Filter):
     def _filterFile(self, fields):
         m = self._filematcher.match(fields['_raw'])
         if m == None:
-            raise FilterError("[filter:%s] line '%s' is not in syslog format" % (self.name,line))
-        ts,hostname,default = m.group('ts','hostname','default')
-        if ts == None or hostname == None or default == None:
-            raise FilterError("[filter:%s] line '%s' is not in syslog format" % (self.name,line))
+            raise FilterError("[filter:%s] line is not in syslog format" % self.name)
+        ts,hostname,msg = m.group('ts','hostname','msg')
+        if ts == None or hostname == None or msg == None:
+            raise FilterError("[filter:%s] line is not in syslog format" % self.name)
         # parse the timestamp
         try:
             fields['ts'] = dateutil.parser.parse(ts)
         except Exception, e:
             raise FilterError("[filter:%s] failed to parse ts '%s': %s" % (self.name, ts, e))
         fields['hostname'] = hostname
-        fields['default'] = default
-        return fields
+        return self._filterMsg(msg, fields)
 
     def _filterSyslog(self, fields):
         data = fields['_raw']
@@ -160,8 +160,8 @@ class SyslogFilter(Filter):
         if severity < 0 or severity > 7:
             raise FilterError("[filter:%s] line has invalid severity %i" % (self.name,severity))
         # notify each input about the new syslog message
-        fields['facility'] = facility
-        fields['severity'] = severity
+        fields['syslog_facility'] = facility
+        fields['syslog_severity'] = severity
         # parse the HEADER section
         # this is a RFC5424-compliant syslog message
         if data[0].isdigit():
@@ -182,11 +182,26 @@ class SyslogFilter(Filter):
             raise FilterError("[filter:%s] failed to parse date '%s': %s" % (self.name, timestamp, e))
         # the remainder of the data consists of the HOSTNAME, a space, then the MSG
         try:
-            hostname,default = data.split(' ', 1)
+            hostname,msg = data.split(' ', 1)
         except:
             raise FilterError("[filter:%s] line has no syslog body")
         fields['hostname'] = hostname
-        fields['default'] = default
+        return self._filterMsg(msg, fields)
+
+    def _filterMsg(self, msg, fields):
+        tag,content = msg.split(' ', 1)
+        m = self._TAGmatcher.match(tag)
+        if m == None:
+            raise FilterError("[filter:%s] line has an invalid tag" % self.name)
+        tag = m.groups()
+        if tag[0] != None and tag[1] != None:
+            fields['syslog_tag'] = tag[0]
+            fields['syslog_pid'] = tag[1]
+        elif tag[2] != None:
+            fields['syslog_tag'] = tag[2]
+        else:
+            raise FilterError("[filter:%s] line has an invalid tag" % self.name)
+        fields['default'] = content
         return fields
 
 _severities = {
