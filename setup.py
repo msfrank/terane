@@ -95,7 +95,7 @@ setup(
             'syslog=terane.filters.syslog:SyslogFilterPlugin',
             'messages=terane.filters.messages:MessagesFilterPlugin',
             'regex=terane.filters.regex:RegexFilterPlugin',
-            'datetime=terane.filters.datetime:DatetimeFilterPlugin',
+            'dt=terane.filters.dt:DatetimeFilterPlugin',
             'apache_combined=terane.filters.apache:ApacheCombinedFilterPlugin',
             'apache_common=terane.filters.apache:ApacheCommonFilterPlugin',
             'mysql_server=terane.filters.mysql:MysqlServerFilterPlugin',
