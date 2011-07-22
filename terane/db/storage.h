@@ -119,11 +119,11 @@ PyObject *terane_TOC_remove_field (terane_TOC *self, PyObject *args);
 int TOC_contains_field (terane_TOC *toc, DB_TXN *txn, PyObject *fieldname);
 PyObject *terane_TOC_contains_field (terane_TOC *self, PyObject *args);
 PyObject *terane_TOC_list_fields (terane_TOC *self, PyObject *args);
-PyObject *terane_TOC_count_fields (terane_TOC *self, PyObject *args);
+PyObject *terane_TOC_count_fields (terane_TOC *self);
 PyObject *terane_TOC_new_segment (terane_TOC *toc, PyObject *args);
 int TOC_contains_segment (terane_TOC *toc, terane_Txn *txn, db_recno_t segment_id);
 PyObject *terane_TOC_iter_segments (terane_TOC *toc, PyObject *args);
-PyObject *terane_TOC_count_segments (terane_TOC *toc, PyObject *args);
+PyObject *terane_TOC_count_segments (terane_TOC *toc);
 PyObject *terane_TOC_delete_segment (terane_TOC *toc, PyObject *args);
 PyObject *terane_TOC_close (terane_TOC *toc);
 
@@ -140,7 +140,7 @@ PyObject *terane_Segment_set_doc (terane_Segment *self, PyObject *args);
 PyObject *terane_Segment_delete_doc (terane_Segment *self, PyObject *args);
 PyObject *terane_Segment_contains_doc (terane_Segment *self, PyObject *args);
 PyObject *terane_Segment_iter_docs (terane_Segment *self, PyObject *args);
-PyObject *terane_Segment_count_docs (terane_Segment *self, PyObject *args);
+PyObject *terane_Segment_count_docs (terane_Segment *self);
 PyObject *terane_Segment_first_doc (terane_Segment *self, PyObject *args);
 PyObject *terane_Segment_last_doc (terane_Segment *self, PyObject *args);
 
