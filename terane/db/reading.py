@@ -107,7 +107,7 @@ class SegmentReader(WhooshIndexReader):
     def doc_count_all(self):
         # return the total number of documents in the store.
         logger.debug("IndexReader.doc_count_all()")
-        return self._segment.count_docs(None)
+        return self._segment.count_docs()
     
     def doc_count(self):
         # return the total number of documents in the store.  This returns the
@@ -117,7 +117,7 @@ class SegmentReader(WhooshIndexReader):
         # deleted documents (we just delete em :) these two values are always the
         # same.
         logger.debug("IndexReader.doc_count()")
-        return self._segment.count_docs(None)
+        return self._segment.count_docs()
     
     def field_length(self, fieldname):
         # return the total number of terms in the specified field. 

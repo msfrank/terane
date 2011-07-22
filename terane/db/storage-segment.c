@@ -255,7 +255,7 @@ PyMethodDef _Segment_methods[] =
         "Returns True if the segment contains the specified document." },
     { "iter_docs", (PyCFunction) terane_Segment_iter_docs, METH_VARARGS,
         "Iterates through all documents in the index." },
-    { "count_docs", (PyCFunction) terane_Segment_count_docs, METH_VARARGS,
+    { "count_docs", (PyCFunction) terane_Segment_count_docs, METH_NOARGS,
         "Returns the total number of documents in the index." },
     { "first_doc", (PyCFunction) terane_Segment_first_doc, METH_VARARGS,
         "Return the first (lowest numbered) document." },

@@ -335,7 +335,7 @@ terane_Segment_iter_docs (terane_Segment *self, PyObject *args)
  * exceptions: None
  */
 PyObject *
-terane_Segment_count_docs (terane_Segment *self, PyObject *args)
+terane_Segment_count_docs (terane_Segment *self)
 {
     return PyLong_FromUnsignedLong (self->ndocuments);
 }

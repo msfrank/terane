@@ -68,8 +68,7 @@ class FieldDict(MutableMapping):
             return self._toc.contains_field(txn, fieldname)
 
     def __len__(self):
-        with Txn(self._env) as txn:
-            return self._toc.count_fields(txn)
+        return self._toc.count_fields()
 
     def __iter__(self):
         with Txn(self._env) as txn:

@@ -473,7 +473,7 @@ error:
  * exceptions: None
  */
 PyObject *
-terane_TOC_count_fields (terane_TOC *self, PyObject *args)
+terane_TOC_count_fields (terane_TOC *self)
 {
     return PyLong_FromUnsignedLong (self->nfields);
  }
@@ -608,7 +608,7 @@ terane_TOC_iter_segments (terane_TOC *self, PyObject *args)
  * exceptions: None
  */
 PyObject *
-terane_TOC_count_segments (terane_TOC *self, PyObject *args)
+terane_TOC_count_segments (terane_TOC *self)
 {
     return PyLong_FromUnsignedLong (self->nsegments);
 }
@@ -893,13 +893,13 @@ PyMethodDef _TOC_methods[] =
         "Return True if the field exists in the TOC." },
     { "list_fields", (PyCFunction) terane_TOC_list_fields, METH_VARARGS,
         "Return a list of all fields in the TOC." },
-    { "count_fields", (PyCFunction) terane_TOC_count_fields, METH_VARARGS,
+    { "count_fields", (PyCFunction) terane_TOC_count_fields, METH_NOARGS,
         "Return the count of fields in the TOC." },
     { "new_segment", (PyCFunction) terane_TOC_new_segment, METH_VARARGS,
         "Allocate a new segment ID." },
     { "iter_segments", (PyCFunction) terane_TOC_iter_segments, METH_VARARGS,
         "Iterate all segment IDs in the TOC." },
-    { "count_segments", (PyCFunction) terane_TOC_count_segments, METH_VARARGS,
+    { "count_segments", (PyCFunction) terane_TOC_count_segments, METH_NOARGS,
         "Return the count of segments in the TOC." },
     { "delete_segment", (PyCFunction) terane_TOC_delete_segment, METH_VARARGS,
         "Delete the segment from the TOC." },

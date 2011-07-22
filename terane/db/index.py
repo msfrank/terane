@@ -79,7 +79,7 @@ class Index(WhooshIndex):
             for segmentid in self._toc.iter_segments(None):
                 segment = Segment(self._toc, segmentid)
                 # get document count from each segment
-                self._size += segment.count_docs(None, True)
+                self._size += segment.count_docs()
                 self._segments.append((segment, segmentid))
             if self._segments == []:
                 with Txn(self._env) as txn:
@@ -89,7 +89,7 @@ class Index(WhooshIndex):
                 logger.info("created first segment for new index '%s'" % name)
             else:
                 logger.info("found %i documents in %i segments for index '%s'" % (
-                    self._size, self._toc.count_segments(None), name))
+                    self._size, self._toc.count_segments(), name))
             # get a reference to the current segment
             self._current = self._segments[-1]
             # get last-modified timestamp (stored in seconds since the epoch)
