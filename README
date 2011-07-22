@@ -26,6 +26,14 @@ Prerequisite Software
     Any recent version should work.  Terane is tested with version 1.4.1.
     http://niemeyer.net/python-dateutil
 
+ * pyparsing
+    Any recent version should work.  Terane is tested with version 1.5.2.
+    http://pyparsing.wikispaces.com/
+
+ * urwid
+    Any recent version should work.  Terane is tested with version 0.9.9.1.
+    http://excess.org/urwid/
+
 Copyright/License
 -----------------
 
