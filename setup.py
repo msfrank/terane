@@ -1,11 +1,19 @@
 #!/usr/bin/env python
 
+import sys, os
+
 from ez_setup import use_setuptools
 use_setuptools()
 from setuptools import setup, Extension, find_packages
 
+# verify required dependencies are installed
+try:
+    import twisted, pyparsing, dateutil, urwid, foobaz
+except ImportError, e:
+    print "Missing required dependency: %s" % e
+    sys.exit(1)
+
 # jump through some hoops to get access to versionstring()
-import sys, os
 from os.path import abspath, dirname
 sys.path.insert(0, abspath(dirname(__file__)))
 from terane import versionstring
