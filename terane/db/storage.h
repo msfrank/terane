@@ -41,6 +41,8 @@ typedef struct _terane_TOC {
     DB *metadata;
     DB *schema;
     DB *segments;
+    unsigned long nsegments;
+    unsigned long nfields;
 } terane_TOC;
 
 /* Iter object declaration */
@@ -89,7 +91,7 @@ typedef struct _terane_Segment {
     DB *documents;
     unsigned long ndocuments;
     terane_Field **fields;
-    int nfields;
+    unsigned long nfields;
     int deleted;
 } terane_Segment;
 

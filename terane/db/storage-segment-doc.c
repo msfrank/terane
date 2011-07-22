@@ -331,9 +331,8 @@ terane_Segment_iter_docs (terane_Segment *self, PyObject *args)
  *
  * callspec: Segment.count_docs()
  * parameters: None
- * returns: the number of documents in the db
- * exceptions:
- *   Exception: An error occurred trying to count the documents
+ * returns: The number of documents in the segment.
+ * exceptions: None
  */
 PyObject *
 terane_Segment_count_docs (terane_Segment *self, PyObject *args)

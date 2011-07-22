@@ -291,7 +291,8 @@ terane_TOC_add_field (terane_TOC *self, PyObject *args)
                 fieldname, db_strerror (dbret));
             break;
     }
-
+    /* increment the internal field count */
+    self->nfields += 1;
     Py_RETURN_NONE;
 }
 
@@ -466,48 +467,15 @@ error:
 /*
  * terane_TOC_count_fields: Return the number of fields in the schema.
  *
- * callspec: TOC.count_fields(txn, slow=False)
- * parameters:
- *   txn (Txn): A Txn object to wrap the operation in, or None
- *   slow (boolean): If True, then perform a slower, more accurate count
+ * callspec: TOC.count_fields()
+ * parameters: None
  * returns: The number of fields in the schema. 
- * exceptions:
- *   terane.db.storage.Error: A db error occurred when trying to get the record
+ * exceptions: None
  */
 PyObject *
 terane_TOC_count_fields (terane_TOC *self, PyObject *args)
 {
-    terane_Txn *txn = NULL;
-    PyObject *slow = NULL;
-    DB_BTREE_STAT *stats = NULL;
-    PyObject *count = NULL;
-    int dbret;
-
-    /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O|O", &txn, &slow))
-        return NULL;
-    if ((PyObject *) txn == Py_None)
-        txn = NULL;
-    if (txn && txn->ob_type != &terane_TxnType)
-        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-
-    /* retrieve count of items in the schema */
-    if (slow && PyObject_IsTrue (slow) == 1)
-        dbret = self->schema->stat (self->schema, txn? txn->txn : NULL, &stats, 0);
-    else
-        dbret = self->schema->stat (self->schema, txn? txn->txn : NULL, &stats, DB_FAST_STAT);
-    switch (dbret) {
-        case 0:
-            count = PyLong_FromUnsignedLong ((unsigned long) stats->bt_nkeys);
-            break;
-        default:
-            PyErr_Format (terane_Exc_Error, "Failed to get field count: %s",
-                db_strerror (dbret));
-            break;
-    }
-    if (stats)
-        PyMem_Free (stats);
-    return count;
+    return PyLong_FromUnsignedLong (self->nfields);
  }
 
 /*
@@ -532,7 +500,7 @@ terane_TOC_new_segment (terane_TOC *self, PyObject *args)
     if (!PyArg_ParseTuple (args, "O!", &terane_TxnType, &txn))
         return NULL;
 
-    /* add the fieldspec to the schema */
+    /* allocate a new segment record */
     memset (&key, 0, sizeof (DBT));
     memset (&data, 0, sizeof (DBT));
     dbret = self->schema->put (self->segments, txn->txn, &key, &data, DB_APPEND);
@@ -544,7 +512,9 @@ terane_TOC_new_segment (terane_TOC *self, PyObject *args)
                 db_strerror (dbret));
             return NULL;
     }
-
+    /* increment the internal segment count */
+    self->nsegments += 1;
+    /* return the segment record number */
     segment_id = *((db_recno_t *) key.data);
     return PyLong_FromUnsignedLong ((unsigned long) segment_id);
 }
@@ -632,46 +602,15 @@ terane_TOC_iter_segments (terane_TOC *self, PyObject *args)
 /*
  * terane_TOC_count_segments: return the number of segments in the TOC.
  *
- * callspec: TOC.count_segments(txn, slow=False)
- * parameters:
- *   txn (Txn): A Txn object to wrap the operation in, or None
- *   slow (boolean): If True, then perform a slower, more accurate count
- * returns: The number of segments in the TOC
- * exceptions:
- *   terane.db.storage.Error: A db error occurred when trying count the segments
+ * callspec: TOC.count_segments()
+ * parameters: None
+ * returns: The number of segments in the TOC.
+ * exceptions: None
  */
 PyObject *
 terane_TOC_count_segments (terane_TOC *self, PyObject *args)
 {
-    terane_Txn *txn = NULL;
-    PyObject *slow = NULL;
-    DB_QUEUE_STAT *stats = NULL;
-    PyObject *count = NULL;
-    int dbret;
-
-    /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O|O", &txn, &slow))
-        return NULL;
-    if ((PyObject *) txn == Py_None)
-        txn = NULL;
-    if (txn && txn->ob_type != &terane_TxnType)
-        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-
-    /* retrieve count of items in the schema */
-    dbret = self->segments->stat (self->segments, txn? txn->txn : NULL,
-        &stats, slow && PyObject_IsTrue (slow)? 0 : DB_FAST_STAT);
-    switch (dbret) {
-        case 0:
-            count = PyLong_FromUnsignedLong ((unsigned long int) stats->qs_nkeys);
-            break;
-        default:
-            PyErr_Format (terane_Exc_Error, "Failed to get segment count: %s",
-                db_strerror (dbret));
-            break;
-    }
-    if (stats)
-        PyMem_Free (stats);
-    return count;
+    return PyLong_FromUnsignedLong (self->nsegments);
 }
 
 /*
@@ -709,6 +648,8 @@ terane_TOC_delete_segment (terane_TOC *self, PyObject *args)
                 db_strerror (dbret));
             break;
     }
+    /* decrement the internal segment count */
+    self->nsegments -= 1;
     Py_RETURN_NONE;
 }
 
@@ -798,6 +739,7 @@ terane_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     char *kwlist[] = {"env", "name", NULL};
     char *tocname = NULL;
     DB_TXN *txn = NULL;
+    DB_BTREE_STAT *stats = NULL;
     int dbret;
 
     /* allocate the TOC object */
@@ -865,7 +807,21 @@ terane_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
             db_strerror (dbret));
         goto error;
     }
- 
+
+    /* get an initial count of fields */
+    dbret = self->schema->stat (self->schema, txn, &stats, 0);
+    if (dbret != 0) {
+        if (stats)
+            PyMem_Free (stats);
+        PyErr_Format (terane_Exc_Error, "Failed to get field count: %s",
+            db_strerror (dbret));
+        goto error;
+    }
+    self->nfields = (unsigned long) stats->bt_nkeys;
+    if (stats)
+        PyMem_Free (stats);
+    stats = NULL;
+
     /* create the DB handle for the segments store */
     dbret = db_create (&self->segments, self->env->env, 0);
     if (dbret != 0) {
@@ -881,7 +837,21 @@ terane_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
             db_strerror (dbret));
         goto error;
     }
-   
+
+    /* get an initial count of segments */
+    dbret = self->segments->stat (self->segments, txn, &stats, 0);
+    if (dbret != 0) {
+        if (stats)
+            PyMem_Free (stats);
+        PyErr_Format (terane_Exc_Error, "Failed to get segment count: %s",
+            db_strerror (dbret));
+        goto error;
+    }
+    self->nsegments = (unsigned long) stats->bt_nkeys;
+    if (stats)
+        PyMem_Free (stats);
+    stats = NULL;
+  
     /* commit new databases */
     dbret = txn->commit (txn, 0);
     if (dbret != 0) {
