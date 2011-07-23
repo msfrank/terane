@@ -202,8 +202,11 @@ terane_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto error;
     }
 
-    /* get an initial count of documents */
-    dbret = self->documents->stat (self->documents, txn, &stats, 0);
+    /* get an initial count of documents.  we don't wrap this call in
+     * a transaction because we aren't making any modifications, and there
+     * is no possibility of external modification during this call.
+     */
+    dbret = self->documents->stat (self->documents, NULL, &stats, 0);
     if (dbret != 0) {
         if (stats)
             PyMem_Free (stats);

@@ -808,8 +808,11 @@ terane_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto error;
     }
 
-    /* get an initial count of fields */
-    dbret = self->schema->stat (self->schema, txn, &stats, 0);
+    /* get an initial count of fields.  we don't wrap this call in
+     * a transaction because we aren't making any modifications, and there
+     * is no possibility of external modification during this call.
+     */
+    dbret = self->schema->stat (self->schema, NULL, &stats, 0);
     if (dbret != 0) {
         if (stats)
             PyMem_Free (stats);
@@ -838,8 +841,11 @@ terane_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto error;
     }
 
-    /* get an initial count of segments */
-    dbret = self->segments->stat (self->segments, txn, &stats, 0);
+    /* get an initial count of segments.  we don't wrap this call in
+     * a transaction because we aren't making any modifications, and there
+     * is no possibility of external modification during this call.
+     */
+    dbret = self->segments->stat (self->segments, NULL, &stats, 0);
     if (dbret != 0) {
         if (stats)
             PyMem_Free (stats);
