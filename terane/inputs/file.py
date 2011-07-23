@@ -53,6 +53,12 @@ class FileInput(Input):
         logger.debug("[input:%s] polling interval is %i seconds" % (self.name,self._interval))
         self._linemax = section.getInt('maximum line length', 1024 * 1024)
         logger.debug("[input:%s] maximum line length is %i bytes" % (self.name,self._linemax))
+        self._loopchunk = section.getInt('loop chunk length', 1024 * 1024)
+        # loop chunk length has to be at least as big as maximum
+        # line length, otherwise we could lose data.
+        if self._loopchunk < self._linemax:
+            self._loopchunk = self._linemax
+        logger.debug("[input:%s] loop chunk length is %i bytes" % (self.name,self._loopchunk))
 
     def outfields(self):
         return set(('_raw',))
@@ -62,12 +68,15 @@ class FileInput(Input):
         self._schedule(None)
         logger.debug("[input:%s] started input" % self.name)
 
-    def _schedule(self, unused):
+    def _schedule(self, loopimmediately):
         self._deferred = Deferred()
         self._deferred.addCallback(self._tail)
         self._deferred.addCallback(self._schedule)
         self._deferred.addErrback(self._error)
-        reactor.callLater(self._interval, self._deferred.callback, None)
+        if loopimmediately == True:
+            reactor.callLater(0, self._deferred.callback, None)
+        else:
+            reactor.callLater(self._interval, self._deferred.callback, None)
 
     def _tail(self, unused):
         try:
@@ -91,7 +100,7 @@ class FileInput(Input):
             if errno != self._errno:
                 logger.warning("[input:%s] failed to tail file: %s" % (self.name,errstr))
                 self._errno = errno
-            return
+            return False
 
         # check if the file inode and/or underlying block device changed
         f = self._file
@@ -111,10 +120,16 @@ class FileInput(Input):
                 (self.name, self._position - _currstats.st_size))
             # reset position to the new end of the file
             self._position = _currstats.st_size
-            return
+            return False
 
-        # calculate the total bytes we will read
+        # calculate the total bytes available to read
         toread = _currstats.st_size - self._position
+        # calculate the bytes we will read this loop iteration
+        if toread > self._loopchunk:
+            toread = self._loopchunk
+            loopimmediately = True
+        else:
+            loopimmediately = False
         # seek to the next byte to read
         f.seek(self._position)
         # loop reading lines until EOF or incomplete line
@@ -177,6 +192,7 @@ class FileInput(Input):
 
         # save the old file stats
         self._prevstats = _currstats
+        return loopimmediately
 
     def _write(self, line):
         # ignore lines consisting entirely of whitespace
