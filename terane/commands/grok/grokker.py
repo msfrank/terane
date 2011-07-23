@@ -33,7 +33,7 @@ class Grokker(object):
     def configure(self, settings):
         # load configuration
         section = settings.section("grok")
-        self.host = section.getString("host", 'localhost:7080')
+        self.host = section.getString("host", 'localhost:45565')
         # configure server logging
         if section.getBoolean("debug", False):
             handler = StreamHandler()

@@ -38,8 +38,6 @@ class Server(MultiService):
     def configure(self, settings):
         self.settings = settings
         section = settings.section('server')
-        self.listenAddress = section.getString('listen address', '0.0.0.0')
-        self.listenPort = section.getInt('listen port', 45565)
         self.pidfile = section.getPath('pid file', '/var/run/terane/server.pid')
         self.debug = section.getBoolean('debug', False)
         verbosity = section.getString('log verbosity', 'WARNING')

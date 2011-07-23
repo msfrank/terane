@@ -26,7 +26,7 @@ class Tailer(object):
     def configure(self, settings):
         # load configuration
         section = settings.section("tail")
-        self.host = section.getString("host", 'localhost:7080')
+        self.host = section.getString("host", 'localhost:45565')
         self.limit = section.getInt("limit", 100)
         self.longfmt = section.getBoolean("long format", False)
         self.indices = section.getList(str, "use indices", None)

@@ -25,7 +25,7 @@ class Searcher(object):
     def configure(self, settings):
         # load configuration
         section = settings.section("search")
-        self.host = section.getString("host", 'localhost:7080')
+        self.host = section.getString("host", 'localhost:45565')
         self.limit = section.getInt("limit", 100)
         self.reverse = section.getBoolean("display reverse", False)
         self.longfmt = section.getBoolean("long format", False)

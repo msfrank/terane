@@ -37,7 +37,7 @@ class Console(urwid.WidgetWrap):
     def configure(self, settings):
         # load configuration
         section = settings.section("console")
-        self.host = section.getString("host", 'localhost:7080')
+        self.host = section.getString("host", 'localhost:45565')
         self.executecmd = section.getString('execute command', None)
         self.debug = section.getBoolean("debug", False)
 

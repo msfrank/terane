@@ -19,7 +19,7 @@ import xmlrpclib, traceback, functools
 from twisted.internet import threads
 from twisted.web.xmlrpc import XMLRPC
 from twisted.web.server import Site
-from terane.plugins import Plugin
+from twisted.application.service import Service
 from terane.dql import parseQuery, ParsingSyntaxError
 from terane.db.plan import SearchPlan, TailPlan, ListIndicesPlan, ShowIndexPlan
 from terane.stats import stats
@@ -131,19 +131,21 @@ class XMLRPCDispatcher(XMLRPC):
             self.logexception(e)
             raise FaultInternalError()
 
-class XMLRPCService(Plugin):
+class XMLRPCService(Service):
 
-    def configure(self, section):
-        pass
+    def configure(self, settings):
+        section = settings.section('server')
+        self.listenAddress = section.getString('listen address', '0.0.0.0')
+        self.listenPort = section.getInt('listen port', 45565)
 
     def startService(self):
-        Plugin.startService(self)
+        Service.startService(self)
         from twisted.internet import reactor
-        self.listener = reactor.listenTCP(7080, Site(XMLRPCDispatcher()))
-        logger.debug("[xmlrpc] started xmlrpc service")
+        self.listener = reactor.listenTCP(self.listenPort, Site(XMLRPCDispatcher()), interface=self.listenAddress)
+        logger.debug("[xmlrpc] started xmlrpc service on %s:%i" % (self.listenAddress, self.listenPort))
 
     def stopService(self):
         self.listener.stopListening()
         self.listener = None
         logger.debug("[xmlrpc] stopped xmlrpc service")
-        Plugin.stopService(self)
+        Service.stopService(self)
