@@ -124,6 +124,13 @@ terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
             db_strerror (dbret));
         goto error;
     }
+    /* set logging parameters */
+    dbret = self->env->log_set_config (self->env, DB_LOG_AUTO_REMOVE, 1);
+    if (dbret != 0) {
+        PyErr_Format (PyExc_Exception, "Failed to enable log auto-removal: %s",
+            db_strerror (dbret));
+        goto error;
+    }
     /* start the checkpoint thread */
     dbret = pthread_create (&self->checkpoint_thread, NULL, _Env_checkpoint_thread, self);
     if (dbret != 0) {
