@@ -44,9 +44,20 @@ _Env_checkpoint_thread (void *ptr)
     /* enable deferred cancellation */
     pthread_setcancelstate (PTHREAD_CANCEL_ENABLE, NULL);
     pthread_setcanceltype (PTHREAD_CANCEL_DEFERRED, NULL);
-    /* loop performing a checkpoint once a minute */
+    /* loop once a minute */
     for (;;) {
+        int rejected = 0;
+        /* run the deadlock detector */
+        dbret = env->env->lock_detect (env->env, 0, DB_LOCK_MINLOCKS, &rejected);
+        if (dbret != 0)
+            log_msg (TERANE_LOG_ERROR, "terane.db.storage",
+                "lock_detect failed: %s", db_strerror (dbret));
+        else if (rejected > 0)
+            log_msg (TERANE_LOG_DEBUG, "terane.db.storage",
+                "lock_detect rejected %i requests", rejected);
+        /* sleep for a minute */
         sleep (60);
+        /* perform a checkpoint */
         dbret = env->env->txn_checkpoint (env->env, 0, 0, 0);
         if (dbret != 0)
             log_msg (TERANE_LOG_ERROR, "terane.db.storage", "txn_checkpoint failed: %s",
@@ -54,6 +65,24 @@ _Env_checkpoint_thread (void *ptr)
         pthread_testcancel ();
     }
     return NULL;
+}
+
+/*
+ * _Env_log_err: log DB error messages s using logfd.
+ */
+static void
+_Env_log_err (const DB_ENV *env, const char *prefix, const char *msg)
+{
+    log_msg (TERANE_LOG_ERROR, "terane.db.storage", msg);
+}
+
+/*
+ * _Env_log_info: log DB informational messages using logfd.
+ */
+static void
+_Env_log_info (const DB_ENV *env, const char *msg)
+{
+    log_msg (TERANE_LOG_INFO, "terane.db.storage", msg);
 }
 
 /*
@@ -89,6 +118,9 @@ terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
         PyErr_Format (PyExc_Exception, "Failed to create DB_ENV: %s", db_strerror (dbret));
         goto error;
     }
+    /* set db error and message logging */
+    self->env->set_errcall(self->env, _Env_log_err);
+    self->env->set_msgcall(self->env, _Env_log_info);
     /* parse constructor parameters */
     if (!PyArg_ParseTupleAndKeywords (args, kwds, "sss|IO",
         kwlist, &envdir, &datadir, &tmpdir, &cachesize, &self->logger))
@@ -117,8 +149,9 @@ terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
         }
     }
     /* open the database environment */
-    dbret = self->env->open (self->env, envdir, DB_CREATE | DB_INIT_TXN |
-        DB_INIT_MPOOL | DB_INIT_LOCK | DB_INIT_LOG | DB_REGISTER | DB_RECOVER, 0);
+    dbret = self->env->open (self->env, envdir, DB_CREATE | 
+        DB_INIT_TXN | DB_INIT_MPOOL | DB_INIT_LOCK | DB_INIT_LOG |
+        DB_REGISTER | DB_RECOVER, 0);
     if (dbret != 0) {
         PyErr_Format (PyExc_Exception, "Failed to open environment: %s",
             db_strerror (dbret));

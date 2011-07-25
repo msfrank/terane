@@ -65,10 +65,13 @@ class DatabaseManager(MultiService):
 
         This method implements IService.startService().
         """
+        # start processing logfd messages
+        self._logfd = LogFD()
+        self._logfd.startReading()
+        # create berkeleydb-specific directories under the dbdir root
         datadir = os.path.join(self.dbdir, "data")
         envdir = os.path.join(self.dbdir, "env")
         tmpdir = os.path.join(self.dbdir, "tmp")
-        # create berkeleydb-specific directories under the dbdir root
         if not os.path.exists(self.dbdir):
             os.mkdir(self.dbdir)
         if not os.path.exists(datadir):
@@ -78,14 +81,10 @@ class DatabaseManager(MultiService):
         if not os.path.exists(tmpdir):
             os.mkdir(tmpdir)
         # open the db environment
-        self._env = Env(envdir, datadir, tmpdir, cachesize=self.cachesize,
-            logger=getLogger('terane.db.storage'))
+        self._env = Env(envdir, datadir, tmpdir, cachesize=self.cachesize)
         logger.debug("opened database environment in %s" % self.dbdir)
         # start the id generator
         self._ids.startService()
-        # process logfd messages
-        self._logfd = LogFD()
-        self._logfd.startReading()
         MultiService.startService(self)
 
     def stopService(self):
