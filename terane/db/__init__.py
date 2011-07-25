@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os
+import os, fcntl
 from twisted.internet import reactor
 from twisted.application.service import MultiService
 from terane.db.storage import Env
@@ -36,6 +36,7 @@ class DatabaseManager(MultiService):
         self._env = None
         self._indices = dict()
         self._ids = IDGenerator()
+        self._lock = None
 
     def configure(self, settings):
         """
@@ -80,6 +81,16 @@ class DatabaseManager(MultiService):
             os.mkdir(envdir)
         if not os.path.exists(tmpdir):
             os.mkdir(tmpdir)
+        # lock the database directory
+        try:
+            self._lock = os.open(os.path.join(self.dbdir, 'lock'), os.O_WRONLY | os.O_CREAT, 0600)
+            fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except IOError, e:
+            from errno import EACCES, EAGAIN
+            if e.errno in (EACCES, EAGAIN):
+                raise Exception("Failed to lock the database directory: database is already locked")
+        except Exception, e:
+            raise Exception("Failed to lock the database directory: %s" % e)
         # open the db environment
         self._env = Env(envdir, datadir, tmpdir, cachesize=self.cachesize)
         logger.debug("opened database environment in %s" % self.dbdir)
@@ -102,6 +113,13 @@ class DatabaseManager(MultiService):
         self._ids.stopService()
         # close the DB environment
         self._env.close()
+        # unlock the database directory
+        try:
+            if self._lock != None:
+                fcntl.flock(self._lock, fcntl.LOCK_UN | fcntl.LOCK_NB)
+        except Exception, e:
+            logger.warning("Failed to unlock the database directory: %s" % e)
+        self._lock = None
         logger.debug("closed database environment")
 
 db = DatabaseManager()
