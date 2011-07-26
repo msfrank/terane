@@ -80,9 +80,9 @@ _Env_log_err (const DB_ENV *env, const char *prefix, const char *msg)
  * _Env_log_info: log DB informational messages using logfd.
  */
 static void
-_Env_log_info (const DB_ENV *env, const char *msg)
+_Env_log_msg (const DB_ENV *env, const char *msg)
 {
-    log_msg (TERANE_LOG_INFO, "terane.db.storage", msg);
+    log_msg (TERANE_LOG_DEBUG, "terane.db.storage", msg);
 }
 
 /*
@@ -119,8 +119,11 @@ terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto error;
     }
     /* set db error and message logging */
-    self->env->set_errcall(self->env, _Env_log_err);
-    self->env->set_msgcall(self->env, _Env_log_info);
+    self->env->set_errcall (self->env, _Env_log_err);
+    self->env->set_msgcall (self->env, _Env_log_msg);
+    self->env->set_verbose (self->env, DB_VERB_DEADLOCK, 1);
+    self->env->set_verbose (self->env, DB_VERB_RECOVERY, 1);
+    self->env->set_verbose (self->env, DB_VERB_REGISTER, 1);
     /* parse constructor parameters */
     if (!PyArg_ParseTupleAndKeywords (args, kwds, "sss|IO",
         kwlist, &envdir, &datadir, &tmpdir, &cachesize, &self->logger))
@@ -148,19 +151,19 @@ terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
             goto error;
         }
     }
+    /* set db log management parameters */
+    dbret = self->env->log_set_config (self->env, DB_LOG_AUTO_REMOVE, 1);
+    if (dbret != 0) {
+        PyErr_Format (PyExc_Exception, "Failed to enable log auto-removal: %s",
+            db_strerror (dbret));
+        goto error;
+    }
     /* open the database environment */
     dbret = self->env->open (self->env, envdir, DB_CREATE | 
         DB_INIT_TXN | DB_INIT_MPOOL | DB_INIT_LOCK | DB_INIT_LOG |
         DB_REGISTER | DB_RECOVER, 0);
     if (dbret != 0) {
         PyErr_Format (PyExc_Exception, "Failed to open environment: %s",
-            db_strerror (dbret));
-        goto error;
-    }
-    /* set logging parameters */
-    dbret = self->env->log_set_config (self->env, DB_LOG_AUTO_REMOVE, 1);
-    if (dbret != 0) {
-        PyErr_Format (PyExc_Exception, "Failed to enable log auto-removal: %s",
             db_strerror (dbret));
         goto error;
     }
