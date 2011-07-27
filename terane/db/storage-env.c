@@ -73,7 +73,7 @@ _Env_checkpoint_thread (void *ptr)
 static void
 _Env_log_err (const DB_ENV *env, const char *prefix, const char *msg)
 {
-    log_msg (TERANE_LOG_ERROR, "terane.db.storage", msg);
+    log_msg (TERANE_LOG_ERROR, "terane.db.storage", "BDB: %s", msg);
 }
 
 /*
@@ -82,7 +82,7 @@ _Env_log_err (const DB_ENV *env, const char *prefix, const char *msg)
 static void
 _Env_log_msg (const DB_ENV *env, const char *msg)
 {
-    log_msg (TERANE_LOG_DEBUG, "terane.db.storage", msg);
+    log_msg (TERANE_LOG_INFO, "terane.db.storage", "BDB: %s", msg);
 }
 
 /*
@@ -161,7 +161,7 @@ terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     /* open the database environment */
     dbret = self->env->open (self->env, envdir, DB_CREATE | 
         DB_INIT_TXN | DB_INIT_MPOOL | DB_INIT_LOCK | DB_INIT_LOG |
-        DB_REGISTER | DB_RECOVER, 0);
+        DB_PRIVATE | DB_RECOVER, 0);
     if (dbret != 0) {
         PyErr_Format (PyExc_Exception, "Failed to open environment: %s",
             db_strerror (dbret));
