@@ -1,3 +1,12 @@
+Release 0.1.0
+-------------
+
+ * added nagios filter.
+ * fixed stale segment and field counts in the TOC.
+ * fixed potential denial-of-service bug in the file input.
+ * added terane console application.
+ * merged messages filter into syslog filter.
+
 Release 0.0.7
 -------------
 
