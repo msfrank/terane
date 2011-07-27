@@ -2,18 +2,30 @@
 # Server configuration
 # ---------------------------------------------------------------------
 [server]
-listen address = 0.0.0.0
+# the address of the interface to listen on for xmlrpc requests.
+listen address = 127.0.0.1
+# the port to listen on for xmlrpc events.
 listen port = 45565
-log file = /var/log/terane/server.log
-pid file = /var/run/terane/terane.pid
-stats file = /var/lib/terane/statistics
-stats sync interval = 1
+# log server messages.  make sure terane-server has permission to write
+# to this file.
+log file = /var/log/terane.log
+# log server messages of the specified severity level and above.  valid
+# levels are DEBUG, INFO, WARNING, and ERROR.
 log verbosity = INFO
+# write pid file.  make sure terane-server has permission to write to
+# this file.
+pid file = /var/run/terane.pid
+# log server statistics.
+stats file = /var/lib/terane/statistics
+# write out the statistics file at the specified interval.
+stats sync interval = 1
 
 # ---------------------------------------------------------------------
 # Database configuration
 # ---------------------------------------------------------------------
 [database]
+# store database in the specified directory.  make sure this directory
+# exists and terane-server has permission to write there.
 data directory = /var/lib/terane/db
 
 # ---------------------------------------------------------------------
@@ -22,24 +34,22 @@ data directory = /var/lib/terane/db
 [plugin:input:file]
 
 [plugin:input:syslog]
-syslog udp address = 0.0.0.0
-syslog udp port = 51500
 
 [plugin:input:collect]
-collect address = 0.0.0.0
-collect port = 8643
 
 [plugin:filter:syslog]
 
-[plugin:filter:messages]
-
 [plugin:filter:regex]
 
-[plugin:filter:datetime]
+[plugin:filter:dt]
 
 [plugin:filter:apache_common]
 
 [plugin:filter:apache_combined]
+
+[plugin:filter:mysql_server]
+
+[plugin:filter:nagios]
 
 [plugin:output:store]
 
@@ -48,73 +58,66 @@ collect port = 8643
 # ---------------------------------------------------------------------
 # Inputs configuration
 # ---------------------------------------------------------------------
-[input:testfile]
+[input:messages]
 type = file
-file path = /home/msfrank/testfile
-polling interval = 1
+file path = /var/log/messages
 
-[input:udp_syslog]
-type = syslog
-syslog udp allowed clients = 10.0.0.0/8
-
-[input:apache_access]
+[input:daemon.log]
 type = file
-file path = /var/log/apache2/access.log
+file path = /var/log/daemon.log
 
-[input:collect]
-type = collect
+[input:mail.err]
+type = file
+file path = /var/log/mail.err
+
+[input:syslog]
+type = file
+file path = /var/log/syslog
+
+[input:kern.log]
+type = file
+file path = /var/log/kern.log
 
 # ---------------------------------------------------------------------
 # Filters configuration
 # ---------------------------------------------------------------------
-[filter:file_var_log_messages]
-type = messages
-
-[filter:syslog_info_local0_7]
+[filter:syslog]
 type = syslog
-syslog selectors = local0,local1.info
-
-[filter:apache_combined]
-type = apache_combined
 
 # ---------------------------------------------------------------------
 # Outputs configuration
 # ---------------------------------------------------------------------
 [output:local]
 type = store
-index name = events
-segment retention policy = 2
-segment optimization policy = 0
-store retention policy = 0
-
-[output:access]
-type = store
-segment retention policy = 5
-
-[output:remote]
-type = forward
-forwarding address = 10.10.10.101
-forwarding port = 8643
+# create a new segment for every 10000 events.
+segment rotation policy = 10000
+# retain the 50 newest segments.
+segment retention policy = 50
 
 # ---------------------------------------------------------------------
 # Routes configuration
 # ---------------------------------------------------------------------
-[route:testfile_to_local]
-input = testfile
-filter = file_var_log_messages
+[route:messages_to_local]
+input = messages
+filter = syslog
 output = local
 
-[route:udp_syslog_to_local]
-input = udp_syslog
-filter = syslog_info_local0_7
+[route:daemon.log_to_local]
+input = daemon.log
+filter = syslog
 output = local
 
-[route:apache_access]
-input = apache_access
-filter = apache_combined
-output = access
+[route:mail.err_to_local]
+input = mail.err
+filter = syslog
+output = local
 
-[route:testfile_to_remote]
-input = testfile
-filter = file_var_log_messages
-output = remote
+[route:syslog_to_local]
+input = syslog
+filter = syslog
+output = local
+
+[route:kern.log_to_local]
+input = kern.log
+filter = syslog
+output = local
