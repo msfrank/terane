@@ -20,7 +20,7 @@ from logging import StreamHandler, DEBUG, Formatter
 from twisted.web.xmlrpc import Proxy
 from twisted.internet import reactor
 from terane.settings import ConfigureError
-from terane.loggers import startLogging
+from terane.loggers import startLogging, StdoutHandler, DEBUG
 
 class Grokker(object):
     def __init__(self):
@@ -36,10 +36,7 @@ class Grokker(object):
         self.host = section.getString("host", 'localhost:45565')
         # configure server logging
         if section.getBoolean("debug", False):
-            handler = StreamHandler()
-            handler.setLevel(DEBUG)
-            handler.setFormatter(Formatter("%(asctime)s %(levelname)s: %(message)s"))
-            startLogging(handler)
+            startLogging(StdoutHandler(), DEBUG)
         else:
             startLogging(None)
         try:

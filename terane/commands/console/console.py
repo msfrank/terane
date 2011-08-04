@@ -22,7 +22,7 @@ from terane.commands.console.input import Input
 from terane.commands.console.search import Searcher
 from terane.commands.console.outfile import Outfile
 from terane.commands.console.ui import ui
-from terane.loggers import startLogging, getLogger
+from terane.loggers import getLogger, startLogging, StdoutHandler, DEBUG
 
 logger = getLogger('terane.commands.console.console')
 
@@ -98,12 +98,7 @@ class Console(urwid.WidgetWrap):
         ui.run()
         logger.debug("exited urwid main loop")
         if self.debug == True:
-            handler = StreamHandler()
-            handler.setLevel(DEBUG)
-            handler.setFormatter(Formatter("%(asctime)s %(levelname)s: %(message)s"))
-            startLogging(handler)
-        else:
-            startLogging(None)
+            startLogging(StdoutHandler(), DEBUG)
         return 0
 
 class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):

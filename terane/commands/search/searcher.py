@@ -19,7 +19,7 @@ import os, sys, dateutil.parser, xmlrpclib
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.web.xmlrpc import Proxy
 from twisted.internet import reactor
-from terane.loggers import startLogging
+from terane.loggers import startLogging, StdoutHandler, DEBUG
 
 class Searcher(object):
     def configure(self, settings):
@@ -39,10 +39,7 @@ class Searcher(object):
         self.query = ' '.join(settings.args())
         # configure server logging
         if section.getBoolean("debug", False):
-            handler = StreamHandler()
-            handler.setLevel(DEBUG)
-            handler.setFormatter(Formatter("%(asctime)s %(levelname)s: %(message)s"))
-            startLogging(handler)
+            startLogging(StdoutHandler(), DEBUG)
         else:
             startLogging(None)
 

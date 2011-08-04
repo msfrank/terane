@@ -21,12 +21,12 @@ from logging import ERROR, WARNING, INFO, DEBUG
 from twisted.internet import reactor
 from twisted.application.service import MultiService
 from twisted.internet.defer import maybeDeferred
-from terane.loggers import getLogger, startLogging
 from terane.db import db
 from terane.plugins import plugins
 from terane.routes import routes
 from terane.xmlrpc import XMLRPCService
 from terane.stats import stats
+from terane.loggers import getLogger, startLogging, StdoutHandler, FileHandler, DEBUG
 
 logger = getLogger('terane.server')
 
@@ -40,22 +40,18 @@ class Server(MultiService):
         section = settings.section('server')
         self.pidfile = section.getPath('pid file', '/var/run/terane/server.pid')
         self.debug = section.getBoolean('debug', False)
-        verbosity = section.getString('log verbosity', 'WARNING')
-        if not verbosity in ('DEBUG','INFO','WARNING','ERROR'):
-            raise ConfigureError("Unknown log verbosity '%s'" % verbosity)
+        logconfigfile = section.getString('log config file', '/etc/terane/server.logconfig')
         if section.getBoolean("debug", False):
-            handler = StreamHandler()
-            handler.setFormatter(Formatter("%(asctime)s %(levelname)s: %(message)s"))
-            handler.setLevel(DEBUG)
+            startLogging(StdoutHandler(), DEBUG, logconfigfile)
         else:
             logfile = section.getPath('log file', 'var/log/terane/server.log')
-            handler = FileHandler(logfile)
-            handler.setFormatter(Formatter("%(asctime)s %(levelname)s: %(message)s"))
-            if verbosity == 'DEBUG': handler.setLevel(DEBUG)
-            if verbosity == 'INFO': handler.setLevel(INFO)
-            if verbosity == 'WARNING': handler.setLevel(WARNING)
-            if verbosity == 'ERROR': handler.setLevel(ERROR)
-        startLogging(handler)
+            verbosity = section.getString('log verbosity', 'WARNING')
+            if verbosity == 'DEBUG': level = DEBUG
+            elif verbosity == 'INFO': level = INFO
+            elif verbosity == 'WARNING': level = WARNING
+            elif verbosity == 'ERROR': level = ERROR
+            else: raise ConfigureError("Unknown log verbosity '%s'" % verbosity)
+            startLogging(FileHandler(logfile), level, logconfigfile)
         self.threadpoolsize = section.getInt('thread pool size', 20)
 
     def run(self):
