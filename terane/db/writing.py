@@ -101,7 +101,7 @@ class IndexWriter(WhooshIndexWriter):
             value = fields.get(fieldname)
 
             if value:
-                logger.debug("field=%s,doc=%s: raw_value='%s'" % (fieldname,doc_id,value))
+                logger.trace("field=%s,doc=%s: raw_value='%s'" % (fieldname,doc_id,value))
                 format = field.format
                 count = 0
 
@@ -140,14 +140,14 @@ class IndexWriter(WhooshIndexWriter):
                     if wmeta['freq'] > maxfreq:
                         maxfreq = wmeta['freq']
                     wmeta = json_encode(wmeta)
-                    logger.debug("field=%s,doc=%s,word=%s: word_meta=%s" % (fieldname,doc_id,word,wmeta))
+                    logger.trace("field=%s,doc=%s,word=%s: word_meta=%s" % (fieldname,doc_id,word,wmeta))
                     self._segment.set_word_meta(field_txn, fieldname, word, wmeta)
                     # increment the total field frequency
                     count += freq
                     # add the valuestring and record number to the inverted index
                     # for the field.
                     wvalue = json_encode({'doc': doc_id, 'weight': weight, 'value': valuestring})
-                    logger.debug("field=%s,doc=%s,word=%s: doc_word=%s" % (fieldname,doc_id,word,wvalue))
+                    logger.trace("field=%s,doc=%s,word=%s: doc_word=%s" % (fieldname,doc_id,word,wvalue))
                     self._segment.set_word(field_txn, fieldname, word, doc_id, wvalue)
 
                 # get the field metadata
@@ -175,7 +175,7 @@ class IndexWriter(WhooshIndexWriter):
                     doc_field['fieldlength'] = count
                 # set the field metadata
                 fmeta = json_encode(fmeta)
-                logger.debug("field=%s: field_meta=%s" % (fieldname,fmeta))
+                logger.trace("field=%s: field_meta=%s" % (fieldname,fmeta))
                 self._segment.set_field_meta(field_txn, fieldname, fmeta)
                 
             # if the field has a vector defined, then generate a sorted
@@ -205,7 +205,7 @@ class IndexWriter(WhooshIndexWriter):
 
         # store the document data
         document = json_encode({'fields': doc_fields})
-        logger.debug("doc=%s: data=%s" % (doc_id,document))
+        logger.trace("doc=%s: data=%s" % (doc_id,document))
         self._segment.set_doc(doc_txn, doc_id, document)
 
         # return the document id

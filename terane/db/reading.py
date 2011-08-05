@@ -61,7 +61,7 @@ class SegmentReader(WhooshIndexReader):
 
     def __contains__(self, term):
         # returns True if the field contains the specified word
-        logger.debug("IndexReader.__contains__(fieldname=%s, word=%s)" % term)
+        logger.trace("IndexReader.__contains__(fieldname=%s, word=%s)" % term)
         fieldname = str(term[0])
         word = unicode(term[1])
         return self._segment.contains_word(None, fieldname, word)
@@ -75,7 +75,7 @@ class SegmentReader(WhooshIndexReader):
     
     def is_deleted(self, doc_id):
         # returns true if the document id doesn't exist in the store
-        logger.debug("IndexReader.is_deleted(doc_id=%s)" % doc_id)
+        logger.trace("IndexReader.is_deleted(doc_id=%s)" % doc_id)
         doc_id = long(doc_id)
         if self._segment.contains_doc(None, doc_id) == True:
             return False
@@ -83,7 +83,7 @@ class SegmentReader(WhooshIndexReader):
 
     def stored_fields(self, doc_id):
         # return a dict of fieldname:fieldvalue pairs for the specified document
-        logger.debug("IndexReader.stored_fields(doc_id=%s)" % doc_id)
+        logger.trace("IndexReader.stored_fields(doc_id=%s)" % doc_id)
         doc_id = long(doc_id)
         doc = json_decode(self._segment.get_doc(None, doc_id))
         storedfields = {}
@@ -95,7 +95,7 @@ class SegmentReader(WhooshIndexReader):
     def all_stored_fields(self):
         # iterate through all documents, yielding a dict of fieldname:fieldvalue
         # pairs for each document.
-        logger.debug("IndexReader.all_stored_fields()")
+        logger.trace("IndexReader.all_stored_fields()")
         for id,doc in self._segment.iter_docs(None):
             doc = json_decode(doc)
             storedfields = {}
@@ -106,7 +106,7 @@ class SegmentReader(WhooshIndexReader):
 
     def doc_count_all(self):
         # return the total number of documents in the store.
-        logger.debug("IndexReader.doc_count_all()")
+        logger.trace("IndexReader.doc_count_all()")
         return self._segment.count_docs()
     
     def doc_count(self):
@@ -116,12 +116,12 @@ class SegmentReader(WhooshIndexReader):
         # returns the total number of documents.  since we don't keep track of
         # deleted documents (we just delete em :) these two values are always the
         # same.
-        logger.debug("IndexReader.doc_count()")
+        logger.trace("IndexReader.doc_count()")
         return self._segment.count_docs()
     
     def field_length(self, fieldname):
         # return the total number of terms in the specified field. 
-        logger.debug("IndexReader.field_length(fieldname=%s)" % fieldname)
+        logger.trace("IndexReader.field_length(fieldname=%s)" % fieldname)
         fieldname = str(fieldname)
         fmeta = self._segment.get_field_meta(None, fieldname)
         if fmeta == None:
@@ -134,7 +134,7 @@ class SegmentReader(WhooshIndexReader):
     
     def max_field_length(self, fieldname):
         # return the maximum termlength in the specified field. 
-        logger.debug("IndexReader.max_field_length(fieldname=%s)" % fieldname)
+        logger.trace("IndexReader.max_field_length(fieldname=%s)" % fieldname)
         fieldname = str(fieldname)
         fmeta = self._segment.get_field_meta(None, fieldname)
         if fmeta == None:
@@ -148,7 +148,7 @@ class SegmentReader(WhooshIndexReader):
     def doc_field_length(self, doc_id, fieldname):
         # return the number of terms in the specified field for the
         # specified document.
-        logger.debug("IndexReader.doc_field_length(doc_id=%s, fieldname=%s)" %
+        logger.trace("IndexReader.doc_field_length(doc_id=%s, fieldname=%s)" %
             (doc_id,fieldname))
         doc_id = long(doc_id)
         fieldname = str(fieldname)
@@ -163,7 +163,7 @@ class SegmentReader(WhooshIndexReader):
     def has_vector(self, doc_id, fieldname):
         # return True if the specified document has vectors for the specified
         # field.
-        logger.debug("IndexReader.has_vector(doc_id=%s, fieldname=%s)" %
+        logger.trace("IndexReader.has_vector(doc_id=%s, fieldname=%s)" %
             (doc_id,fieldname))
         doc_id = long(doc_id)
         fieldname = str(fieldname)
@@ -177,7 +177,7 @@ class SegmentReader(WhooshIndexReader):
     
     def vector(self, doc_id, fieldname):
         # return document vector for the specified field of the specified document.
-        logger.debug("IndexReader.vector(doc_id=%s, fieldname=%s)" %
+        logger.trace("IndexReader.vector(doc_id=%s, fieldname=%s)" %
             (doc_id,fieldname))
         doc_id = long(doc_id)
         fieldname = str(fieldname)
@@ -188,7 +188,7 @@ class SegmentReader(WhooshIndexReader):
     def __iter__(self):
         # iterate through the index, yielding tuples consisting of
         # (fieldname, text, document count, word frequency)
-        logger.debug("IndexReader.__iter__()")
+        logger.trace("IndexReader.__iter__()")
         for fieldname in self._schema.names():
             for word,wmeta in self._segment.iter_words_meta(None, fieldname):
                 wmeta = json_decode(wmeta)
@@ -197,7 +197,7 @@ class SegmentReader(WhooshIndexReader):
     def doc_frequency(self, fieldname, word):
         # return the amount of documents in the specified field which contain
         # the specified word.
-        logger.debug("IndexReader.doc_frequency(fieldname=%s, word=%s)" %
+        logger.trace("IndexReader.doc_frequency(fieldname=%s, word=%s)" %
             (fieldname, word))
         fieldname = str(fieldname)
         word = unicode(word)
@@ -209,7 +209,7 @@ class SegmentReader(WhooshIndexReader):
 
     def frequency(self, fieldname, word):
         # return the frequency of the specified word in the specified field.
-        logger.debug("IndexReader.frequency(fieldname=%s, word=%s)" %
+        logger.trace("IndexReader.frequency(fieldname=%s, word=%s)" %
             (fieldname, word))
         fieldname = str(fieldname)
         word = unicode(word)
@@ -223,7 +223,7 @@ class SegmentReader(WhooshIndexReader):
         # iterate through the index, yielding tuples consisting of
         # (field number, text, document count, word frequency), starting
         # at the specified text.
-        logger.debug("IndexReader.iter_from(fieldname=%s, start=%s)" %
+        logger.trace("IndexReader.iter_from(fieldname=%s, start=%s)" %
             (fieldname, start))
         fieldname = str(fieldname)
         start = unicode(start)
@@ -239,7 +239,7 @@ class SegmentReader(WhooshIndexReader):
     
     def lexicon(self, fieldname):
         # return a sorted list of the indexed terms for the specified field.
-        logger.debug("IndexReader.lexicon(fieldname=%s)" % fieldname)
+        logger.trace("IndexReader.lexicon(fieldname=%s)" % fieldname)
         fieldname = str(fieldname)
         return [word for word,unused in self._segment.iter_words_meta(None, fieldname)]
     
@@ -247,7 +247,7 @@ class SegmentReader(WhooshIndexReader):
         # iterate through the index for the specified field, yielding tuples
         # consisting of (text, document count, word frequency), starting
         # at the specified prefix.
-        logger.debug("IndexReader.iter_field(fieldname=%s, prefix=%s)" %
+        logger.trace("IndexReader.iter_field(fieldname=%s, prefix=%s)" %
             (fieldname, prefix))
         fieldname = str(fieldname)
         prefix = unicode(prefix)
@@ -258,7 +258,7 @@ class SegmentReader(WhooshIndexReader):
     def expand_prefix(self, fieldname, prefix):
         # iterate through the the specified field, yielding terms which start
         # with the specified prefix.
-        logger.debug("IndexReader.expand_prefix(fieldname=%s, prefix=%s)" %
+        logger.trace("IndexReader.expand_prefix(fieldname=%s, prefix=%s)" %
             (fieldname,prefix))
         fieldname = str(fieldname)
         prefix = unicode(prefix)
@@ -272,7 +272,7 @@ class SegmentReader(WhooshIndexReader):
         # return a PostingReader which contains a list of all the document ids
         # and their corresponding value strings for the specified word in the
         # specified field, excluding any document ids listed in exclude_docs.
-        logger.debug("IndexReader.postings(fieldname=%s, word=%s, scorer=%s)" %
+        logger.trace("IndexReader.postings(fieldname=%s, word=%s, scorer=%s)" %
             (fieldname, word, scorer))
         fieldname = str(fieldname)
         word = unicode(word)
@@ -293,7 +293,7 @@ class SegmentReader(WhooshIndexReader):
     def sort_docs_by(self, fieldnames, doc_ids, reverse=False):
         # Returns a version of `docnums` sorted by the value of a field
         # in each document.
-        logger.debug("IndexReader.sort_docs_by(fieldnames=%s, doc_ids=%s, reverse=%s)" %
+        logger.trace("IndexReader.sort_docs_by(fieldnames=%s, doc_ids=%s, reverse=%s)" %
             (fieldnames, str(doc_ids), reverse))
         if isinstance(fieldnames, str):
             fieldnames = (fieldnames,)
@@ -305,7 +305,7 @@ class SegmentReader(WhooshIndexReader):
     def key_docs_by(self, fieldnames, doc_ids, limit, reverse=False, offset=0):
         # Returns a sequence of `(sorting_key, docnum)` pairs for the
         # document numbers in `docnum`.
-        logger.debug("IndexReader.key_docs_by(fieldnames=%s, doc_ids=%s, limit=%i, reverse=%s, offset=%i)" %
+        logger.trace("IndexReader.key_docs_by(fieldnames=%s, doc_ids=%s, limit=%i, reverse=%s, offset=%i)" %
             (fieldnames, str(doc_ids), limit, reverse, offset))
         if isinstance(fieldnames, str):
             fieldnames = (fieldnames,)
@@ -323,7 +323,7 @@ class PostingReader(WhooshMatcher):
         self._postings = postings
         self._current = None
         self._scorer = scorer
-        logger.debug("PostingReader.__init__(word=%s)" % self._word)
+        logger.trace("PostingReader.__init__(word=%s)" % self._word)
     
     def is_active(self):
         # return True if there are still items to iterate over, otherwise False
@@ -340,7 +340,7 @@ class PostingReader(WhooshMatcher):
             doc_id,wvalue = self._postings.next()
             wvalue = json_decode(wvalue)
             self._current = (doc_id, wvalue['weight'], wvalue['value'])
-            logger.debug("PostingReader.next(word=%s): doc_id=%s, weight=%s, value=%s" %
+            logger.trace("PostingReader.next(word=%s): doc_id=%s, weight=%s, value=%s" %
                 (self._word, self._current[0], self._current[1], self._current[2]))
             return True
         except StopIteration:
@@ -350,61 +350,61 @@ class PostingReader(WhooshMatcher):
 
     def id(self):
         # return the value of the current iterator item.
-        logger.debug("PostingReader.id(word=%s)" % self._word)
+        logger.trace("PostingReader.id(word=%s)" % self._word)
         if self._is_uninitialized(): self.next()
         return self._current[0]
 
     def weight(self):
         # return the value of the current iterator item.
-        logger.debug("PostingReader.weight(word=%s)" % self._word)
+        logger.trace("PostingReader.weight(word=%s)" % self._word)
         if self._is_uninitialized(): self.next()
         return self._current[1]
 
     def value(self):
         # return the value string of the current iterator item.
-        logger.debug("PostingReader.value(word=%)" % self._word)
+        logger.trace("PostingReader.value(word=%)" % self._word)
         if self._is_uninitialized(): self.next()
         return self._current[2]
 
     def all_items(self):
         # return a list of all (document id, value string) tuples.
-        logger.debug("PostingReader.all_items(word=%s)" % self._word)
+        logger.trace("PostingReader.all_items(word=%s)" % self._word)
         self._postings.reset()
         while self.is_active():
             if not self.next(): return
             item = (self._current[0], self._current[2])
-            logger.debug("PostingReader.all_items(word=%s) => (%s, %s)" %
+            logger.trace("PostingReader.all_items(word=%s) => (%s, %s)" %
                 (self._word, item[0], item[1]))
             yield item
     
     def all_ids(self):
         # return a list of all document ids.
-        logger.debug("PostingReader.all_ids(word=%s)" % self._word)
+        logger.trace("PostingReader.all_ids(word=%s)" % self._word)
         self._postings.reset()
         while self.is_active():
             if not self.next(): return
             id = self._current[0]
-            logger.debug("PostingReader.all_ids(word=%s) => %s" %
+            logger.trace("PostingReader.all_ids(word=%s) => %s" %
                 (self._word, id))
             yield id
    
     def items_as(self, astype):
         # return a list of all (document id, value) tuples, with each value
         # coerced to the type specified by astype.
-        logger.debug("PostingReader.items_as(word=%s, astype=%s)" %
+        logger.trace("PostingReader.items_as(word=%s, astype=%s)" %
             (self._word,astype))
         self._postings.reset()
         while self.is_active():
             if not self.next(): return
             item = (self.id(), self.value_as(astype))
-            logger.debug("PostingReader.items_as(word=%s) => (%s, %s)" %
+            logger.trace("PostingReader.items_as(word=%s) => (%s, %s)" %
                 (self._word, item[0], item[1]))
             yield item
 
     def skip_to(self, target_id):
         # skip ahead to the specified document id.
         target_id = long(target_id)
-        logger.debug("PostingReader.skip_to(word=%s, target_id=%s)" %
+        logger.trace("PostingReader.skip_to(word=%s, target_id=%s)" %
             (self._word,target_id))
         if not self.is_active():
             raise ReadTooFar
@@ -418,19 +418,19 @@ class PostingReader(WhooshMatcher):
             raise ReadTooFar
         wvalue = json_decode(wvalue)
         self._current = (doc_id, wvalue['weight'], wvalue['value'])
-        logger.debug("PostingReader.skip_to(word=%s): jumped to doc_id=%s, weight=%s, value=%s" %
+        logger.trace("PostingReader.skip_to(word=%s): jumped to doc_id=%s, weight=%s, value=%s" %
             (self._word, self._current[0], self._current[1], self._current[2]))
 
     def score(self):
-        logger.debug("PostingReader.score(word=%s)" % self._word)
+        logger.trace("PostingReader.score(word=%s)" % self._word)
         return self._scorer.score(self)
     
     def quality(self):
-        logger.debug("PostingReader.quality(word=%s)" % self._word)
+        logger.trace("PostingReader.quality(word=%s)" % self._word)
         return self._scorer.quality(self)
     
     def block_quality(self):
-        logger.debug("PostingReader.block_quality(word=%s)" % self._word)
+        logger.trace("PostingReader.block_quality(word=%s)" % self._word)
         return self._scorer.block_quality(self)
 
 class MultiReader(WhooshMultiReader):
@@ -447,7 +447,7 @@ class MultiReader(WhooshMultiReader):
                 offsets.append((0, r))
         offsets.sort(key=lambda x: x[0])
         self.doc_offsets, self.readers = zip(*offsets)
-        logger.debug("MultiReader.__init__(): readers=%s, offsets=%s" % (self.readers,self.doc_offsets))
+        logger.trace("MultiReader.__init__(): readers=%s, offsets=%s" % (self.readers,self.doc_offsets))
 
     def _document_segment(self, doc_id):
         return max(0, bisect_right(self.doc_offsets, doc_id - 1))
@@ -455,7 +455,7 @@ class MultiReader(WhooshMultiReader):
     def _segment_and_docnum(self, doc_id):
         segment = self._document_segment(doc_id)
         offset_doc = doc_id
-        logger.debug("MultiReader._segment_and_docnum(doc_id=%i): segment is %i, offset_doc is %i" % (
+        logger.trace("MultiReader._segment_and_docnum(doc_id=%i): segment is %i, offset_doc is %i" % (
             doc_id, segment, offset_doc))
         return segment, offset_doc
 
