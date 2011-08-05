@@ -99,6 +99,7 @@ terane_Segment_get_doc (terane_Segment *self, PyObject *args)
     key.size = TERANE_DID_STRING_LEN;
     /* get the record */
     memset (&data, 0, sizeof (DBT));
+    data.flags = DB_DBT_MALLOC;
     dbret = self->documents->get (self->documents, txn? txn->txn : NULL, &key, &data, 0);
     switch (dbret) {
         case 0:
@@ -117,6 +118,9 @@ terane_Segment_get_doc (terane_Segment *self, PyObject *args)
                 (char *) key.data, db_strerror (dbret));
             break;
     }
+    /* free allocated memory */
+    if (data.data)
+        PyMem_Free (data.data);
     return document;
 }
 
@@ -379,7 +383,9 @@ terane_Segment_first_doc (terane_Segment *self, PyObject *args)
 
     /* retrieve the first item */
     memset (&key, 0, sizeof (DBT));
+    key.flags = DB_DBT_MALLOC;
     memset (&data, 0, sizeof (DBT));
+    data.flags = DB_DBT_MALLOC;
     dbret = cursor->get (cursor, &key, &data, DB_FIRST);
     switch (dbret) {
         case 0:
@@ -403,7 +409,11 @@ terane_Segment_first_doc (terane_Segment *self, PyObject *args)
             break;
     }
 
-    /* free cursor */
+    /* free allocated memory */
+    if (key.data)
+        PyMem_Free (key.data);
+    if (data.data)
+        PyMem_Free (data.data);
     if (cursor != NULL)
         cursor->close (cursor);
     return tuple;
@@ -448,7 +458,9 @@ terane_Segment_last_doc (terane_Segment *self, PyObject *args)
 
     /* retrieve the first item */
     memset (&key, 0, sizeof (DBT));
+    key.flags = DB_DBT_MALLOC;
     memset (&data, 0, sizeof (DBT));
+    data.flags = DB_DBT_MALLOC;
     dbret = cursor->get (cursor, &key, &data, DB_LAST);
     switch (dbret) {
         case 0:
@@ -472,7 +484,11 @@ terane_Segment_last_doc (terane_Segment *self, PyObject *args)
             break;
     }
 
-    /* free cursor */
+    /* free allocated memory */
+    if (key.data)
+        PyMem_Free (key.data);
+    if (data.data)
+        PyMem_Free (data.data);
     if (cursor != NULL)
         cursor->close (cursor);
     return tuple;

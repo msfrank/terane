@@ -161,7 +161,7 @@ terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     /* open the database environment */
     dbret = self->env->open (self->env, envdir, DB_CREATE | 
         DB_INIT_TXN | DB_INIT_MPOOL | DB_INIT_LOCK | DB_INIT_LOG |
-        DB_PRIVATE | DB_RECOVER, 0);
+        DB_PRIVATE | DB_THREAD | DB_RECOVER, 0);
     if (dbret != 0) {
         PyErr_Format (PyExc_Exception, "Failed to open environment: %s",
             db_strerror (dbret));

@@ -195,7 +195,7 @@ terane_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     /* open the documents segment */
     dbret = self->documents->open (self->documents, txn, self->name,
-        "_documents", DB_BTREE, DB_CREATE, 0);
+        "_documents", DB_BTREE, DB_CREATE | DB_THREAD, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open _documents: %s",
             db_strerror (dbret));

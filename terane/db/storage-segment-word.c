@@ -267,6 +267,7 @@ terane_Segment_get_word (terane_Segment *self, PyObject *args)
 
     /* get the record */
     memset (&data, 0, sizeof (DBT));
+    data.flags = DB_DBT_MALLOC;
     dbret = field->get (field, txn? txn->txn : NULL, key, &data, 0);
     _Segment_free_key (key);
     switch (dbret) {
@@ -283,6 +284,10 @@ terane_Segment_get_word (terane_Segment *self, PyObject *args)
             return PyErr_Format (terane_Exc_Error, "Failed to get data: %s",
                 db_strerror (dbret));
     }
+
+    /* free allocated memory */
+    if (data.data)
+        PyMem_Free (data.data);
     return metadata;
 }
 
@@ -578,6 +583,7 @@ terane_Segment_get_word_meta (terane_Segment *self, PyObject *args)
 
     /* get the record */
     memset (&data, 0, sizeof (DBT));
+    data.flags = DB_DBT_MALLOC;
     dbret = field->get (field, txn? txn->txn : NULL, key, &data, 0);
     _Segment_free_key (key);
     switch (dbret) {
@@ -594,6 +600,10 @@ terane_Segment_get_word_meta (terane_Segment *self, PyObject *args)
             return PyErr_Format (terane_Exc_Error, "Failed to get metadata: %s",
                 db_strerror (dbret));
     }
+    
+    /* free allocated memory */
+    if (data.data)
+        PyMem_Free (data.data);
     return metadata;
 }
 

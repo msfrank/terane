@@ -160,7 +160,9 @@ _Iter_get (terane_Iter *iter, DBT *key, int itype, int flags)
 
     /* get the next cursor item */
     memcpy (&k, key, sizeof (DBT));
+    k.flags = DB_DBT_MALLOC;
     memset (&data, 0, sizeof (DBT));
+    data.flags = DB_DBT_MALLOC;
     dbret = iter->cursor->get (iter->cursor, &k, &data, flags);    
     switch (dbret) {
         /* success */
@@ -186,7 +188,6 @@ _Iter_get (terane_Iter *iter, DBT *key, int itype, int flags)
                 db_strerror (dbret));
             return NULL;
     }
-
     /* perform post-retrieval checks */
     switch (itype) {
         case TERANE_ITER_RANGE:
@@ -198,6 +199,11 @@ _Iter_get (terane_Iter *iter, DBT *key, int itype, int flags)
             item = iter->next (iter, &k, &data);
             break;
     }
+    /* free allocated memory */
+    if (k.data && k.data != key->data)
+        PyMem_Free (k.data);
+    if (data.data)
+        PyMem_Free (data.data);
     /* if the callback returned NULL, then close the cursor */
     if (item == NULL)
         terane_Iter_close (iter, NULL);

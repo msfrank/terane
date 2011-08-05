@@ -48,6 +48,7 @@ TOC_new_DID (terane_TOC *toc)
     key.data = "last-id";
     key.size = 8;
     memset (&data, 0, sizeof (DBT));
+    data.flags = DB_DBT_MALLOC;
     dbret = toc->metadata->get (toc->metadata, txn, &key, &data, DB_RMW);
     switch (dbret) {
         case 0:
@@ -64,6 +65,10 @@ TOC_new_DID (terane_TOC *toc)
             return 0;
     }
 
+    /* free allocated memory */
+    if (data.data)
+        PyMem_Free (data.data);
+
     /* set the new high document id */
     memset (&key, 0, sizeof (DBT));
     key.data = "last-id";
@@ -75,16 +80,18 @@ TOC_new_DID (terane_TOC *toc)
     dbret = toc->metadata->put (toc->metadata, txn, &key, &data, 0);
     switch (dbret) {
         case 0:
+            /* commit the transaction */
+            txn->commit (txn, 0);
             break;
         default:
             txn->abort (txn);
+            did_num = 0;
             PyErr_Format (terane_Exc_Error, "Failed to create document id: %s",
                 db_strerror (dbret));
-            return 0;
+            break;
     }
 
-    /* commit the transaction and return the docnum */
-    txn->commit (txn, 0);
+    /* return the docnum */
     return did_num;
 }
 
@@ -119,9 +126,10 @@ terane_TOC_get_metadata (terane_TOC *self, PyObject *args)
 
     /* use the document id as the record number */
     memset (&key, 0, sizeof (DBT));
-    memset (&data, 0, sizeof (DBT));
     key.data = (char *) id;
     key.size = strlen(id) + 1;
+    memset (&data, 0, sizeof (DBT));
+    data.flags = DB_DBT_MALLOC;
 
     /* get the record */
     dbret = self->metadata->get (self->metadata, txn? txn->txn : NULL, &key, &data, 0);
@@ -142,6 +150,10 @@ terane_TOC_get_metadata (terane_TOC *self, PyObject *args)
                 (char *) key.data, db_strerror (dbret));
             break;
     }
+
+    /* free allocated memory */
+    if (data.data)
+        PyMem_Free (data.data);
     return metadata;
 }
 
@@ -220,9 +232,11 @@ terane_TOC_get_field (terane_TOC *self, PyObject *args)
 
     /* use the document id as the record number */
     memset (&key, 0, sizeof (DBT));
-    memset (&data, 0, sizeof (DBT));
     key.data = (char *) fieldname;
     key.size = strlen(fieldname) + 1;
+    memset (&data, 0, sizeof (DBT));
+    data.flags = DB_DBT_MALLOC;
+
     /* get the record */
     dbret = self->schema->get (self->schema, txn? txn->txn : NULL, &key, &data, 0);
     switch (dbret) {
@@ -243,6 +257,9 @@ terane_TOC_get_field (terane_TOC *self, PyObject *args)
             break;
     }
 
+    /* free allocated memory */
+    if (data.data)
+        PyMem_Free (data.data);
     return fieldspec;
 }
 
@@ -415,7 +432,9 @@ terane_TOC_list_fields (terane_TOC *self, PyObject *args)
     /* loop through each schema item */
     while (1) {
         memset (&key, 0, sizeof (DBT));
+        key.flags = DB_DBT_MALLOC;
         memset (&data, 0, sizeof (DBT));
+        data.flags = DB_DBT_MALLOC;
         dbret = cursor->get (cursor, &key, &data, DB_NEXT);
         if (dbret == DB_NOTFOUND)
             break;
@@ -438,6 +457,12 @@ terane_TOC_list_fields (terane_TOC *self, PyObject *args)
                 pickledfield = NULL;
                 Py_DECREF (tuple);
                 tuple = NULL;
+                if (key.data)
+                    PyMem_Free (key.data);
+                key.data = NULL;
+                if (data.data)
+                    PyMem_Free (data.data);
+                data.data = NULL;
                 break;
             default:
                 PyErr_Format (terane_Exc_Error, "Failed to get next schema field: %s",
@@ -461,6 +486,10 @@ error:
         Py_DECREF (tuple);
     if (fields != NULL)
         Py_DECREF (fields);
+    if (key.data != NULL)
+        PyMem_Free (key.data);
+    if (data.data != NULL)
+        PyMem_Free (data.data);
     return NULL;
 }
 
@@ -785,7 +814,7 @@ terane_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
     /* open the metadata store */
     dbret = self->metadata->open (self->metadata, txn, tocname, "_metadata",
-        DB_BTREE, DB_CREATE, 0);
+        DB_BTREE, DB_CREATE | DB_THREAD, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open _metadata: %s",
             db_strerror (dbret));
@@ -801,7 +830,7 @@ terane_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
     /* open the schema store */
     dbret = self->schema->open (self->schema, txn, tocname, "_schema",
-        DB_BTREE, DB_CREATE, 0);
+        DB_BTREE, DB_CREATE | DB_THREAD, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open _schema: %s",
             db_strerror (dbret));
@@ -834,7 +863,7 @@ terane_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
     /* open the segments store */
     dbret = self->segments->open (self->segments, txn, tocname, "_segments",
-        DB_RECNO, DB_CREATE, 0);
+        DB_RECNO, DB_CREATE | DB_THREAD, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open _segments: %s",
             db_strerror (dbret));

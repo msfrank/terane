@@ -107,7 +107,7 @@ Segment_get_field_DB (terane_Segment *segment, terane_Txn *txn, PyObject *fieldn
 
     /* open the field segment.  if the field doesn't exist its an error */
     dbret = new->field->open (new->field, field_txn, segment->name,
-        PyString_AsString (fieldname), DB_BTREE, DB_CREATE, 0);
+        PyString_AsString (fieldname), DB_BTREE, DB_CREATE | DB_THREAD, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open segment for %s: %s",
             PyString_AsString (fieldname), db_strerror (dbret));
@@ -184,9 +184,10 @@ terane_Segment_get_field_meta (terane_Segment *self, PyObject *args)
 
     /* get the record */
     memset (&key, 0, sizeof (DBT));
-    memset (&data, 0, sizeof (DBT));
     key.size = 1;
     key.data = "\0";
+    memset (&data, 0, sizeof (DBT));
+    data.flags = DB_DBT_MALLOC;
     dbret = field->get (field, txn? txn->txn : NULL, &key, &data, 0);
     switch (dbret) {
         case 0:
@@ -205,6 +206,9 @@ terane_Segment_get_field_meta (terane_Segment *self, PyObject *args)
                 PyString_AsString (fieldname), db_strerror (dbret));
     }
 
+    /* free allocated memory */
+    if (data.data)
+        PyMem_Free (data.data);
     return metadata;
 }
 
