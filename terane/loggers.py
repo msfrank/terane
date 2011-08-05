@@ -120,6 +120,9 @@ class Logger(object):
         kwds['level'] = level
         msg(message, **kwds)
 
+    def trace(self, message, **kwds):
+        self.msg(TRACE, message, **kwds)
+
     def debug(self, message, **kwds):
         self.msg(DEBUG, message, **kwds)
 
@@ -202,7 +205,9 @@ def startLogging(observer, level=INFO, configfile=None):
                     continue
                 logger = getLogger(name)
                 level.upper()
-                if level == 'DEBUG':
+                if level == 'TRACE':
+                    _setLevel(logger, TRACE)
+                elif level == 'DEBUG':
                     _setLevel(logger, DEBUG)
                 elif level == 'INFO':
                     _setLevel(logger, INFO)
