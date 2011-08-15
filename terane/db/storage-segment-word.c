@@ -19,21 +19,6 @@
 
 #include "storage.h"
 
-static int
-_Segment_get_string (PyObject *obj, char **str, Py_ssize_t *len)
-{
-    int i, ret;
-
-    ret = PyString_AsStringAndSize (obj, str, len);
-    if (ret < 0)
-        return -1;  /* raises TypeError */
-    for (i = 0; i < *len; i++) {
-        if ((*str)[i] == '\0')
-            fprintf (stderr, "embedded null at byte %i\n", i);
-    }
-    return ret;
-}
-
 /*
  * _Segment_make_word_key:
  */
@@ -62,7 +47,7 @@ _Segment_make_word_key (PyObject *word, PyObject *id)
     if (encoded == NULL)
         return NULL;        /* raises a codec error */
     /* get word string data and length */
-    if (_Segment_get_string (encoded, &word_str, &word_len) < 0) {
+    if (PyString_AsStringAndSize (encoded, &word_str, &word_len) < 0) {
         Py_DECREF (encoded);
         return NULL;        /* raises TypeError */
     }
@@ -119,7 +104,7 @@ _Segment_make_meta_key (PyObject *word)
     encoded = PyUnicode_AsUTF8String (word);
     if (encoded == NULL)
         return NULL;        /* raises a codec error */
-    if (_Segment_get_string (encoded, &word_str, &word_len) < 0) {
+    if (PyString_AsStringAndSize (encoded, &word_str, &word_len) < 0) {
         Py_DECREF (encoded);
         return NULL;        /* raises TypeError */
     }
@@ -171,7 +156,7 @@ _Segment_make_iter_key (PyObject *word)
     encoded = PyUnicode_AsUTF8String (word);
     if (encoded == NULL)
         return NULL;        /* raises a codec error */
-    if (_Segment_get_string (encoded, &word_str, &word_len) < 0) {
+    if (PyString_AsStringAndSize (encoded, &word_str, &word_len) < 0) {
         Py_DECREF (encoded);
         return NULL;        /* raises TypeError */
     }
