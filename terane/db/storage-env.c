@@ -26,9 +26,6 @@ static void
 _Env_dealloc (terane_Env *self)
 {
     terane_Env_close (self, NULL);
-    if (self->logger)
-        Py_DECREF (self->logger);
-    self->logger = NULL;
     self->ob_type->tp_free ((PyObject *) self);
 }
 
@@ -88,13 +85,12 @@ _Env_log_msg (const DB_ENV *env, const char *msg)
 /*
  * terane_Env_new: allocate a new Env object.
  *
- * callspec: Env(envdir, datadir, tmpdir, [cachesize, [logger]])
+ * callspec: Env(envdir, datadir, tmpdir, [cachesize])
  * parameters:
  *  envdir (string): A path to the DB environment
  *  datadir (string): A path to where the database data is stored
  *  tmpdir (string): A path to a directory used for temporary data
  *  cachesize (int): The size of the database cache
- *  logger (logging.Logger): A logger instance to log to
  * returns: A new Env object
  * exceptions:
  *  Exception: failed to create the DB_ENV handle
@@ -103,7 +99,7 @@ PyObject *
 terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     terane_Env *self;
-    char *kwlist[] = {"envdir", "datadir", "tmpdir", "cachesize", "logger", NULL};
+    char *kwlist[] = {"envdir", "datadir", "tmpdir", "cachesize", NULL};
     char *envdir = NULL, *datadir = NULL, *tmpdir = NULL;
     unsigned int cachesize = 0;
     int dbret;
@@ -125,12 +121,9 @@ terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     self->env->set_verbose (self->env, DB_VERB_RECOVERY, 1);
     self->env->set_verbose (self->env, DB_VERB_REGISTER, 1);
     /* parse constructor parameters */
-    if (!PyArg_ParseTupleAndKeywords (args, kwds, "sss|IO",
-        kwlist, &envdir, &datadir, &tmpdir, &cachesize, &self->logger))
+    if (!PyArg_ParseTupleAndKeywords (args, kwds, "sss|I",
+        kwlist, &envdir, &datadir, &tmpdir, &cachesize))
         goto error;
-    /* add a reference to the logger object */
-    if (self->logger != NULL)
-        Py_INCREF (self->logger);
     /* set the data_dir.  datadir string should not be freed. */
     dbret = self->env->set_data_dir (self->env, datadir);
     if (dbret != 0) {
@@ -178,8 +171,6 @@ terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 
 /* if there was an error, clean up and bail out */
 error:
-    if (self->logger)
-        Py_DECREF (self->logger);
     if (self)
         _Env_dealloc ((terane_Env *) self);
     return NULL;
@@ -214,29 +205,6 @@ terane_Env_close (terane_Env *self, PyObject *args)
         self->env = NULL;
     }
     Py_RETURN_NONE;
-}
-
-/*
- * terane_Env_log: log a message.
- */
-void
-Env_log (terane_Env *env, int level, const char *fmt, ...)
-{
-    va_list ap;
-    PyObject *message = NULL, *ret;
-
-    /* if no logger is present, then just return */
-    if (env->logger == NULL)
-        return;
-    /* build a python string from the format string and var-args */
-    va_start (ap, fmt);
-    message = PyString_FromFormatV (fmt, ap);
-    va_end (ap);
-    /* call the log function with the supplied arguments */
-    ret = PyObject_CallMethod (env->logger, "log", "iO", level, message);
-    /* unreference objects */
-    Py_XDECREF (ret);
-    Py_XDECREF (message);
 }
 
 /* Env methods declaration */

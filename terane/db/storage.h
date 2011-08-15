@@ -30,7 +30,6 @@
 typedef struct _terane_Env {
     PyObject_HEAD
     DB_ENV *env;
-    PyObject *logger;
     pthread_t checkpoint_thread;
 } terane_Env;
 
@@ -104,7 +103,6 @@ typedef char terane_DID_string[17];
  */
 PyObject *terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds);
 PyObject *terane_Env_close (terane_Env *self, PyObject *args);
-void Env_log (terane_Env *env, int level, const char *fmt, ...);
 
 PyObject *terane_Txn_new (PyTypeObject *type, PyObject *args, PyObject *kwds);
 PyObject *terane_Txn_commit (terane_Txn *self);
