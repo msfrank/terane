@@ -531,6 +531,7 @@ terane_TOC_new_segment (terane_TOC *self, PyObject *args)
 
     /* allocate a new segment record */
     memset (&key, 0, sizeof (DBT));
+    key.flags = DB_DBT_MALLOC;
     memset (&data, 0, sizeof (DBT));
     dbret = self->schema->put (self->segments, txn->txn, &key, &data, DB_APPEND);
     switch (dbret) {
@@ -545,6 +546,9 @@ terane_TOC_new_segment (terane_TOC *self, PyObject *args)
     self->nsegments += 1;
     /* return the segment record number */
     segment_id = *((db_recno_t *) key.data);
+    /* free allocated memory */
+    if (key.data)
+        PyMem_Free (key.data);
     return PyLong_FromUnsignedLong ((unsigned long) segment_id);
 }
 
@@ -841,7 +845,7 @@ terane_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
      * a transaction because we aren't making any modifications, and there
      * is no possibility of external modification during this call.
      */
-    dbret = self->schema->stat (self->schema, NULL, &stats, 0);
+    dbret = self->schema->stat (self->schema, txn, &stats, 0);
     if (dbret != 0) {
         if (stats)
             PyMem_Free (stats);
@@ -874,7 +878,7 @@ terane_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
      * a transaction because we aren't making any modifications, and there
      * is no possibility of external modification during this call.
      */
-    dbret = self->segments->stat (self->segments, NULL, &stats, 0);
+    dbret = self->segments->stat (self->segments, txn, &stats, 0);
     if (dbret != 0) {
         if (stats)
             PyMem_Free (stats);
