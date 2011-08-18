@@ -47,6 +47,14 @@ _Iter_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     self = (terane_Iter *) type->tp_alloc (type, 0);
     if (self == NULL)
         return NULL;
+    self->parent = NULL;
+    self->cursor = NULL;
+    self->initialized = 0;
+    self->itype = 0;
+    self->key = NULL;
+    self->key = 0;
+    self->next = NULL;
+    self->skip = NULL;
     return (PyObject *) self;
 }
 
@@ -70,8 +78,8 @@ Iter_new (PyObject *parent, DBC *cursor, terane_Iter_ops *ops)
         PyErr_Format (terane_Exc_Error, "Failed to allocate Iter: ops is invalid");
         return NULL;
     }
-    /* iter = PyObject_New (terane_Iter, &terane_IterType); */
-    iter = (terane_Iter *) _Iter_new (&terane_IterType, NULL, NULL);
+    iter = PyObject_New (terane_Iter, &terane_IterType);
+    /* iter = (terane_Iter *) _Iter_new (&terane_IterType, NULL, NULL); */
     if (iter == NULL)
         return NULL;
     Py_INCREF (parent);
