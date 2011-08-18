@@ -30,35 +30,6 @@ _Iter_dealloc (terane_Iter *self)
 }
 
 /*
- * _Iter_new: allocate a new Iter object.  This should only ever
- *  be called internally, since certain context can only be passed in C.
- *
- * callspec: Iter()
- * parameters: None
- * returns: A new Iter object
- * exceptions: None
- */
-static PyObject *
-_Iter_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
-{
-    terane_Iter *self;
-
-    /* allocate the Iter object */
-    self = (terane_Iter *) type->tp_alloc (type, 0);
-    if (self == NULL)
-        return NULL;
-    self->parent = NULL;
-    self->cursor = NULL;
-    self->initialized = 0;
-    self->itype = 0;
-    self->key = NULL;
-    self->key = 0;
-    self->next = NULL;
-    self->skip = NULL;
-    return (PyObject *) self;
-}
-
-/*
  * Iter_new: allocate a new Iter object using the supplied DB cursor.
  * 
  * returns: A new Iter object
@@ -85,7 +56,10 @@ Iter_new (PyObject *parent, DBC *cursor, terane_Iter_ops *ops)
     Py_INCREF (parent);
     iter->parent = parent;
     iter->cursor = cursor;
+    iter->initialized = 0;
     iter->itype = TERANE_ITER_ALL;
+    iter->key = NULL;
+    iter->len = 0;
     iter->next = ops->next;
     iter->skip = ops->skip;
     return (PyObject *) iter;
@@ -168,7 +142,7 @@ _Iter_get (terane_Iter *iter, DBT *key, int itype, int flags)
 
     /* get the next cursor item */
     memcpy (&k, key, sizeof (DBT));
-    k.flags = DB_DBT_MALLOC;
+    k.flags |= DB_DBT_MALLOC;
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
     dbret = iter->cursor->get (iter->cursor, &k, &data, flags);    
@@ -408,5 +382,5 @@ PyTypeObject terane_IterType = {
     0,                         /* tp_dictoffset */
     0,                         /* tp_init */
     0,                         /* tp_alloc */
-    _Iter_new
+    0,                         /* tp_new */
 };
