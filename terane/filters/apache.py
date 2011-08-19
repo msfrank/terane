@@ -28,7 +28,7 @@ class ApacheCommonFilterPlugin(Plugin):
         pass
 
     def instance(self):
-        return ApacheFilter()
+        return ApacheCommonFilter()
 
 class ApacheCommonFilter(Filter):
 
