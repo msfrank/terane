@@ -17,7 +17,6 @@
 
 import os, sys, signal, atexit
 from logging import StreamHandler, FileHandler, Formatter
-from logging import ERROR, WARNING, INFO, DEBUG
 from twisted.internet import reactor
 from twisted.application.service import MultiService
 from twisted.internet.defer import maybeDeferred
@@ -26,7 +25,8 @@ from terane.plugins import plugins
 from terane.routes import routes
 from terane.xmlrpc import XMLRPCService
 from terane.stats import stats
-from terane.loggers import getLogger, startLogging, StdoutHandler, FileHandler, DEBUG
+from terane.loggers import getLogger, startLogging, StdoutHandler, FileHandler
+from terane.loggers import ERROR, WARNING, INFO, DEBUG
 
 logger = getLogger('terane.server')
 
