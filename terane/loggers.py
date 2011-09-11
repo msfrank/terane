@@ -99,7 +99,7 @@ class StdoutHandler(BaseHandler):
 
 class FileHandler(BaseHandler):
     def __init__(self, path):
-        self._f = file(path, 'a')
+        self._f = open(path, 'a')
     def handle(self, message):
         untilConcludes(self._f.write, message + '\n')
         untilConcludes(self._f.flush)
