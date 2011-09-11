@@ -414,8 +414,10 @@ class PostingReader(WhooshMatcher):
         # move to the target item
         try:
             doc_id,wvalue = self._postings.skip(target_id)
-        except IndexError:
-            raise ReadTooFar
+        except Exception:
+            self._current = None
+            self._postings = None
+            return
         wvalue = json_decode(wvalue)
         self._current = (doc_id, wvalue['weight'], wvalue['value'])
         logger.trace("PostingReader.skip_to(word=%s): jumped to doc_id=%s, weight=%s, value=%s" %

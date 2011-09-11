@@ -242,7 +242,7 @@ class ShowIndexPlan(ExecutionPlan):
 
 class Results(object):
     def __init__(self, plan, *results, **meta):
-        logger.debug("Results.__init__(): collating search results")
+        logger.trace("Results.__init__(): collating search results")
         self._plan = plan
         # ugly hack: we wrap meta in a tuple, so we can differentiate the first
         # row (the meta row) from the rows of results
@@ -263,7 +263,7 @@ class Results(object):
         self._results.insert(0, (meta,))
 
     def __iter__(self):
-        logger.debug("Results.__iter__(): iterating search results")
+        logger.trace("Results.__iter__(): iterating search results")
         class ResultIterator(object):
             def __init__(self, results, plan):
                 self._iter = iter(results)

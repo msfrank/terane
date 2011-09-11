@@ -30,6 +30,8 @@ class IntersectionMatcher(WhooshIntersectionMatcher):
                 self.b.skip_to(id)
             except ReadTooFar:
                 break
+            if not self.b.is_active():
+                break
             curr = self.b.id()
             if curr == id:
                 yield id
