@@ -10,16 +10,22 @@ Prerequisite Software
 
  * python >= 2.5
     Terane requires at least version 2.5.  However, python3 is also not
-    supported.  Terane is tested on version 2.6.5.
+    supported.  In order to build from source, the development headers for
+    python are also required.  Terane is tested on version 2.6.5.
     http://www.python.org
+
+ * setuptools
+    Any recent version should work.  Terane is tested with 0.6.10.
+    http://pypi.python.org/pypi/setuptools
 
  * twisted
     Any recent version should work.  Terane is tested with version 10.0.0.
     http://www.twistedmatrix.com
 
  * libdb
-    Any version in the 4.x/5.x series should work.  Terane is tested with
-    version 4.8.
+    Any version in the 4.x/5.x series should work.  In order to build from
+    source, the development headers for libdb are also required.  Terane is
+    tested with version 4.8.
     http://www.oracle.com/technetwork/database/berkeleydb/
 
  * python-dateutil
