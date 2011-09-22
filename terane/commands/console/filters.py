@@ -19,8 +19,12 @@ import re
 
 class Is(object):
     def __init__(self, field, params):
+        self._params = params
         self._field = field
         self._value = params[0]
+
+    def __str__(self):
+        return "<filter Is %s>" % self._value
 
     def __call__(self, fields):
         if self._field == None:
@@ -37,8 +41,12 @@ class Is(object):
 
 class Matches(object):
     def __init__(self, field, params):
+        self._params = params
         self._field = field
         self._regex = re.compile(params[0])
+
+    def __str__(self):
+        return "<filter Matches %s>" % self._params[0]
 
     def __call__(self, fields):
         if self._field == None:
@@ -55,8 +63,12 @@ class Matches(object):
 
 class Contains(object):
     def __init__(self, field, params):
+        self._params = params
         self._field = field
         self._sub = params[0]
+
+    def __str__(self):
+        return "<filter Contains %s>" % self._params[0]
 
     def __call__(self, fields):
         if self._field == None:
@@ -73,6 +85,7 @@ class Contains(object):
                 
 class GreaterThan(object):
     def __init__(self, field, params):
+        self._params = params
         self._field = field
         value = params[0]
         if value.find('.') > -1:
@@ -80,6 +93,9 @@ class GreaterThan(object):
         else:
             self._type = int
         self._value = self._type(value)
+
+    def __str__(self):
+        return "<filter GreaterThan %s>" % self._value
 
     def __call__(self, fields):
         if self._field == None:
@@ -99,6 +115,7 @@ class GreaterThan(object):
 
 class LessThan(object):
     def __init__(self, field, params):
+        self._params = params
         self._field = field
         value = params[0]
         if value.find('.') > -1:
@@ -106,6 +123,9 @@ class LessThan(object):
         else:
             self._type = int
         self._value = self._type(value)
+
+    def __str__(self):
+        return "<filter LessThan %s>" % self._value
 
     def __call__(self, fields):
         if self._field == None:
