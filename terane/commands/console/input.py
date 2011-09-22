@@ -23,10 +23,16 @@ logger = getLogger('terane.commands.console.input')
 
 
 class Input(urwid.FlowWidget):
+
+    VIEW_MODE = 0
+    COMMAND_MODE = 1
+    FIND_MODE = 2
+    RFIND_MODE = 3
+
     def __init__(self):
-        # if _buffer is None, we are in view mode
         self._buffer = None
         self._offset = 0
+        self._mode = Input.VIEW_MODE
 
     def selectable(self):
         """
@@ -47,8 +53,8 @@ class Input(urwid.FlowWidget):
         """
         (maxcol,) = size
         cursor = None
-        # we are not in command input mode, so display a blank row
-        if self._buffer == None:
+        # we are in view mode, so display a blank row
+        if self._mode == Input.VIEW_MODE:
             if focus:
                 cursor = self.get_cursor_coords(size)
             return urwid.TextCanvas([' '], maxcol=maxcol, cursor=cursor)
@@ -63,9 +69,16 @@ class Input(urwid.FlowWidget):
             if self._offset < 0: self._offset = 0
         # calculate the visible characters in the buffer
         visible = ''.join(self._buffer[self._offset:])
+        # display the input line
         if focus:
             cursor = self.get_cursor_coords(size)
-        return urwid.TextCanvas([':' + visible], maxcol=maxcol, cursor=cursor)
+        if self._mode == Input.COMMAND_MODE:
+            indicator = ':'
+        if self._mode == Input.FIND_MODE:
+            indicator = '/'
+        if self._mode == Input.RFIND_MODE:
+            indicator = '?'
+        return urwid.TextCanvas([indicator + visible], maxcol=maxcol, cursor=cursor)
 
     def keypress(self, size, key):
         """
@@ -75,22 +88,36 @@ class Input(urwid.FlowWidget):
         if key == 'window resize':
             self._invalidate()
             return None
-        # if _buffer is None, then we are not in command input mode
-        if self._buffer == None:
+        # if _we are in view mode
+        if self._mode == Input.VIEW_MODE:
             if key == ':':
                 self._buffer = []
+                self._offset = 0
+                self._mode = Input.COMMAND_MODE
+                key = None
+            elif key == '/':
+                self._buffer = []
+                self._offset = 0
+                self._mode = Input.FIND_MODE
+                key = None
+            elif key == '?':
+                self._buffer = []
+                self._offset = 0
+                self._mode = Input.RFIND_MODE
                 key = None
             elif key == 'q':
                 reactor.stop()
                 key = None
-        # otherwise we are in command input mode.  in this mode, backspace or
-        # delete removes the last character in the input buffer, enter or return
-        # executes the command, esc switches back to view mode, and any other
-        # single character is considered input.
+        # otherwise we are in one of the command input modes (COMMAND, FIND, 
+        # RFIND).  in this mode, backspace or delete removes the last
+        # character in the input buffer, enter or return executes the command,
+        # esc switches back to view mode, and any other single character is
+        # considered input.
         else:
             if key == 'esc':
                 self._buffer = None
                 self._offset = 0
+                self._mode = Input.VIEW_MODE
                 key = None
             elif key == 'backspace' or key == 'delete':
                 if len(self._buffer) > 0:
@@ -101,10 +128,13 @@ class Input(urwid.FlowWidget):
                 self._buffer = None
                 self._offset = 0
                 line = line.strip()
-                if line == '':
-                    key = None
-                else:
+                if self._mode == Input.COMMAND_MODE and len(line) > 0:
                     key = "command %s" % line
+                elif self._mode == Input.FIND_MODE:
+                    key = "command find /%s" % line
+                elif self._mode == Input.RFIND_MODE:
+                    key = "command rfind ?%s" % line
+                self._mode = Input.VIEW_MODE
             elif len(key) == 1:
                 self._buffer.append(key)
                 key = None
