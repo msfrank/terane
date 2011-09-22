@@ -46,16 +46,21 @@ class Console(urwid.WidgetWrap):
         if key == None:
             return key
         if key.startswith('command'):
-            cmdline = key.split()
-            if len(cmdline) < 2:
+            try:
+                cmdline = key.split(None, 1)[1]
+            except:
                 return key
-            cmd,args = cmdline[1],cmdline[2:]
+            try:
+                (cmd,args) = cmdline.split(None, 1)
+            except:
+                (cmd,args) = (cmdline, '')
             return self.command(cmd, args)
         if key != None and len(self._windows) > 0:
             return self._windows[0].keypress(size, key)
         return key
 
     def command(self, cmd, args):
+        logger.debug("command=%s, args='%s'" % (cmd, args))
         # window management commands
         if cmd == 'windows':
             self._windows.showWindowlist()
@@ -69,10 +74,10 @@ class Console(urwid.WidgetWrap):
             self._windows.closeWindow()
         # actions
         elif cmd == 'search':
-            searcher = Searcher(self.host, ' '.join(args))
+            searcher = Searcher(self.host, args)
             self._windows.addWindow(searcher)
         elif cmd == 'load':
-            outfile = Outfile(args[0])
+            outfile = Outfile(args)
             self._windows.addWindow(outfile)
         elif cmd == 'quit':
             reactor.stop()
@@ -93,8 +98,8 @@ class Console(urwid.WidgetWrap):
         """
         ui.setroot(self)
         if self.executecmd != None:
-            cmdline = self.executecmd.split()
-            self.command(cmdline[0], cmdline[1:])
+            cmdline = self.executecmd.split(None, 1)
+            self.command(cmdline[0], cmdline[1])
         ui.run()
         logger.debug("exited urwid main loop")
         if self.debug == True:

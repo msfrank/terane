@@ -15,8 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, sys, urwid
+import os, sys, re, urwid
 from dateutil.parser import parse
+from itertools import cycle, islice
 from csv import DictWriter
 from terane.commands.console import filters
 from terane.loggers import getLogger
@@ -27,30 +28,55 @@ class Result(urwid.WidgetWrap):
     def __init__(self, fields):
         self.fields = fields
         self.visible = True
+        self.highlighted = False
         self._text = urwid.Text('', wrap='any')
         urwid.WidgetWrap.__init__(self, self._text)
 
     def reformat(self, resultslist):
-            # if any filter fails, then don't display the result
-            for f in resultslist.filters:
-                if f(self.fields) == False:
-                    self.visible = False
-                    return
-            self.visible = True
-            # we always display these fields
-            default = self.fields['default']
-            ts = parse(self.fields['ts']).strftime("%d %b %Y %H:%M:%S")
-            # if we are collapsed, only show ts and default
-            if resultslist.collapsed:
-                self._text.set_text("%s: %s" % (ts, default))
-            # otherwise show all fields
-            else:
-                fields = self.fields.copy()
-                del fields['default']
-                del fields['ts']
-                fields = sorted(["  %s=%s" % (k,v) for k,v in fields.items() if k not in resultslist.hidefields])
-                text = "%s: %s\n" % (ts,default) + "\n".join(fields) + "\n"
-                self._text.set_text(text)
+        # if any filter fails, then don't display the result
+        for f in resultslist.filters:
+            if f(self.fields) == False:
+                self.visible = False
+                return
+        self.visible = True
+        # reset highlighting
+        self.highlighted = False
+        def _highlight(_text):
+            if resultslist.pattern == None:
+                return _text
+            markup = []
+            iterables = [
+                resultslist.pattern.split(_text),
+                [('highlight', t) for t in resultslist.pattern.findall(_text)]
+                ]
+            if len(iterables[1]) > 0:
+                self.highlighted = True
+            pending = len(iterables)
+            nexts = cycle(iter(it).next for it in iterables)
+            while pending:
+                try:
+                    for next in nexts:
+                        markup.append(next())
+                except StopIteration:
+                    pending -= 1
+                    nexts = cycle(islice(nexts, pending))
+            return markup
+        # we always display these fields
+        text = ["%s: " % parse(self.fields['ts']).strftime("%d %b %Y %H:%M:%S")]
+        text.extend(_highlight(self.fields['default']))
+        # if we are collapsed, only show ts and default, otherwise show all fields
+        if not resultslist.collapsed:
+            fields = self.fields.copy()
+            del fields['default']
+            del fields['ts']
+            fields = sorted([(k,v) for k,v in fields.items() if k not in resultslist.hidefields and v != ''])
+            if len(fields) > 0:
+                text.append('\n')
+            for (k,v) in fields:
+                text.append("  %s=" % k)
+                text.extend(_highlight(v))
+                text.append('\n')
+        self._text.set_text(text)
 
 class ResultsListWalker(urwid.ListWalker):
     def __init__(self):
@@ -63,6 +89,12 @@ class ResultsListWalker(urwid.ListWalker):
 
     def __iter__(self):
         return iter(self.results)
+
+    def __getitem__(self, i):
+        return self.results[i]
+
+    def __len__(self):
+        return len(self.results)
 
     def get_focus(self):
         if len(self.results) == 0:
@@ -110,8 +142,14 @@ class ResultsListbox(urwid.WidgetWrap):
         self.collapsed = True
         self.hidefields = []
         self.filters = []
+        self.pattern = None
         # build the listbox widget
-        self._listbox = urwid.ListBox(self._results)
+        class _ListBox(urwid.ListBox):
+            def render(self, size, focus=False):
+                retval = urwid.ListBox.render(self, size, focus)
+                self._offset,self._inset = urwid.ListBox.get_focus_offset_inset(self, size)
+                return retval
+        self._listbox = _ListBox(self._results)
         urwid.WidgetWrap.__init__(self, self._listbox)
  
     def append(self, r):
@@ -140,16 +178,62 @@ class ResultsListbox(urwid.WidgetWrap):
             return None
 
     def command(self, cmd, args):
-        if cmd == 'save':
-            logger.debug("saving search to %s" % args[0])
-            with file(args[0], 'w') as f:
-                self.savecsv(f)
         if cmd == 'filter':
-            logger.debug("pushing filter: %s" % ' '.join(args))
-            self.pushfilter(args)
+            self.pushfilter(args.split())
         if cmd == 'pop':
-            logger.debug("popping filter")
             self.popfilter()
+        if cmd == 'find':
+            self.find(args)
+        if cmd == 'rfind':
+            self.rfind(args)
+        if cmd == 'save':
+            self.save(args)
+
+    def find(self, args):
+        # if there is a new search regex, then redo results highlighting
+        if args != '/':
+            args = args[1:]
+            logger.debug("highlighting results using regex '%s'" % args)
+            self.pattern = re.compile(args)
+            for r in self._results:
+                r.reformat(self)
+        # scroll to the position of next highlighted item
+        widget,position = self._listbox.get_focus()
+        nextposition = position + 1
+        while nextposition < len(self._results):
+            if self._results[nextposition].highlighted:
+                break
+            nextposition += 1
+        # if the position remains the same, then just return
+        if position == nextposition or nextposition >= len(self._results):
+            return
+        logger.debug("jumping to highlighted result at position %i" % nextposition)
+        self._listbox.set_focus(nextposition, 'above')
+        #self._listbox.set_focus_valign('bottom')
+        #logger.debug("listbox offset=%i, inset=%i" % (self._listbox._offset,self._listbox._inset))
+
+    def rfind(self, args):
+        # if there is a new search regex, then redo results highlighting
+        if args != '?':
+            args = args[1:]
+            logger.debug("highlighting results using regex '%s'" % args)
+            self.pattern = re.compile(args)
+            for r in self._results:
+                r.reformat(self)
+        # scroll to the position of next highlighted item
+        widget,position = self._listbox.get_focus()
+        prevposition = position - 1
+        while prevposition >= 0:
+            if self._results[prevposition].highlighted:
+                break
+            prevposition -= 1
+        # if the position remains the same, then just return
+        if position == prevposition or prevposition <= 0:
+            return
+        logger.debug("jumping to highlighted result at position %i" % prevposition)
+        self._listbox.set_focus(prevposition, 'below')
+        #self._listbox.set_focus_valign('top')
+        #logger.debug("listbox offset=%i, inset=%i" % (self._listbox._offset,self._listbox._inset))
 
     def pushfilter(self, args):
         # parse filter arguments
@@ -172,6 +256,7 @@ class ResultsListbox(urwid.WidgetWrap):
             f = filters.LessThan(field, params)
         else:
             return
+        logger.debug("pushing filter %s" % f)
         # run each result through the new filter chain
         self.filters.append(f)
         for r in self._results:
@@ -181,7 +266,8 @@ class ResultsListbox(urwid.WidgetWrap):
 
     def popfilter(self):
         try:
-            self.filters.pop(-1)
+            f = self.filters.pop(-1)
+            logger.debug("popping filter %s" % f)
         except:
             return
         for r in self._results:
@@ -189,14 +275,16 @@ class ResultsListbox(urwid.WidgetWrap):
         self._results.reset_focus()
         self._results._modified()
 
-    def savecsv(self, f):
-        # set the field order
-        specialfields = ['ts','input','hostname','id','default']
-        fields = [field for field in sorted(self._fields) if field not in specialfields]
-        fields = specialfields + fields
-        writer = DictWriter(f, fields)
-        # write the header row
-        writer.writerow(dict([(fname,fname) for fname in fields]))
-        # write each result row
-        for r in self._results:
-            writer.writerow(r.fields)
+    def save(self, args):
+        logger.debug("saving search to %s" % args)
+        with file(args, 'w') as f:
+            # set the field order
+            specialfields = ['ts','input','hostname','id','default']
+            fields = [field for field in sorted(self._fields) if field not in specialfields]
+            fields = specialfields + fields
+            writer = DictWriter(f, fields)
+            # write the header row
+            writer.writerow(dict([(fname,fname) for fname in fields]))
+            # write each result row
+            for r in self._results:
+                writer.writerow(r.fields)

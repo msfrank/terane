@@ -26,10 +26,17 @@ class UIManager(object):
         blank = urwid.SolidFill()
         self._root = urwid.Frame(blank)
         self._loop = None
+        self._palette = [
+            ('normal', 'default', 'default'),
+            ('highlight', 'standout', 'default'),
+            ]
 
     def run(self):
         ev = urwid.TwistedEventLoop(reactor=reactor)
-        self._loop = urwid.MainLoop(self._root, unhandled_input=self._unhandled_input, event_loop=ev)
+        self._loop = urwid.MainLoop(self._root, 
+            palette=self._palette,
+            unhandled_input=self._unhandled_input,
+            event_loop=ev)
         return self._loop.run()
 
     def quit(self):
@@ -55,5 +62,3 @@ def useMainThread(fn):
     def _threadWrapper(*args, **kwds):
         return reactor.callFromThread(fn, *args, **kwds)
     return _threadWrapper
-
-
