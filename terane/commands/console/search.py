@@ -18,7 +18,6 @@
 import os, sys, urwid
 from dateutil.parser import parse
 from xmlrpclib import Fault
-from csv import DictWriter
 from twisted.web.xmlrpc import Proxy
 from terane.commands.console.results import ResultsListbox
 from terane.commands.console.ui import ui, useMainThread
@@ -27,40 +26,49 @@ from terane.loggers import getLogger
 logger = getLogger('terane.commands.console.search')
 
 class Searcher(urwid.WidgetWrap):
-    def __init__(self, host, query):
-        self.title = query
-        self._host = host
-        self._query = query
+    def __init__(self, console, args):
+        # configure the searcher
+        self._console = console
+        self.title = "Search results for '%s'" % args
+        self._query = args
         self._results = ResultsListbox()
-        self._frame = urwid.Frame(self._results)
-        # make the search request
-        proxy = Proxy("http://%s/XMLRPC" % self._host, allowNone=True)
+        url = "http://%s/XMLRPC" % console.host
+        logger.debug("using proxy url %s" % url)
+        # make the xmlrpc search request
+        proxy = Proxy(url, allowNone=True)
         deferred = proxy.callRemote('search', self._query)
         deferred.addCallback(self._getResult)
         deferred.addErrback(self._getError)
-        urwid.WidgetWrap.__init__(self, self._frame)
+        urwid.WidgetWrap.__init__(self, self._results)
 
     @useMainThread
     def _getResult(self, results):
+        """
+        Append each search result into the ResultsListbox.
+        """
         self._meta = results.pop(0)
         for r in results:
             self._results.append(r)
-        # redraw the listbox widget
         ui.redraw()
 
     @useMainThread
     def _getError(self, failure):
+        """
+        Display the error popup.
+        """
+        # close the search window
+        #self._console.closeWindow(self)
+        # display the error on screen
         try:
             raise failure.value
         except Fault, e:
             errtext = "search failed: %s (code %i)" % (e.faultString,e.faultCode)
+            ui.error(errtext)
             logger.debug(errtext)
-            self._frame.set_body(urwid.Filler(urwid.Text(errtext, align='center')))
         except BaseException, e:
             errtext = "search failed: %s" % str(e)
+            ui.error(errtext)
             logger.debug(errtext)
-            self._frame.set_body(urwid.Filler(urwid.Text(errtext, align='center')))
-        ui.redraw()
 
     def command(self, cmd, args):
         if self._results != None:
