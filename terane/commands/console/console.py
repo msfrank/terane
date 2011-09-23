@@ -18,6 +18,7 @@
 import os, sys, urwid
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.internet import reactor
+from terane.commands.console.switcher import WindowSwitcher
 from terane.commands.console.input import Input
 from terane.commands.console.search import Searcher
 from terane.commands.console.outfile import Outfile
@@ -31,7 +32,7 @@ class Console(urwid.WidgetWrap):
         self._input = Input()
         self._frame = urwid.Frame(urwid.SolidFill(), footer=self._input)
         self._frame.set_focus('footer')
-        self._windows = WindowSwitcher(self._frame)
+        self.switcher = WindowSwitcher(self._frame)
         urwid.WidgetWrap.__init__(self, self._frame)
 
     def configure(self, settings):
@@ -42,6 +43,9 @@ class Console(urwid.WidgetWrap):
         self.debug = section.getBoolean("debug", False)
 
     def keypress(self, size, key):
+        """
+        Parse raw keypresses from urwid.
+        """
         key = self._input.keypress(size, key)
         if key == None:
             return key
@@ -55,36 +59,23 @@ class Console(urwid.WidgetWrap):
             except:
                 (cmd,args) = (cmdline, '')
             return self.command(cmd, args)
-        if key != None and len(self._windows) > 0:
-            return self._windows[0].keypress(size, key)
-        return key
+        return self.switcher.keypress(size, key)
 
     def command(self, cmd, args):
+        """
+        Parse input commands.
+        """
         logger.debug("command=%s, args='%s'" % (cmd, args))
-        # window management commands
-        if cmd == 'windows':
-            self._windows.showWindowlist()
-        elif cmd == 'prev':
-            self._windows.prevWindow()
-        elif cmd == 'next':
-            self._windows.nextWindow()
-        elif cmd == 'jump':
-            self._windows.jumpToWindow(args)
-        elif cmd == 'close':
-            self._windows.closeWindow()
-        # actions
-        elif cmd == 'search':
-            searcher = Searcher(self.host, args)
-            self._windows.addWindow(searcher)
-        elif cmd == 'load':
-            outfile = Outfile(args)
-            self._windows.addWindow(outfile)
-        elif cmd == 'quit':
-            reactor.stop()
+        if cmd == 'search':
+            searcher = Searcher(self, args)
+            return self.switcher.addWindow(searcher)
+        if cmd == 'load':
+            outfile = Outfile(self, args)
+            return self.switcher.addWindow(outfile)
+        if cmd == 'quit':
+            return reactor.stop()
         # forward other commands to the active window
-        elif len(self._windows) > 0:
-            return self._windows[0].command(cmd, args)
-        return None
+        return self.switcher.command(cmd, args)
 
     def mouse_event(self, size, event, button, col, row, focus):
         """
@@ -96,142 +87,11 @@ class Console(urwid.WidgetWrap):
         """
         Start the event loop.
         """
-        ui.setroot(self)
         if self.executecmd != None:
             cmdline = self.executecmd.split(None, 1)
             self.command(cmdline[0], cmdline[1])
-        ui.run()
+        ui.run(self)
         logger.debug("exited urwid main loop")
         if self.debug == True:
             startLogging(StdoutHandler(), DEBUG)
         return 0
-
-class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
-    def __init__(self, frame):
-        self._frame = frame
-        self._windows = []
-        self._nextid = 1
-        self._blank = urwid.SolidFill()
-        self._currwin = None
-        self._currpos = None
-        # build the listbox widget
-        self._windowlist = urwid.ListBox(self)
-        urwid.WidgetWrap.__init__(self, self._windowlist)
-
-    def __len__(self):
-        return len(self._windows)
-
-    def __getitem__(self, i):
-        return self._windows[i][0]
-
-    def _get_item(self, position):
-        return urwid.Text(self._windows[position][2])
-
-    def get_focus(self):
-        if self._currpos == None:
-            return (None,None)
-        return (self._get_item(self._currpos), self._currpos)
-
-    def set_focus(self, position):
-        if position < 0 or position >= len(self._windows) - 1:
-            return
-        self._currpos = position
-        urwid.ListWalker._modified(self)
-
-    def get_prev(self, position):
-        if position == None or position < 1:
-            return (None,None)
-        position = position - 1
-        item = self._get_item(position)
-        return (item, position)
-
-    def get_next(self, position):
-        if position == None or position >= len(self._windows) - 1:
-            return (None,None)
-        position = position + 1
-        item = self._get_item(position)
-        return (item, position)
-
-    def showWindowlist(self):
-        window = self._frame.get_body()
-        if window == self:
-            return
-        if len(self._windows) < 1:
-            self._currpos = None
-        else:
-            self._currpos = 0
-        self._frame.set_body(self)
-        self._frame.set_focus('footer')
-
-    def addWindow(self, window):
-        """
-        Add the specified window to the window list and bring it to the front.
-        """
-        try:
-            desc = "Window #%i - %s" % (self._nextid, getattr(window, 'title'))
-        except:
-            desc = "Window #%i" % self._nextid
-        self._windows.append((window,self._nextid,desc))
-        self._nextid += 1
-        self._frame.set_body(window)
-        self._frame.set_focus('footer')
-        self._currwin = len(self._windows) - 1
-
-    def nextWindow(self):
-        window = self._frame.get_body()
-        if window == self:
-            return self.closeWindow()
-        if len(self._windows) <= 1:
-            return
-        if self._currwin == len(self._windows) - 1:
-            self._currwin = 0
-        else:
-            self._currwin += 1
-        window = self._windows[self._currwin][0]
-        self._frame.set_body(window)
-        self._frame.set_focus('footer')
-
-    def prevWindow(self):
-        window = self._frame.get_body()
-        if window == self:
-            return self.closeWindow()
-        if len(self._windows) <= 1:
-            return
-        if self._currwin == 0:
-            self._currwin = len(self._windows) - 1
-        else:
-            self._currwin -= 1
-        window = self._windows[self._currwin][0]
-        self._frame.set_body(window)
-        self._frame.set_focus('footer')
-
-    def jumpToWindow(self, args):
-        try:
-            dest = int(args[0])
-        except:
-            return
-        for i in range(0, len(self._windows)):
-            if dest == self._windows[i][1]:
-                self._currwin = i
-                self._frame.set_body(self._windows[i][0])
-                self._frame.set_focus('footer')
-                break
-
-    def closeWindow(self):
-        window = self._frame.get_body()
-        # there are no windows open
-        if window == self._blank:
-            return
-        # the current window is the window list
-        if window == self:
-            if self._currwin == None:
-                window = self._blank
-            else:
-                window = self._windows[self._currwin][0]
-        else:
-            self._windows.pop(self._currwin)
-            self._currwin -= 1
-            window = self._windows[self._currwin][0]
-        # display the new active window   
-        self._frame.set_body(window)
-        self._frame.set_focus('footer')
