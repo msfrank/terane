@@ -144,12 +144,7 @@ class ResultsListbox(urwid.WidgetWrap):
         self.filters = []
         self.pattern = None
         # build the listbox widget
-        class _ListBox(urwid.ListBox):
-            def render(self, size, focus=False):
-                retval = urwid.ListBox.render(self, size, focus)
-                self._offset,self._inset = urwid.ListBox.get_focus_offset_inset(self, size)
-                return retval
-        self._listbox = _ListBox(self._results)
+        self._listbox = urwid.ListBox(self._results)
         urwid.WidgetWrap.__init__(self, self._listbox)
  
     def append(self, r):
