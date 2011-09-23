@@ -21,19 +21,33 @@ from terane.loggers import getLogger
 
 logger = getLogger('terane.commands.console.ui')
 
+class Error(urwid.WidgetWrap):
+    def __init__(self, exception):
+        self._text = urwid.Text([('bold',str(exception)), '\nPress any key to continue'])
+        self._frame = urwid.Frame(urwid.SolidFill(), footer=self._text)
+        self._frame.set_focus('footer')
+        urwid.WidgetWrap.__init__(self, self._frame)
+
+    def keypress(self, size, key):
+        ui._ui.set_body(ui._root)
+
 class UIManager(object):
     def __init__(self):
         blank = urwid.SolidFill()
-        self._root = urwid.Frame(blank)
+        self._ui = urwid.Frame(blank)
+        self._root = None
         self._loop = None
         self._palette = [
             ('normal', 'default', 'default'),
             ('highlight', 'standout', 'default'),
+            ('bold', 'bold', 'default'),
             ]
 
-    def run(self):
+    def run(self, root):
+        self._root = root
+        self._ui.set_body(self._root)
         ev = urwid.TwistedEventLoop(reactor=reactor)
-        self._loop = urwid.MainLoop(self._root, 
+        self._loop = urwid.MainLoop(self._ui, 
             palette=self._palette,
             unhandled_input=self._unhandled_input,
             event_loop=ev)
@@ -45,8 +59,8 @@ class UIManager(object):
     def redraw(self):
         if self._loop != None: self._loop.draw_screen()
 
-    def setroot(self, widget):
-        self._root.set_body(widget)
+    def error(self, exception):
+        self._ui.set_body(Error(exception))
         self.redraw()
 
     def _unhandled_input(self, unhandled):
