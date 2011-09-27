@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, datetime
+import os, datetime, traceback
 from Queue import Queue
 from twisted.python.log import startLoggingWithObserver, msg, ILogObserver
 from twisted.python.util import untilConcludes
@@ -83,8 +83,12 @@ class BaseHandler(object):
     def __init__(self):
         pass
     def __call__(self, record):
-        record['message'] = record['message'][0]
-        self.handle("%(time)s %(levelname)s %(loggername)s: %(message)s" % record)
+        if 'failure' in record:
+            record['message'] = record['failure'].getTraceback()
+            self.handle("%(time)s %(levelname)s %(loggername)s: %(message)s" % record)
+        else:
+            record['message'] = ' '.join(record['message'])
+            self.handle("%(time)s %(levelname)s %(loggername)s: %(message)s" % record)
     def handle(self, message):
         pass
     def close(self):
@@ -162,6 +166,7 @@ def getLogger(name):
         logger = child
     return logger
 _twistedlogger = getLogger('twisted')
+_loggerslogger = getLogger('terane.loggers')
 
 def startLogging(observer, level=INFO, configfile=None):
     """
