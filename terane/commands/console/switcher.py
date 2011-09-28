@@ -55,15 +55,13 @@ class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
     def keypress(self, size, key):
         if self._frame.get_body() == self:
             if key == 'up' or key == 'k':
-                logger.debug("window switcher up")
                 self._windowlist.keypress(size, 'up')
                 self._windowlist.set_focus(self._focus - 1, 'below')
             if key == 'down' or key == 'j':
-                logger.debug("window switcher down")
                 self._windowlist.keypress(size, 'down')
                 self._windowlist.set_focus(self._focus + 1, 'above')
             if key == 'enter':
-                logger.debug("window switcher: jump to '%s'" % self[self._focus].title)
+                self.jumpToWindow(self[self._focus])
             return None
         if self._curr != None:
             return self._curr.window.keypress(size, key)
@@ -87,6 +85,9 @@ class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
             return None
         if cmd == 'close':
             if args == '':
+                window = self._frame.get_body()
+                if window == self:
+                    return self._hideWindowList()
                 return self.closeWindow(self._curr)
             else:
                 try:
@@ -155,20 +156,20 @@ class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
         handle = WindowHandle(window, title, self._nextwid)
         if self._nwindows == 0:
             self._windows = handle
+            handle.prev = handle
+            handle.next = handle
             self._curr = handle
-            self._curr.prev = handle
-            self._curr.next = handle
         elif self._nwindows == 1:
-            handle.prev = self._windows
-            handle.next = self._windows
             self._windows.prev = handle
             self._windows.next = handle
+            handle.prev = self._windows
+            handle.next = self._windows
             self._curr = handle
         else:
-            handle.prev = self._curr
-            handle.next = self._curr.next
-            self._curr.next = handle
-            self._curr.prev.next = handle
+            handle.prev = self._windows.prev
+            handle.next = self._windows
+            self._windows.prev.next = handle
+            self._windows.prev = handle
             self._curr = handle
         self._nwindows += 1
         self._nextwid += 1
@@ -243,7 +244,6 @@ class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
             while i < 0:
                 curr = curr.prev
                 i += 1
-        #logger.debug("__getitem__: index=%i, title='%s'" % (index,curr.title))
         return curr
 
     def get_focus(self):
@@ -253,34 +253,30 @@ class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
         isCurr = False
         if self._curr == handle:
             isCurr = True
-        #logger.debug("get_focus: focus=%i, title='%s'" % (self._focus,handle.title))
         return (handle.getText(isFocused=True, isCurr=isCurr), self._focus)
 
     def set_focus(self, focus):
-        if focus < 0 or focus >= self._nwindows - 1:
+        if focus < 0 or focus > self._nwindows - 1:
             return
         self._focus = focus
-        logger.debug("set_focus: focus=%i" % self._focus)
         urwid.ListWalker._modified(self)
 
     def get_prev(self, position):
         if position == None or position < 1:
             return (None,None)
         position = position - 1
-        isCurr = False
-        if self._curr == self[self._focus]:
-            isCurr = True
         handle = self[position]
-        logger.debug("get_prev: position=%i, title='%s'" % (position, handle.title))
+        isCurr = False
+        if self._curr == handle:
+            isCurr = True
         return (handle.getText(isCurr=isCurr), position)
 
     def get_next(self, position):
         if position == None or position >= self._nwindows - 1:
             return (None,None)
         position = position + 1
-        isCurr = False
-        if self._curr == self[self._focus]:
-            isCurr = True
         handle = self[position]
-        logger.debug("get_next: position=%i, title='%s'" % (position, handle.title))
+        isCurr = False
+        if self._curr == handle:
+            isCurr = True
         return (handle.getText(isCurr=isCurr), position)
