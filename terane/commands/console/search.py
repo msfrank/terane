@@ -57,16 +57,16 @@ class Searcher(urwid.WidgetWrap):
         Display the error popup.
         """
         # close the search window
-        #self._console.closeWindow(self)
+        self._console.switcher.closeWindow(self.console.switcher.findWindow(self))
         # display the error on screen
         try:
             raise failure.value
         except Fault, e:
-            errtext = "search failed: %s (code %i)" % (e.faultString,e.faultCode)
+            errtext = "Search failed: %s (code %i)" % (e.faultString,e.faultCode)
             ui.error(errtext)
             logger.debug(errtext)
         except BaseException, e:
-            errtext = "search failed: %s" % str(e)
+            errtext = "Search failed: %s" % str(e)
             ui.error(errtext)
             logger.debug(errtext)
 

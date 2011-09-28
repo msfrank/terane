@@ -45,9 +45,9 @@ class Outfile(urwid.WidgetWrap):
                 ui.redraw()
         except BaseException, e:
             # close the search window
-            #self._console.closeWindow(self)
+            self._console.switcher.closeWindow(self._console.switcher.findWindow(self))
             # display the error on screen
-            errtext = "load failed: %s" % str(e)
+            errtext = "Load failed: %s" % str(e)
             ui.error(errtext)
             logger.debug(errtext)
 
