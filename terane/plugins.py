@@ -65,9 +65,7 @@ class PluginManager(MultiService):
     def __init__(self):
         MultiService.__init__(self)
         self.setName("plugins")
-        self._input_plugins = {}
-        self._output_plugins = {}
-        self._filter_plugins = {}
+        self._plugins = {}
         
     def configure(self, settings):
         """
@@ -91,98 +89,46 @@ class PluginManager(MultiService):
             logger.info("loaded plugin egg '%s'" % p)
         for e in errors:
             logger.info("failed to load plugin egg '%s'" % e)
-        # load input plugins
-        for ep in working_set.iter_entry_points('terane.plugin.input'):
-            try:
-                _Plugin = ep.load()
-                section = settings.section("plugin:input:%s" % ep.name)
-                if not section == None:
-                    plugin = _Plugin()
-                    plugin.setName("plugin:input:%s" % ep.name)
-                    plugin.configure(section)
-                    self.addService(plugin)
-                    self._input_plugins[ep.name] = plugin
-                    logger.info("loaded input plugin '%s'" % ep.name)
-            except Exception, e:
-                tb = "\nUnhandled Exception:\n%s\n---\n%s" % (e,traceback.format_exc())
-                logger.warning("failed to load input plugin '%s':%s" % (ep.name, tb))
-        # load output plugins
-        for ep in working_set.iter_entry_points('terane.plugin.output'):
-            try:
-                _Plugin = ep.load()
-                section = settings.section("plugin:output:%s" % ep.name)
-                if not section == None:
-                    plugin = _Plugin()
-                    plugin.setName("plugin:output:%s" % ep.name)
-                    plugin.configure(section)
-                    self.addService(plugin)
-                    self._output_plugins[ep.name] = plugin
-                    logger.info("loaded output plugin '%s'" % ep.name)
-            except Exception, e:
-                tb = "\nUnhandled Exception:\n%s\n---\n%s" % (e,traceback.format_exc())
-                logger.warning("failed to load output plugin '%s':%s" % (ep.name, tb))
-        # load filter plugins
-        for ep in working_set.iter_entry_points('terane.plugin.filter'):
-            try:
-                _Plugin = ep.load()
-                section = settings.section("plugin:filter:%s" % ep.name)
-                if not section == None:
-                    plugin = _Plugin()
-                    plugin.setName("plugin:filter:%s" % ep.name)
-                    plugin.configure(section)
-                    self.addService(plugin)
-                    self._filter_plugins[ep.name] = plugin
-                    logger.info("loaded filter plugin '%s'" % ep.name)
-            except Exception, e:
-                tb = "\nUnhandled Exception:\n%s\n---\n%s" % (e,traceback.format_exc())
-                logger.warning("failed to load filter plugin '%s':%s" % (ep.name, tb))
+        # load all discovered plugins for each type
+        for ptype in ['protocol','input','output','filter']:
+            plugins = {}
+            for ep in working_set.iter_entry_points("terane.plugin.%s" % ptype):
+                try:
+                    _Plugin = ep.load()
+                    section = settings.section("plugin:%s:%s" % (ptype, ep.name))
+                    # if a configuration section exists, configure the plugin
+                    if not section == None:
+                        plugin = _Plugin()
+                        plugin.setName("plugin:%s:%s" % (ptype, ep.name))
+                        plugin.configure(section)
+                        self.addService(plugin)
+                        plugins[ep.name] = plugin
+                        logger.info("loaded %s plugin '%s'" % (ptype, ep.name))
+                except Exception, e:
+                    tb = "\nUnhandled Exception:\n%s\n---\n%s" % (e,traceback.format_exc())
+                    logger.warning("failed to load %s plugin '%s':%s" % (ptype, ep.name, tb))
+            self._plugins[ptype] = plugins
 
-    def input(self, input_type):
+    def instance(self, ptype, pname):
         """
-        Returns the specified input plugin instance.
+        Returns an instance of the specified plugin.
         
-        :param input_type: The name of the input plugin.
+        :param ptype: The type of plugin.
         :type input_type: str
-        :returns: The input plugin instance.
+        :param pname: The name of the plugin.
+        :type input_type: str
+        :returns: An instance of the specified plugin.
         :rtype: :class:`terane.plugins.Plugin`
         :raises Exception: The specified plugin was not found.
         """
         try:
-            plugin = self._input_plugins[input_type]
+            plugins = self._plugins[ptype]
         except:
-            raise Exception("no registered input plugin named '%s'" % input_type)
-        return plugin.instance()
-
-    def output(self, output_type):
-        """
-        Returns the specified output plugin instance.
-        
-        :param output_type: The name of the output plugin.
-        :type output_type: str
-        :returns: The output plugin instance.
-        :rtype: :class:`terane.plugins.Plugin`
-        :raises Exception: The specified plugin was not found.
-        """
+            raise Exception("no registered plugin type named '%s'" % ptype)
         try:
-            plugin = self._output_plugins[output_type]
+            plugin = plugins[pname]
         except:
-            raise Exception("no registered output plugin named '%s'" % output_type)
-        return plugin.instance()
-
-    def filter(self, filter_type):
-        """
-        Returns the specified filter plugin instance.
-        
-        :param filter_type: The name of the filter plugin.
-        :type filter_type: str
-        :returns: The filter plugin instance.
-        :rtype: :class:`terane.plugins.Plugin`
-        :raises Exception: The specified plugin was not found.
-        """
-        try:
-            plugin = self._filter_plugins[filter_type]
-        except:
-            raise Exception("no registered filter plugin named '%s'" % filter_type)
+            raise Exception("no registered %s plugin named '%s'" % (ptype, pname))
         return plugin.instance()
 
 

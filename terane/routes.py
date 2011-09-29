@@ -135,7 +135,7 @@ class RouteManager(MultiService):
                 sink_type = section.getString('type', None)
                 if sink_type == None:
                     raise Exception("missing required option 'type'")
-                sink = plugins.output(sink_type)
+                sink = plugins.instance('output', sink_type)
                 sink.setName(name)
                 sink.configure(section)
                 self.addService(sink)
@@ -150,7 +150,7 @@ class RouteManager(MultiService):
                 source_type = section.getString('type', None)
                 if source_type == None:
                     raise Exception("missing required option 'type'")
-                source = plugins.input(source_type)
+                source = plugins.instance('input', source_type)
                 source.setName(name)
                 source.configure(section)
                 self.addService(source)
@@ -165,7 +165,7 @@ class RouteManager(MultiService):
                 filter_type = section.getString('type', None)
                 if filter_type == None:
                     raise Exception("missing required option 'type'")
-                filter = plugins.filter(filter_type)
+                filter = plugins.instance('filter', filter_type)
                 filter.setName(name)
                 filter.configure(section)
                 self._filters[name] = filter
