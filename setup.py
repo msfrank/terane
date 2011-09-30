@@ -62,6 +62,7 @@ setup(
         'terane.lib.whoosh.support',
         'terane.lib.whoosh.qparser',
         'terane.outputs',
+        'terane.protocols',
         ],
     ext_modules=[
         Extension('terane.db.storage', [
@@ -107,6 +108,9 @@ setup(
             'apache_common=terane.filters.apache:ApacheCommonFilterPlugin',
             'mysql_server=terane.filters.mysql:MysqlServerFilterPlugin',
             'nagios=terane.filters.nagios:NagiosFilterPlugin',
+            ],
+        'terane.plugin.protocol': [
+            'xmlrpc=terane.protocols.xmlrpc:XMLRPCProtocolPlugin',
             ],
         },
 )
