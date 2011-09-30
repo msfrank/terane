@@ -1,4 +1,4 @@
-# Copyright 2010,2011 Michael Frank <msfrank@syntaxjockey.com>
+#Copyright 2010,2011 Michael Frank <msfrank@syntaxjockey.com>
 #
 # This file is part of Terane.
 #
@@ -20,6 +20,7 @@ from twisted.internet import threads
 from twisted.web.xmlrpc import XMLRPC
 from twisted.web.server import Site
 from twisted.application.service import Service
+from terane.plugins import Plugin
 from terane.dql import parseQuery, ParsingSyntaxError
 from terane.db.plan import SearchPlan, TailPlan, ListIndicesPlan, ShowIndexPlan
 from terane.stats import stats
@@ -131,21 +132,25 @@ class XMLRPCDispatcher(XMLRPC):
             self.logexception(e)
             raise FaultInternalError()
 
-class XMLRPCService(Service):
+class XMLRPCProtocolPlugin(Plugin):
 
-    def configure(self, settings):
-        section = settings.section('server')
+    def __init__(self):
+        self._instance = None
+
+    def configure(self, section):
         self.listenAddress = section.getString('listen address', '0.0.0.0')
         self.listenPort = section.getInt('listen port', 45565)
 
+    def instance(self):
+        raise Exception("instance() method not implemented for XMLRPCProtocolPlugin")
+
     def startService(self):
-        Service.startService(self)
+        Plugin.startService(self)
         from twisted.internet import reactor
         self.listener = reactor.listenTCP(self.listenPort, Site(XMLRPCDispatcher()), interface=self.listenAddress)
-        logger.debug("[xmlrpc] started xmlrpc service on %s:%i" % (self.listenAddress, self.listenPort))
+        logger.debug("[listener:%s] started xmlrpc listener on %s:%i" % (self.name, self.listenAddress, self.listenPort))
 
     def stopService(self):
+        Plugin.stopService(self)
         self.listener.stopListening()
-        self.listener = None
-        logger.debug("[xmlrpc] stopped xmlrpc service")
-        Service.stopService(self)
+        logger.debug("[listener:%s] stopped xmlrpc listener" % self.name)
