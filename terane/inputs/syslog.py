@@ -33,7 +33,7 @@ class SyslogUDPReceiver(DatagramProtocol):
     def datagramReceived(self, data, (host,port)):
         try:
             fields = {'_raw': data, '_host': host, '_port': port}
-            logger.debug("received msg from %s:%i: %s" % (host,port,data))
+            logger.trace("received msg from %s:%i: %s" % (host,port,data))
             for input in self._plugin._inputs:
                 if input._check(host, port):
                     input._write(fields)

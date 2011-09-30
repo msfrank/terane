@@ -199,7 +199,7 @@ class FileInput(Input):
         line = line.strip()
         if line.isspace():
             return
-        logger.debug("[input:%s] received line: %s" % (self.name,line))
+        logger.trace("[input:%s] received line: %s" % (self.name,line))
         # generate default timestamp and hostname, in case later
         # filters aren't able to add it
         ts = datetime.datetime.now(tzutc())

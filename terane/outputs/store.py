@@ -55,7 +55,7 @@ class StoreOutput(Output):
         for key in remove:
             del fields[key]
         # store the event in the index
-        logger.debug("[output:%s] storing event: %s" % (self.name,str(fields)))
+        logger.trace("[output:%s] storing event: %s" % (self.name,str(fields)))
         self._index.add(fields)
         # if the current segment contains more events than specified by
         # _segRotation, then rotate the index to generate a new segment.

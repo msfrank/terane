@@ -83,7 +83,7 @@ class IndexWriter(WhooshIndexWriter):
         # create a document record
         doc_id = self._ix._ids.allocate()
         self._segment.new_doc(doc_txn, doc_id)
-        logger.debug("created new document with id %s" % doc_id)
+        logger.trace("created new document with id %s" % doc_id)
         # add the document id to the fields, so we can search on it
         fields['id'] = long(doc_id)
             

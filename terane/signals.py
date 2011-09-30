@@ -59,5 +59,5 @@ class Signal(object):
         self._receivers = {}
         for d in deferreds:
             if self.matches(d.kwds):
-                logger.debug("signaling receivers")
+                logger.trace("signaling receiver %s" % d)
                 d.callback(result)
