@@ -212,12 +212,12 @@ extern PyObject *terane_Exc_Error;
  * in the python standard library.  for more information see
  * http://docs.python.org/library/logging.html#logging-levels.
  */
-#define TERANE_LOG_CRITICAL         50
-#define TERANE_LOG_ERROR            40
-#define TERANE_LOG_WARNING          30
-#define TERANE_LOG_INFO             20
-#define TERANE_LOG_DEBUG            10
-#define TERANE_LOG_NOTSET           0
+#define TERANE_LOG_FATAL            0
+#define TERANE_LOG_ERROR            10
+#define TERANE_LOG_WARNING          20
+#define TERANE_LOG_INFO             30
+#define TERANE_LOG_DEBUG            40
+#define TERANE_LOG_TRACE            50
 
 /* the size of a terane_DID_string buffer, including the trailing '\0' */
 #define TERANE_DID_STRING_LEN       17

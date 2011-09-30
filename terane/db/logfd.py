@@ -43,7 +43,7 @@ class LogFD(FileDescriptor):
         self._buffer = []
         level, name, message = line.split(' ', 2)
         logger = getLogger(name)
-        logger.log(int(level), message)
+        logger.msg(int(level), message)
 
     def fileno(self):
         return self._fd
