@@ -94,10 +94,10 @@ class PluginManager(MultiService):
             plugins = {}
             for ep in working_set.iter_entry_points("terane.plugin.%s" % ptype):
                 try:
-                    _Plugin = ep.load()
-                    section = settings.section("plugin:%s:%s" % (ptype, ep.name))
-                    # if a configuration section exists, configure the plugin
-                    if not section == None:
+                    # if a configuration section exists, load and configure the plugin
+                    if settings.hasSection("plugin:%s:%s" % (ptype, ep.name)):
+                        _Plugin = ep.load()
+                        section = settings.section("plugin:%s:%s" % (ptype, ep.name))
                         plugin = _Plugin()
                         plugin.setName("plugin:%s:%s" % (ptype, ep.name))
                         plugin.configure(section)

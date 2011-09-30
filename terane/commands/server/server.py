@@ -23,7 +23,6 @@ from twisted.internet.defer import maybeDeferred
 from terane.db import db
 from terane.plugins import plugins
 from terane.routes import routes
-from terane.xmlrpc import XMLRPCService
 from terane.stats import stats
 from terane.loggers import getLogger, startLogging, StdoutHandler, FileHandler
 from terane.loggers import ERROR, WARNING, INFO, DEBUG
@@ -53,6 +52,7 @@ class Server(MultiService):
             else: raise ConfigureError("Unknown log verbosity '%s'" % verbosity)
             startLogging(FileHandler(logfile), level, logconfigfile)
         self.threadpoolsize = section.getInt('thread pool size', 20)
+        reactor.suggestThreadPoolSize(self.threadpoolsize)
 
     def run(self):
         # check that the pid file doesn't exist
@@ -107,11 +107,6 @@ class Server(MultiService):
         # configure the route manager
         routes.configure(self.settings)
         plugins.addService(routes)
-        # configure the xmlrpc service
-        reactor.suggestThreadPoolSize(self.threadpoolsize)
-        xmlrpc = XMLRPCService()
-        xmlrpc.configure(self.settings)
-        routes.addService(xmlrpc)
         # catch SIGINT and SIGTERM
         signal.signal(signal.SIGINT, self._signal)
         signal.signal(signal.SIGTERM, self._signal)

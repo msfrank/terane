@@ -139,6 +139,17 @@ class Settings(object):
         """
         return list(self._args)
 
+    def hasSection(self, name):
+        """
+        Returns True if the specified section exists, otherwise False.
+
+        :param name: The section name.
+        :type name: str
+        :returns: True or False.
+        :rtype: [bool]
+        """
+        return self._config.has_section(name)
+
     def section(self, name):
         """
         Get the section with the specified name.  Note if the section
