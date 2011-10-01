@@ -1,3 +1,14 @@
+Release 0.1.1
+-------------
+
+ * refactored logging infrastructure.
+ * updated storage backend to use free-threaded DB handles.
+ * fixed ApacheCommonFilter.
+ * added results find mode in console, with highlighting.
+ * added error modal in console.
+ * refactored the window switcher in console.
+ * implemented xmlrpc as a protocol plugin.
+
 Release 0.1.0
 -------------
 
