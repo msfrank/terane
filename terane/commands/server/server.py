@@ -20,7 +20,6 @@ from logging import StreamHandler, FileHandler, Formatter
 from twisted.internet import reactor
 from twisted.application.service import MultiService
 from twisted.internet.defer import maybeDeferred
-from terane.db import db
 from terane.plugins import plugins
 from terane.routes import routes
 from terane.stats import stats
@@ -98,15 +97,12 @@ class Server(MultiService):
         # configure the statistics manager
         stats.configure(self.settings)
         self.addService(stats)
-        # configure the database manager
-        db.configure(self.settings)
-        self.addService(db)
         # configure the plugin manager
         plugins.configure(self.settings)
-        db.addService(plugins)
+        self.addService(plugins)
         # configure the route manager
         routes.configure(self.settings)
-        plugins.addService(routes)
+        self.addService(routes)
         # catch SIGINT and SIGTERM
         signal.signal(signal.SIGINT, self._signal)
         signal.signal(signal.SIGTERM, self._signal)
