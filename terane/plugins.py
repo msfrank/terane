@@ -22,10 +22,15 @@ from terane.loggers import getLogger
 
 logger = getLogger('terane.plugins')
 
-class Plugin(Service):
+class Plugin(MultiService):
     """
     Abstract class which all plugins inherit from.
     """
+
+    factory = None
+
+    def __init__(self):
+        MultiService.__init__(self)
 
     def configure(self, section):
         """
@@ -37,6 +42,16 @@ class Plugin(Service):
         :type section: :class:`terane.settings.Section`
         """
         pass
+
+    def instance(self, name):
+        """
+        """
+        if self.factory == None:
+            raise NotImplemented()
+        instance = self.factory()
+        instance.setName(name)
+        self.addService(instance)
+        return instance
 
     def startService(self):
         """
@@ -52,7 +67,7 @@ class Plugin(Service):
         shutdown task, they should override this method (be sure to chain up
         to the parent method) and perform them here.
         """
-        Service.stopService(self)
+        return Service.stopService(self)
 
 class PluginManager(MultiService):
     """
@@ -109,7 +124,7 @@ class PluginManager(MultiService):
                     logger.warning("failed to load %s plugin '%s':%s" % (ptype, ep.name, tb))
             self._plugins[ptype] = plugins
 
-    def instance(self, ptype, pname):
+    def instance(self, ptype, pname, iname=None):
         """
         Returns an instance of the specified plugin.
         
@@ -129,7 +144,7 @@ class PluginManager(MultiService):
             plugin = plugins[pname]
         except:
             raise Exception("no registered %s plugin named '%s'" % (ptype, pname))
-        return plugin.instance()
+        return plugin.instance(iname)
 
 
 plugins = PluginManager()

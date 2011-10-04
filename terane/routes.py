@@ -17,6 +17,7 @@
 
 import socket, datetime, traceback
 from twisted.application.service import MultiService
+from twisted.internet.defer import CancelledError
 from terane.plugins import plugins
 from terane.filters import FilterError, StopFiltering
 from terane.settings import ConfigureError
@@ -64,11 +65,11 @@ class Route(object):
                 requiredfields.update(filter.outfields())
             # warn if the input may not provide all required fields
             if not self._filters[0].infields().issubset(self._input.outfields()):
-                logger.warn("[route:%s] input %s does not guarantee fields required by filter %s, events may be lost" %
+                logger.warn("[route:%s] input %s does not guarantee fields required by filter %s" %
                     (self.name, self._input.name, self._filters[0].name))
             # warn if the output may not receive all required fields
             if not self._output.infields().issubset(requiredfields):
-                logger.warn("[route:%s] filter chain does not guarantee fields required by output %s, events may be lost" %
+                logger.warn("[route:%s] filter chain does not guarantee fields required by output %s" %
                     (self.name, self._output.name))
             logger.debug("[route:%s] route configuration: %s -> %s -> %s" %
                 (self.name,self._input.name,' -> '.join(filters),self._output.name))
@@ -114,9 +115,15 @@ class Route(object):
         self._scheduleReceivedEvent()
 
     def _errorReceivingEvent(self, failure):
-        logger.debug("[route:%s] error processing event: %s" % (self.name,str(failure)))
-        self._scheduleReceivedEvent()
-        return failure
+        if failure.check(CancelledError) == None:
+            logger.debug("[route:%s] error processing event: %s" % (self.name,str(failure)))
+            self._scheduleReceivedEvent()
+
+    def close(self):
+        if self.d != None:
+            self._input.on_received_event.disconnect(self.d)
+            self.d = None
+        logger.debug("[route:%s] stopped processing route" % self.name)
 
 class RouteManager(MultiService):
     def __init__(self):
@@ -135,10 +142,8 @@ class RouteManager(MultiService):
                 sink_type = section.getString('type', None)
                 if sink_type == None:
                     raise Exception("missing required option 'type'")
-                sink = plugins.instance('output', sink_type)
-                sink.setName(name)
+                sink = plugins.instance('output', sink_type, name)
                 sink.configure(section)
-                self.addService(sink)
                 self._outputs[name] = sink
             except Exception, e:
                 tb = "\nUnhandled Exception:\n%s\n---\n%s" % (e,traceback.format_exc())
@@ -150,10 +155,8 @@ class RouteManager(MultiService):
                 source_type = section.getString('type', None)
                 if source_type == None:
                     raise Exception("missing required option 'type'")
-                source = plugins.instance('input', source_type)
-                source.setName(name)
+                source = plugins.instance('input', source_type, name)
                 source.configure(section)
-                self.addService(source)
                 self._inputs[name] = source
             except Exception, e:
                 tb = "\nUnhandled Exception:\n%s\n---\n%s" % (e,traceback.format_exc())
@@ -165,8 +168,7 @@ class RouteManager(MultiService):
                 filter_type = section.getString('type', None)
                 if filter_type == None:
                     raise Exception("missing required option 'type'")
-                filter = plugins.instance('filter', filter_type)
-                filter.setName(name)
+                filter = plugins.instance('filter', filter_type, name)
                 filter.configure(section)
                 self._filters[name] = filter
             except Exception, e:
@@ -182,5 +184,10 @@ class RouteManager(MultiService):
             except Exception, e:
                 logger.warning("failed to load route %s: %s" % (name, e))
 
+    def stopService(self):
+        for route in self._routes:
+            route.close()
+        self._routes = []
+        return MultiService.stopService(self)
 
 routes = RouteManager()
