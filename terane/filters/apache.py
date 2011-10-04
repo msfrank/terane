@@ -22,14 +22,6 @@ from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.apache")
 
-class ApacheCommonFilterPlugin(Plugin):
-
-    def configure(self, section):
-        pass
-
-    def instance(self):
-        return ApacheCommonFilter()
-
 class ApacheCommonFilter(Filter):
 
     def configure(self, section):
@@ -74,14 +66,9 @@ class ApacheCommonFilter(Filter):
                 raise FilterError("regex did not match '%s'" % field)
             fields[field] = value
         return fields
-        
-class ApacheCombinedFilterPlugin(Plugin):
 
-    def configure(self, section):
-        pass
-
-    def instance(self):
-        return ApacheCombinedFilter()
+class ApacheCommonFilterPlugin(Plugin):
+    factory = ApacheCommonFilter
 
 class ApacheCombinedFilter(Filter):
 
@@ -129,3 +116,6 @@ class ApacheCombinedFilter(Filter):
                 raise FilterError("regex did not match '%s'" % field)
             fields[field] = value
         return fields
+
+class ApacheCombinedFilterPlugin(Plugin):
+    factory = ApacheCombinedFilter()

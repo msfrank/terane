@@ -22,14 +22,6 @@ from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.nagios")
 
-class NagiosFilterPlugin(Plugin):
-
-    def configure(self, section):
-        pass
-
-    def instance(self):
-        return NagiosFilter()
-
 class NagiosFilter(Filter):
 
     def configure(self, section):
@@ -108,3 +100,6 @@ class NagiosFilter(Filter):
     def _warning(self, line, fields):
         fields['default'] = line.strip()
         return fields
+
+class NagiosFilterPlugin(Plugin):
+    factory = NagiosFilter()

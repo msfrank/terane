@@ -22,14 +22,6 @@ from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.syslog")
 
-class SyslogFilterPlugin(Plugin):
-
-    def configure(self, section):
-        pass
-
-    def instance(self):
-        return SyslogFilter()
-
 class SyslogFilter(Filter):
 
     def _updateselected(self, selector):
@@ -203,6 +195,9 @@ class SyslogFilter(Filter):
             raise FilterError("[filter:%s] line has an invalid tag" % self.name)
         fields['default'] = content
         return fields
+
+class SyslogFilterPlugin(Plugin):
+    factory = SyslogFilter
 
 _severities = {
     'emerg': 0,

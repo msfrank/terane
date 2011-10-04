@@ -22,7 +22,7 @@ from twisted.web.server import Site
 from twisted.application.service import Service
 from terane.plugins import Plugin
 from terane.dql import parseQuery, ParsingSyntaxError
-from terane.db.plan import SearchPlan, TailPlan, ListIndicesPlan, ShowIndexPlan
+#from terane.db.plan import SearchPlan, TailPlan, ListIndicesPlan, ShowIndexPlan
 from terane.stats import stats
 from terane.loggers import getLogger
 

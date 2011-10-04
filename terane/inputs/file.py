@@ -25,14 +25,6 @@ from terane.loggers import getLogger
 
 logger = getLogger('terane.inputs.file')
 
-class FileInputPlugin(Plugin):
-
-    def configure(self, section):
-        pass
-
-    def instance(self):
-        return FileInput()
-
 class FileInput(Input):
 
     def __init__(self):
@@ -220,3 +212,6 @@ class FileInput(Input):
         self._deferred = None
         Input.stopService(self)
         logger.debug("[input:%s] stopped input" % self.name)
+
+class FileInputPlugin(Plugin):
+    factory = FileInput

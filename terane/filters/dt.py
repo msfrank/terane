@@ -22,15 +22,6 @@ from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.datetime")
 
-class DatetimeFilterPlugin(Plugin):
-
-    def configure(self, section):
-        pass
-
-    def instance(self):
-        return DatetimeFilter()
-
-
 class DatetimeFilter(Filter):
 
     def configure(self, section):
@@ -101,3 +92,6 @@ class DatetimeFilter(Filter):
         except Exception, e:
             raise FilterError("failed to generate 'ts': %s" %  e)
         return fields
+
+class DatetimeFilterPlugin(Plugin):
+    factory = DatetimeFilter()

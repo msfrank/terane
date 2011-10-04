@@ -22,14 +22,6 @@ from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.mysql")
 
-class MysqlServerFilterPlugin(Plugin):
-
-    def configure(self, section):
-        pass
-
-    def instance(self):
-        return MysqlServerFilter()
-
 class MysqlServerFilter(Filter):
 
     def configure(self, section):
@@ -59,3 +51,6 @@ class MysqlServerFilter(Filter):
         else:
             fields['default'] = fields['_raw']
         return fields
+
+class MysqlServerFilterPlugin(Plugin):
+    factory = MysqlServerFilter()

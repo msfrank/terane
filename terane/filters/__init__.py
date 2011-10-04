@@ -15,16 +15,15 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
+from twisted.application.service import Service
+
 class FilterError(Exception):
     pass
 
 class StopFiltering(Exception):
     pass
 
-class Filter(object):
-
-    def setName(self, name):
-        self.name = name
+class Filter(Service):
 
     def configure(self, section):
         pass

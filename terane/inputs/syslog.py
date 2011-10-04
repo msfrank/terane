@@ -34,40 +34,11 @@ class SyslogUDPReceiver(DatagramProtocol):
         try:
             fields = {'_raw': data, '_host': host, '_port': port}
             logger.trace("received msg from %s:%i: %s" % (host,port,data))
-            for input in self._plugin._inputs:
+            for input in self._plugin:
                 if input._check(host, port):
                     input._write(fields)
         except Exception, e:
             logger.debug(str(e))
-
-class SyslogInputPlugin(Plugin):
-
-    def configure(self, section):
-        self._inputs = []
-        self._udplistener = None
-        self._udpaddress = section.getString('syslog udp address', '0.0.0.0')
-        self._udpport = section.getInt('syslog udp port', 514)
-
-    def instance(self):
-        input =  SyslogInput()
-        self._inputs.append(input)
-        return input
-
-    def startService(self):
-        Plugin.startService(self)
-        if not self._inputs == []:
-            factory = SyslogUDPReceiver(self)
-            self._udplistener = reactor.listenUDP(self._udpport, factory, interface=self._udpaddress)
-            logger.info("[plugin:input:syslog] listening for udp syslog messages on %s:%i" % (self._udpaddress,self._udpport))
-        else:
-            logger.info("[plugin:input:syslog] no syslog inputs configured")
-
-    def stopService(self):
-        if not self._udplistener == None:
-            self._udplistener.stopListening()
-            self._udplistener = None
-        Plugin.stopService(self)
-        logger.info("[plugin:input:syslog] stopped listening for syslog messages")
 
 class SyslogInput(Input):
 
@@ -92,3 +63,30 @@ class SyslogInput(Input):
     def stopService(self):
         Input.stopService(self)
         logger.debug("[input:%s] stopped input" % self.name)
+        
+class SyslogInputPlugin(Plugin):
+
+    factory = SyslogInput
+
+    def configure(self, section):
+        self._udplistener = None
+        self._udpaddress = section.getString('syslog udp address', '0.0.0.0')
+        self._udpport = section.getInt('syslog udp port', 514)
+
+    def startService(self):
+        Plugin.startService(self)
+        if len(self.services) > 0:
+            receiver = SyslogUDPReceiver(self)
+            self._udplistener = reactor.listenUDP(self._udpport, receiver, interface=self._udpaddress)
+            logger.info("[plugin:input:syslog] listening for udp syslog messages on %s:%i" % (self._udpaddress,self._udpport))
+        else:
+            logger.info("[plugin:input:syslog] no syslog inputs configured")
+
+    def stopService(self):
+        if not self._udplistener == None:
+            self._udplistener.stopListening()
+            self._udplistener = None
+        Plugin.stopService(self)
+        logger.info("[plugin:input:syslog] stopped listening for syslog messages")
+
+

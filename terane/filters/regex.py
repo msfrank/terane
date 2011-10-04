@@ -22,15 +22,6 @@ from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.regex")
 
-class RegexFilterPlugin(Plugin):
-
-    def configure(self, section):
-        pass
-
-    def instance(self):
-        return RegexFilter()
-
-
 class RegexFilter(Filter):
 
     def configure(self, section):
@@ -60,3 +51,6 @@ class RegexFilter(Filter):
             raise StopFiltering("input '%s' didn't match regex" % fields[self._infield])
         fields.update(m.groupdict())
         return fields
+
+class RegexFilterPlugin(Plugin):
+    factory = RegexFilter()

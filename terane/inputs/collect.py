@@ -54,19 +54,31 @@ class CollectorRealm:
             raise Unauthorized()
         return IPerspective, Collector(avatarId, self._plugin), lambda:None
         
+class CollectInput(Input):
 
+    def outfields(self):
+        return set()
+
+    def startService(self):
+        Input.startService(self)
+        logger.debug("[input:%s] started input" % self.name)
+
+    def _write(self, fields):
+        self.on_received_event.signal(fields)
+
+    def stopService(self):
+        Input.stopService(self)
+        logger.debug("[input:%s] stopped input" % self.name)
+        
 class CollectInputPlugin(Plugin):
+
+    factory = CollectInput
 
     def configure(self, section):
         self._inputs = []
         self._listener = None
         self._address = section.getString('collect address', '0.0.0.0')
         self._port = section.getInt('collect port', 8643)
-
-    def instance(self):
-        input =  CollectInput()
-        self._inputs.append(input)
-        return input
 
     def startService(self):
         Plugin.startService(self)
@@ -86,21 +98,4 @@ class CollectInputPlugin(Plugin):
         Plugin.stopService(self)
         logger.info("[plugin:input:collect] stopped listening for remote messages")
 
-class CollectInput(Input):
 
-    def configure(self, section):
-        pass
-
-    def outfields(self):
-        return set()
-
-    def startService(self):
-        Input.startService(self)
-        logger.debug("[input:%s] started input" % self.name)
-
-    def _write(self, fields):
-        self.on_received_event.signal(fields)
-
-    def stopService(self):
-        Input.stopService(self)
-        logger.debug("[input:%s] stopped input" % self.name)

@@ -28,14 +28,6 @@ from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.forward')
 
-class ForwardOutputPlugin(Plugin):
-
-    def configure(self, section):
-        pass
-
-    def instance(self):
-        return ForwardOutput()
-
 class ForwardOutput(Output):
 
     def configure(self, section):
@@ -112,3 +104,6 @@ class ForwardOutput(Output):
         logger.debug("[output:%s] failed to forward event to %s:%i: %s" %
             (self.name, self.forwardserver, self.forwardport, str(reason)))
         return reason
+
+class ForwardOutputPlugin(Plugin):
+    factory = ForwardOutput

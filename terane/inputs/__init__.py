@@ -33,4 +33,4 @@ class Input(Service):
         Service.startService(self)
 
     def stopService(self):
-        Service.stopService(self)
+        return Service.stopService(self)
