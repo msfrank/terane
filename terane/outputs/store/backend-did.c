@@ -17,7 +17,7 @@
  * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "storage.h"
+#include "backend.h"
 
 /*
  * DID_num_to_string: convert a document id integer into a string.

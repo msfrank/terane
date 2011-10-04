@@ -17,7 +17,7 @@
  * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "storage.h"
+#include "backend.h"
 
 /*
  * terane_Segment_new_doc: create a new document
@@ -28,8 +28,8 @@
  *   id (long): The document id
  * returns: None
  * exceptions:
- *   terane.db.storage.DocExists: The specified document id already exists
- *   terane.db.storage.Error: A db error occurred when trying to create the record
+ *   terane.outputs.store.backend.DocExists: The specified document id already exists
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to create the record
  */
 PyObject *
 terane_Segment_new_doc (terane_Segment *self, PyObject *args)
@@ -75,7 +75,7 @@ terane_Segment_new_doc (terane_Segment *self, PyObject *args)
  * returns: A string representing the document contents 
  * exceptions:
  *   KeyError: The document with the specified id doesn't exist
- *   terane.db.storage.Error: A db error occurred when trying to retrieve the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to retrieve the record
  */
 PyObject *
 terane_Segment_get_doc (terane_Segment *self, PyObject *args)
@@ -134,7 +134,7 @@ terane_Segment_get_doc (terane_Segment *self, PyObject *args)
  *   document (string): Data to store in the document
  * returns: None
  * exceptions:
- *   terane.db.storage.Error: A db error occurred when trying to set the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
  */
 PyObject *
 terane_Segment_set_doc (terane_Segment *self, PyObject *args)
@@ -182,7 +182,7 @@ terane_Segment_set_doc (terane_Segment *self, PyObject *args)
  * returns: None
  * exceptions:
  *   KeyError: The document with the specified id doesn't exist
- *   terane.db.storage.Error: A db error occurred when trying to delete the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to delete the record
  */
 PyObject *
 terane_Segment_delete_doc (terane_Segment *self, PyObject *args)
@@ -353,7 +353,7 @@ terane_Segment_count_docs (terane_Segment *self)
  * returns: A tuple consisting of (docnum,document).
  * exceptions:
  *   IndexError: There are no documents in the Segment
- *   terane.db.storage.Error: A db error occurred when trying to get the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
  */
 PyObject *
 terane_Segment_first_doc (terane_Segment *self, PyObject *args)
@@ -428,7 +428,7 @@ terane_Segment_first_doc (terane_Segment *self, PyObject *args)
  * returns: A tuple consisting of (docnum,document).
  * exceptions:
  *   IndexError: There are no documents in the Segment
- *   terane.db.storage.Error: A db error occurred when trying to get the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
  */
 PyObject *
 terane_Segment_last_doc (terane_Segment *self, PyObject *args)

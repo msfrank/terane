@@ -17,7 +17,7 @@
  * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "storage.h"
+#include "backend.h"
 
 /* compare two terane_Field instances by name */
 static int
@@ -159,7 +159,7 @@ error:
  * returns: a string containing the JSON-encoded metadata. 
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   terane.db.storage.Error: A db error occurred when trying to get the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
  */
 PyObject *
 terane_Segment_get_field_meta (terane_Segment *self, PyObject *args)
@@ -224,7 +224,7 @@ terane_Segment_get_field_meta (terane_Segment *self, PyObject *args)
  * returns: None
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   terane.db.storage.Error: A db error occurred when trying to set the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
  */
 PyObject *
 terane_Segment_set_field_meta (terane_Segment *self, PyObject *args)

@@ -17,7 +17,7 @@
  * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "storage.h"
+#include "backend.h"
 
 /*
  * _Segment_make_word_key:
@@ -217,7 +217,7 @@ _Segment_free_key (DBT *key)
  * returns: The JSON-encoded data
  * exceptions:
  *   KeyError: The specified field or record doesn't exist
- *   terane.db.storage.Error: A db error occurred when trying to get the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
  */
 PyObject *
 terane_Segment_get_word (terane_Segment *self, PyObject *args)
@@ -289,7 +289,7 @@ terane_Segment_get_word (terane_Segment *self, PyObject *args)
  * returns: None
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   terane.db.storage.Error: A db error occurred when trying to set the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
  */
 PyObject *
 terane_Segment_set_word (terane_Segment *self, PyObject *args)
@@ -348,7 +348,7 @@ terane_Segment_set_word (terane_Segment *self, PyObject *args)
  * returns: True if the word exists in the field, otherwise False.
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   terane.db.storage.Error: A db error occurred when trying to find the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to find the record
  */
 PyObject *
 terane_Segment_contains_word (terane_Segment *self, PyObject *args)
@@ -475,7 +475,7 @@ _Segment_skip_word (terane_Iter *iter, PyObject *args)
  *  of (id,metadata).
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   terane.db.storage.Error: A db error occurred when trying to get the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
  */
 PyObject *
 terane_Segment_iter_words (terane_Segment *self, PyObject *args)
@@ -534,7 +534,7 @@ terane_Segment_iter_words (terane_Segment *self, PyObject *args)
  * returns: a string containing the JSON-encoded metadata. 
  * exceptions:
  *   KeyError: The specified field or metadata doesn't exist
- *   terane.db.storage.Error: A db error occurred when trying to get the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
  */
 PyObject *
 terane_Segment_get_word_meta (terane_Segment *self, PyObject *args)
@@ -605,7 +605,7 @@ terane_Segment_get_word_meta (terane_Segment *self, PyObject *args)
  * returns: None
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   terane.db.storage.Error: A db error occurred when trying to set the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
  */
 PyObject *
 terane_Segment_set_word_meta (terane_Segment *self, PyObject *args)
@@ -691,7 +691,7 @@ _Segment_next_word_meta (terane_Iter *iter, DBT *key, DBT *data)
  *  of (word,metadata).
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   terane.db.storage.Error: A db error occurred when trying to set the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
  */
 PyObject *
 terane_Segment_iter_words_meta (terane_Segment *self, PyObject *args)
@@ -742,7 +742,7 @@ terane_Segment_iter_words_meta (terane_Segment *self, PyObject *args)
  *  of (word,metadata).
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   terane.db.storage.Error: A db error occurred when trying to set the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
  */
 PyObject *
 terane_Segment_iter_words_meta_from (terane_Segment *self, PyObject *args)
@@ -804,7 +804,7 @@ terane_Segment_iter_words_meta_from (terane_Segment *self, PyObject *args)
  *  of (word,metadata).
  * exceptions:
  *   KeyError: The specified field doesn't exist
- *   terane.db.storage.Error: A db error occurred when trying to set the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
  */
 PyObject *
 terane_Segment_iter_words_meta_range (terane_Segment *self, PyObject *args)

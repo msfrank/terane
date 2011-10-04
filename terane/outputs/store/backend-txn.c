@@ -17,7 +17,7 @@
  * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "storage.h"
+#include "backend.h"
 
 /*
  * _Txn_discard: discard the invalid Txn handle, and all child handles.
@@ -47,9 +47,9 @@ _Txn_discard (terane_Txn *txn)
  * parameters: None
  * returns: 0 if the operation succeeded, otherwise < 0 on error
  * exceptions:
- *  terane.db.storage:Deadlock: deadlock was detected.
- *  terane.db.storage:LockTimeout: timed out trying to grab the lock.
- *  terane.db.storage:Error: the commit failed.
+ *  terane.outputs.store.backend:Deadlock: deadlock was detected.
+ *  terane.outputs.store.backend:LockTimeout: timed out trying to grab the lock.
+ *  terane.outputs.store.backend:Error: the commit failed.
  */
 static int
 _Txn_commit (terane_Txn *txn)
@@ -90,7 +90,7 @@ _Txn_commit (terane_Txn *txn)
  * parameters: None
  * returns: 0 if the operation succeeded, otherwise < 0 on error
  * exceptions:
- *  terane.db.storage:Error: the abort failed.
+ *  terane.outputs.store.backend:Error: the abort failed.
  */
 static int
 _Txn_abort (terane_Txn *txn)
@@ -136,11 +136,11 @@ _Txn_dealloc (terane_Txn *self)
  *
  * callspec: Txn(env[,parent])
  * parameters:
- *  env (terane.db.storage:Env): The database environment
- *  parent (terane.db.storage:Txn): A parent Txn
- * returns: A new terane.db.storage:Txn object
+ *  env (terane.outputs.store.backend:Env): The database environment
+ *  parent (terane.outputs.store.backend:Txn): A parent Txn
+ * returns: A new terane.outputs.store.backend:Txn object
  * exceptions:
- *  terane.db.storage:Error: failed to create the DB_TXN handle
+ *  terane.outputs.store.backend:Error: failed to create the DB_TXN handle
  */
 PyObject *
 terane_Txn_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
@@ -195,9 +195,9 @@ error:
  * parameters: None
  * returns: None
  * exceptions:
- *  terane.db.storage:Deadlock: deadlock was detected.
- *  terane.db.storage:LockTimeout: timed out trying to grab the lock.
- *  terane.db.storage:Error: the commit failed.
+ *  terane.outputs.store.backend:Deadlock: deadlock was detected.
+ *  terane.outputs.store.backend:LockTimeout: timed out trying to grab the lock.
+ *  terane.outputs.store.backend:Error: the commit failed.
  */
 PyObject *
 terane_Txn_commit (terane_Txn *self)
@@ -213,7 +213,7 @@ terane_Txn_commit (terane_Txn *self)
  * parameters: None
  * returns: None
  * exceptions:
- *  terane.db.storage:Error: the abort failed.
+ *  terane.outputs.store.backend:Error: the abort failed.
  */
 PyObject *
 terane_Txn_abort (terane_Txn *self)
@@ -229,7 +229,7 @@ terane_Txn_abort (terane_Txn *self)
  * parameters: None
  * returns: The Txn instance.
  * exceptions:
- *  terane.db.storage:Error: the Txn instance is invalid.
+ *  terane.outputs.store.backend:Error: the Txn instance is invalid.
  */
 PyObject *
 terane_Txn_enter (terane_Txn *self)
@@ -252,9 +252,9 @@ terane_Txn_enter (terane_Txn *self)
  *   tb: The exception traceback
  * returns: False
  * exceptions:
- *  terane.db.storage:Deadlock: deadlock was detected.
- *  terane.db.storage:LockTimeout: timed out trying to grab the lock.
- *  terane.db.storage:Error: the commit or abort failed.
+ *  terane.outputs.store.backend:Deadlock: deadlock was detected.
+ *  terane.outputs.store.backend:LockTimeout: timed out trying to grab the lock.
+ *  terane.outputs.store.backend:Error: the commit or abort failed.
  */
 PyObject *
 terane_Txn_exit (terane_Txn *self, PyObject *args)
@@ -285,7 +285,7 @@ PyMethodDef _Txn_methods[] =
 PyTypeObject terane_TxnType = {
     PyObject_HEAD_INIT(NULL)
     0,
-    "storage.Txn",
+    "backend.Txn",
     sizeof (terane_Txn),
     0,                         /*tp_itemsize*/
     (destructor) _Txn_dealloc,

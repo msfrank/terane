@@ -17,7 +17,7 @@
  * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "storage.h"
+#include "backend.h"
 
 /*
  * terane_Iter_dealloc: free resources for the Iter object.
@@ -244,7 +244,7 @@ _Iter_next (terane_Iter *self)
  * returns: The iterator value at the skipped-to position
  * exceptions:
  *  IndexError: Target item is out of range
- *  terane.db.storage.Error: failed to move the DBC cursor
+ *  terane.outputs.store.backend.Error: failed to move the DBC cursor
  */
 PyObject *
 terane_Iter_skip (terane_Iter *self, PyObject *args)
@@ -278,7 +278,7 @@ terane_Iter_skip (terane_Iter *self, PyObject *args)
  * parameters: None
  * returns: None
  * exceptions:
- *  terane.db.storage.Error: Iterator is closed
+ *  terane.outputs.store.backend.Error: Iterator is closed
  */
 PyObject *
 terane_Iter_reset (terane_Iter *self, PyObject *args)
@@ -296,9 +296,9 @@ terane_Iter_reset (terane_Iter *self, PyObject *args)
  * parameters: None
  * returns: None
  * exceptions:
- *  terane.db.storage.Deadlock: the DBC cursor was chosen by deadlock detector
- *  terane.db.storage.LockTimeout:
- *  terane.db.storage.Error: failed to close the DBC cursor
+ *  terane.outputs.store.backend.Deadlock: the DBC cursor was chosen by deadlock detector
+ *  terane.outputs.store.backend.LockTimeout:
+ *  terane.outputs.store.backend.Error: failed to close the DBC cursor
  */
 PyObject *
 terane_Iter_close (terane_Iter *self, PyObject *args)
@@ -346,7 +346,7 @@ PyMethodDef _Iter_methods[] =
 PyTypeObject terane_IterType = {
     PyObject_HEAD_INIT(NULL)
     0,
-    "storage.Iter",
+    "backend.Iter",
     sizeof (terane_Iter),
     0,                         /*tp_itemsize*/
     (destructor) _Iter_dealloc,

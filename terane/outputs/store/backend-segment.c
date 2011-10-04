@@ -17,7 +17,7 @@
  * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "storage.h"
+#include "backend.h"
 
 /*
  * _Segment_close: close the underlying DB handles.
@@ -88,7 +88,7 @@ terane_Segment_delete (terane_Segment *self)
  * parameters: None
  * returns: None
  * exceptions:
- *  terane.db.storage.Error: failed to close a db in the Segment
+ *  terane.outputs.store.backend.Error: failed to close a db in the Segment
  */
 PyObject *
 terane_Segment_close (terane_Segment *self)
@@ -125,7 +125,7 @@ _Segment_dealloc (terane_Segment *self)
  *  id (long): The segment id
  * returns: A new Segment object
  * exceptions:
- *  terane.db.storage.Error: failed to create/open the Segment
+ *  terane.outputs.store.backend.Error: failed to create/open the Segment
  */
 PyObject *
 terane_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
@@ -293,7 +293,7 @@ PyMethodDef _Segment_methods[] =
 PyTypeObject terane_SegmentType = {
     PyObject_HEAD_INIT(NULL)
     0,
-    "storage.Segment",
+    "backend.Segment",
     sizeof (terane_Segment),
     0,                         /*tp_itemsize*/
     (destructor) _Segment_dealloc,

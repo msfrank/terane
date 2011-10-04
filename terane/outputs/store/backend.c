@@ -1,7 +1,7 @@
-#include "storage.h"
+#include "backend.h"
 
-/* storage module function table */
-static PyMethodDef storage_functions[] =
+/* backend module function table */
+static PyMethodDef backend_functions[] =
 {
     { "get_logfd", terane__get_logfd, METH_NOARGS,
         "Return the reading end of the logger channel." },
@@ -13,9 +13,9 @@ PyObject *terane_Exc_LockTimeout = NULL;
 PyObject *terane_Exc_DocExists = NULL;
 PyObject *terane_Exc_Error = NULL;
 
-/* storage module init function */
+/* backend module init function */
 PyMODINIT_FUNC
-initstorage (void)
+initbackend (void)
 {
     PyObject *m;
     int dbret;
@@ -46,8 +46,8 @@ initstorage (void)
     if (PyType_Ready (&terane_IterType) < 0)
         return;
 
-    /* initialize the storage module */
-    m = Py_InitModule3 ("storage", storage_functions, "Manipulate the terane database");
+    /* initialize the backend module */
+    m = Py_InitModule3 ("backend", backend_functions, "Manipulate the terane database");
 
     /* load the types into the module */
     Py_INCREF (&terane_EnvType);
@@ -62,19 +62,19 @@ initstorage (void)
     PyModule_AddObject (m, "Iter", (PyObject *) &terane_IterType);
 
     /* create exceptions */
-    terane_Exc_Deadlock = PyErr_NewException("storage.Deadlock", NULL, NULL);
+    terane_Exc_Deadlock = PyErr_NewException("backend.Deadlock", NULL, NULL);
     Py_INCREF (terane_Exc_Deadlock);
     PyModule_AddObject (m, "Deadlock", terane_Exc_Deadlock);
 
-    terane_Exc_LockTimeout = PyErr_NewException("storage.LockTimeout", NULL, NULL);
+    terane_Exc_LockTimeout = PyErr_NewException("backend.LockTimeout", NULL, NULL);
     Py_INCREF (terane_Exc_LockTimeout);
     PyModule_AddObject (m, "LockTimeout", terane_Exc_LockTimeout);
 
-    terane_Exc_DocExists = PyErr_NewException("storage.DocExists", NULL, NULL);
+    terane_Exc_DocExists = PyErr_NewException("backend.DocExists", NULL, NULL);
     Py_INCREF (terane_Exc_DocExists);
     PyModule_AddObject (m, "DocExists", terane_Exc_DocExists);
 
-    terane_Exc_Error = PyErr_NewException("storage.Error", NULL, NULL);
+    terane_Exc_Error = PyErr_NewException("backend.Error", NULL, NULL);
     Py_INCREF (terane_Exc_Error);
     PyModule_AddObject (m, "Error", terane_Exc_Error);
 }

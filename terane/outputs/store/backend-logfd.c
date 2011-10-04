@@ -17,7 +17,7 @@
  * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "storage.h"
+#include "backend.h"
 
 static int logfd[2] = { -1, -1 };
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;

@@ -17,7 +17,7 @@
  * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "storage.h"
+#include "backend.h"
 
 /*
  * _Env_dealloc: free resources for the Env object.
@@ -47,17 +47,17 @@ _Env_checkpoint_thread (void *ptr)
         /* run the deadlock detector */
         dbret = env->env->lock_detect (env->env, 0, DB_LOCK_MINLOCKS, &rejected);
         if (dbret != 0)
-            log_msg (TERANE_LOG_ERROR, "terane.db.storage",
+            log_msg (TERANE_LOG_ERROR, "terane.outputs.store.backend",
                 "lock_detect failed: %s", db_strerror (dbret));
         else if (rejected > 0)
-            log_msg (TERANE_LOG_DEBUG, "terane.db.storage",
+            log_msg (TERANE_LOG_DEBUG, "terane.outputs.store.backend",
                 "lock_detect rejected %i requests", rejected);
         /* sleep for a minute */
         sleep (60);
         /* perform a checkpoint */
         dbret = env->env->txn_checkpoint (env->env, 0, 0, 0);
         if (dbret != 0)
-            log_msg (TERANE_LOG_ERROR, "terane.db.storage", "txn_checkpoint failed: %s",
+            log_msg (TERANE_LOG_ERROR, "terane.outputs.store.backend", "txn_checkpoint failed: %s",
                 db_strerror (dbret));
         pthread_testcancel ();
     }
@@ -70,7 +70,7 @@ _Env_checkpoint_thread (void *ptr)
 static void
 _Env_log_err (const DB_ENV *env, const char *prefix, const char *msg)
 {
-    log_msg (TERANE_LOG_ERROR, "terane.db.storage", "BDB: %s", msg);
+    log_msg (TERANE_LOG_ERROR, "terane.outputs.store.backend", "BDB: %s", msg);
 }
 
 /*
@@ -79,7 +79,7 @@ _Env_log_err (const DB_ENV *env, const char *prefix, const char *msg)
 static void
 _Env_log_msg (const DB_ENV *env, const char *msg)
 {
-    log_msg (TERANE_LOG_INFO, "terane.db.storage", "BDB: %s", msg);
+    log_msg (TERANE_LOG_INFO, "terane.outputs.store.backend", "BDB: %s", msg);
 }
 
 /*
@@ -222,7 +222,7 @@ PyMethodDef _Env_methods[] =
 PyTypeObject terane_EnvType = {
     PyObject_HEAD_INIT(NULL)
     0,
-    "storage.Env",
+    "backend.Env",
     sizeof (terane_Env),
     0,                         /*tp_itemsize*/
     (destructor) _Env_dealloc,

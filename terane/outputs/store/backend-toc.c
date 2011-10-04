@@ -17,14 +17,14 @@
  * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "storage.h"
+#include "backend.h"
 
 /*
  * TOC_new_DID: allocate a new DID and return it as an unsigned 64-bit integer.
  * 
  * returns: An unsigned 64-bit integer identifier
  * exceptions:
- *  terane.db.storage.Error: failed to allocate new id
+ *  terane.outputs.store.backend.Error: failed to allocate new id
  */
 terane_DID_num
 TOC_new_DID (terane_TOC *toc)
@@ -105,7 +105,7 @@ TOC_new_DID (terane_TOC *toc)
  * returns: A string representing the metadata value 
  * exceptions:
  *   KeyError: The document with the specified id doesn't exist
- *   terane.db.storage.Error: A db error occurred when trying to retrieve the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to retrieve the record
  */
 PyObject *
 terane_TOC_get_metadata (terane_TOC *self, PyObject *args)
@@ -167,7 +167,7 @@ terane_TOC_get_metadata (terane_TOC *self, PyObject *args)
  *   value (string): Metadata to store
  * returns: None
  * exceptions:
- *   terane.db.storage.Error: A db error occurred when trying to set the record
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
  */
 PyObject *
 terane_TOC_set_metadata (terane_TOC *self, PyObject *args)
@@ -211,7 +211,7 @@ terane_TOC_set_metadata (terane_TOC *self, PyObject *args)
  *   fieldname (string): The field name
  * returns: string representing the pickled FieldType.
  * exceptions:
- *   terane.db.storage.Error: A db error occurred when trying to get the field
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to get the field
  */
 PyObject *
 terane_TOC_get_field (terane_TOC *self, PyObject *args)
@@ -273,7 +273,7 @@ terane_TOC_get_field (terane_TOC *self, PyObject *args)
  *   pickledfield (string): String representing the pickled FieldType
  * returns: None
  * exceptions:
- *   terane.db.storage.Error: A db error occurred when trying to add the field
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to add the field
  */
 PyObject *
 terane_TOC_add_field (terane_TOC *self, PyObject *args)
@@ -322,7 +322,7 @@ terane_TOC_add_field (terane_TOC *self, PyObject *args)
  *   fieldname (string): The field name
  * returns: None
  * exceptions:
- *   terane.db.storage.Error: A db error occurred when trying to remove the field
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to remove the field
  */
 PyObject *
 terane_TOC_remove_field (terane_TOC *self, PyObject *args)
@@ -365,7 +365,7 @@ TOC_contains_field (terane_TOC *toc, DB_TXN *txn, PyObject *fieldname)
  *   fieldname (string): The field name
  * returns: True if the field exists, otherwise False.
  * exceptions:
- *   terane.db.storage.Error: A db error occurred when trying to get the fields
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to get the fields
  */
 PyObject *
 terane_TOC_contains_field (terane_TOC *self, PyObject *args)
@@ -397,7 +397,7 @@ terane_TOC_contains_field (terane_TOC *self, PyObject *args)
  *   txn (Txn): A Txn object to wrap the operation in, or None
  * returns: a list of (fieldname,pickledfield) tuples.
  * exceptions:
- *   terane.db.storage.Error: A db error occurred when trying to get the fields
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to get the fields
  */
 PyObject *
 terane_TOC_list_fields (terane_TOC *self, PyObject *args)
@@ -515,7 +515,7 @@ terane_TOC_count_fields (terane_TOC *self)
  *   txn (Txn): A Txn object to wrap the operation in
  * returns: A long representing the segment id.
  * exceptions:
- *   terane.db.storage.Error: A db error occurred when trying to allocate the segment.
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to allocate the segment.
  */
 PyObject *
 terane_TOC_new_segment (terane_TOC *self, PyObject *args)
@@ -599,7 +599,7 @@ _TOC_next_segment (terane_Iter *iter, DBT *key, DBT *data)
  * returns: a new Iter object.  Each iteration returns a long representing the
  *  segment id.
  * exceptions:
- *   terane.db.storage.Error: A db error occurred when trying to create the iterator
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to create the iterator
  */
 PyObject *
 terane_TOC_iter_segments (terane_TOC *self, PyObject *args)
@@ -655,7 +655,7 @@ terane_TOC_count_segments (terane_TOC *self)
  *   id (long): The identifier of the Segment to delete
  * returns: None
  * exceptions:
- *   terane.db.storage.Error: A db error occurred when trying count the segments
+ *   terane.outputs.store.backend.Error: A db error occurred when trying count the segments
  */PyObject *
 terane_TOC_delete_segment (terane_TOC *self, PyObject *args)
 {
@@ -729,7 +729,7 @@ _TOC_close (terane_TOC *toc)
  * parameters: None
  * returns: None
  * exceptions:
- *  terane.db.storage.Error: failed to close a db in the TOC
+ *  terane.outputs.store.backend.Error: failed to close a db in the TOC
  */
 PyObject *
 terane_TOC_close (terane_TOC *self)
@@ -763,7 +763,7 @@ _TOC_dealloc (terane_TOC *self)
  *  name (string): The name of the Index
  * returns: A new TOC object
  * exceptions:
- *  terane.db.storage.Error: failed to create/open the TOC
+ *  terane.outputs.store.backend.Error: failed to create/open the TOC
  */
 PyObject *
 terane_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
@@ -951,7 +951,7 @@ PyMethodDef _TOC_methods[] =
 PyTypeObject terane_TOCType = {
     PyObject_HEAD_INIT(NULL)
     0,
-    "storage.TOC",
+    "backend.TOC",
     sizeof (terane_TOC),
     0,                         /*tp_itemsize*/
     (destructor) _TOC_dealloc,
