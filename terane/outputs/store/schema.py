@@ -34,7 +34,7 @@
 import pickle
 from collections import MutableMapping
 from whoosh.fields import Schema as WhooshSchema, FieldConfigurationError
-from terane.db.storage import Txn
+from terane.outputs.store.storage import Txn
 from terane.loggers import getLogger
 
 logger = getLogger('terane.db.schema')

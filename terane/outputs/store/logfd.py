@@ -17,7 +17,7 @@
 
 import os
 from twisted.internet.abstract import FileDescriptor
-from terane.db.storage import get_logfd
+from terane.outputs.store.storage import get_logfd
 from terane.loggers import getLogger
 
 class LogFD(FileDescriptor):

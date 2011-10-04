@@ -18,53 +18,86 @@
 import os, fcntl
 from twisted.internet import reactor
 from twisted.application.service import MultiService
-from terane.db.storage import Env
-from terane.db.index import Index
-from terane.db.idgen import IDGenerator
-from terane.db.logfd import LogFD
+from terane.plugins import Plugin
+from terane.outputs import Output
+from terane.outputs.store.storage import Env
+from terane.outputs.store.index import Index
+from terane.outputs.store.idgen import IDGenerator
+from terane.outputs.store.logfd import LogFD
 from terane.loggers import getLogger
 
 logger = getLogger('terane.db')
 
-class DatabaseManager(MultiService):
+class StoreOutput(Output):
+
     def __init__(self):
-        """
-        Initialize the database service.
-        """
-        MultiService.__init__(self)
-        self.setName("database")
+        self._index = None
+
+    def configure(self, section):
+        self._indexName = section.getString("index name", self.name)
+        self._segRotation = section.getInt("segment rotation policy", 0)
+        self._segRetention = section.getInt("segment retention policy", 0)
+        self._segOptimize = section.getBoolean("optimize segments", False)
+        
+    def startService(self):
+        if self._indexName in self._plugin._outputs:
+            raise Exception("[output:%s] index '%s' is already open" % self._indexName)
+        self._index = Index(self.parent._env, self._indexName, self.parent._ids)
+        Output.startService(self)
+
+    def stopService(self):
+        if self._index != None:
+            self._index.close()
+        self._index = None
+        return Output.stopService(self)
+
+    def receiveEvent(self, fields):
+        # if the output is not running, discard any received events
+        if not self.running:
+            return
+        # remove any fields starting with '_'
+        remove = [k for k in fields.keys() if k.startswith('_')]
+        for key in remove:
+            del fields[key]
+        # store the event in the index
+        logger.trace("[output:%s] storing event: %s" % (self.name,str(fields)))
+        self._index.add(fields)
+        # if the current segment contains more events than specified by
+        # _segRotation, then rotate the index to generate a new segment.
+        segment,segmentid = self._index.current()
+        if self._segRotation > 0 and segment.count_docs() >= self._segRotation:
+            self._index.rotate()
+            # if the index contains more segments than specified by _segRetention,
+            # then delete the oldest segment.
+            if self._segRetention > 0:
+                segments = self._index.segments()
+                if len(segments) > self._segRetention:
+                    for segment,segmentid in segments[0:len(segments)-self._segRetention]:
+                        self._index.delete(segment, segmentid)
+    
+class StoreOutputPlugin(Plugin):
+
+    factory = StoreOutput
+
+    def __init__(self):
+        Plugin.__init__(self)
         self._env = None
-        self._indices = dict()
         self._ids = IDGenerator()
         self._lock = None
+        self._outputs = {}
 
-    def configure(self, settings):
+    def configure(self, section):
         """
-        Configure the database service.
+        Configure the store plugin.
         """
-        section = settings.section('database')
         self.dbdir = os.path.abspath(section.getPath('data directory', '/var/lib/terane/db/'))
         self.cachesize = section.getInt('cache size', 256 * 1024)
         self.ncaches = section.getInt('multiple caches', 1)
         self._ids.configure(section, self.dbdir)
 
-    def getIndex(self, name):
-        """
-        Return the specified Index, creating it if necessary.
-        """
-        if not self.running:
-            raise Exception("Database service is not running")
-        if name in self._indices:
-            return self._indices[name]
-        index = Index(self._env, name, self._ids)
-        self._indices[name] = index
-        return index
-
     def startService(self):
         """
         Start the database service.
-
-        This method implements IService.startService().
         """
         # start processing logfd messages
         self._logfd = LogFD()
@@ -93,22 +126,21 @@ class DatabaseManager(MultiService):
             raise Exception("Failed to lock the database directory: %s" % e)
         # open the db environment
         self._env = Env(envdir, datadir, tmpdir, cachesize=self.cachesize)
-        logger.debug("opened database environment in %s" % self.dbdir)
+        logger.debug("[plugin:output:store] opened database environment in %s" % self.dbdir)
         # start the id generator
         self._ids.startService()
-        MultiService.startService(self)
+        Plugin.startService(self)
 
     def stopService(self):
         """
         Stop the database service, closing all open indices.
-
-        This method implements IService.stopService().
         """
-        MultiService.stopService(self)
+        Plugin.stopService(self)
         # close each open index, and remove reference to it
-        for name, index in self._indices.items():
-            index.close()
-            del self._indices[name]
+        for name,output in self._outputs.items():
+            if output.running:
+                output.stopService()
+            del self._outputs[name]
         # stop the id generator
         self._ids.stopService()
         # close the DB environment
@@ -121,5 +153,3 @@ class DatabaseManager(MultiService):
             logger.warning("Failed to unlock the database directory: %s" % e)
         self._lock = None
         logger.debug("closed database environment")
-
-db = DatabaseManager()

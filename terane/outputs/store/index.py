@@ -38,10 +38,10 @@ from whoosh.fields import FieldType, TEXT, DATETIME, NUMERIC
 from whoosh.analysis import SimpleAnalyzer
 from whoosh.searching import Searcher as WhooshSearcher
 from whoosh.qparser import QueryParser
-from terane.db.storage import TOC, Segment, Txn
-from terane.db.schema import Schema
-from terane.db.reading import MultiReader
-from terane.db.writing import IndexWriter
+from terane.outputs.store.storage import TOC, Segment, Txn
+from terane.outputs.store.schema import Schema
+from terane.outputs.store.reading import MultiReader
+from terane.outputs.store.writing import IndexWriter
 from terane.loggers import getLogger
 
 logger = getLogger('terane.db.index')
