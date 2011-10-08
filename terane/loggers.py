@@ -17,7 +17,7 @@
 
 import os, datetime, traceback
 from Queue import Queue
-from twisted.python.log import startLoggingWithObserver, msg, ILogObserver
+from twisted.python.log import startLoggingWithObserver, msg, err, ILogObserver
 from twisted.python.util import untilConcludes
 
 NOTSET  = None
@@ -123,6 +123,10 @@ class Logger(object):
         kwds['logger'] = self
         kwds['level'] = level
         msg(message, **kwds)
+
+    def exception(self, exception):
+        kwds = {'logger': self, 'level': DEBUG}
+        err(_why=exception, **kwds)
 
     def trace(self, message, **kwds):
         self.msg(TRACE, message, **kwds)
