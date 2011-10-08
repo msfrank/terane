@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import socket, datetime, traceback
+import socket, datetime
 from twisted.application.service import MultiService
 from twisted.internet.defer import CancelledError
 from terane.plugins import plugins
@@ -36,14 +36,16 @@ class Route(object):
     def configure(self, section):
         # load the route input
         name = section.getString('input')
-        if not name in routes._inputs:
+        try:
+            self._input = plugins.instance('input', name)
+        except:
             raise ConfigureError("no such input %s" % name)
-        self._input = routes._inputs[name]
         # load the route output
         name = section.getString('output')
-        if not name in routes._outputs:
+        try:
+            self._output = plugins.instance('output', name)
+        except:
             raise ConfigureError("no such output %s" % name)
-        self._output = routes._outputs[name]
         # load the route filter chain
         self._filters = []
         filters = section.getString('filter', '').strip()
@@ -51,10 +53,12 @@ class Route(object):
         if len(filters) > 0:
             # verify each referenced filter has been loaded
             for name in filters:
-                if not name in routes._filters:
+                try:
+                    instance = plugins.instance('filter', name)
+                except:
                     raise ConfigureError("no such filter %s" % name)
                 # add filter to the filter chain
-                self._filters.append(routes._filters[name])
+                self._filters.append(instance)
             # verify that the filtering chain will work
             requiredfields = self._filters[0].outfields()
             for filter in self._filters[1:]:
@@ -129,51 +133,9 @@ class RouteManager(MultiService):
     def __init__(self):
         MultiService.__init__(self)
         self.setName("routes")
-        self._inputs = {}
-        self._filters = {}
-        self._outputs = {}
         self._routes = []
 
     def configure(self, settings):
-        # configure each output
-        for section in settings.sectionsLike('output:'):
-            name = section.name.split(':',1)[1]
-            try:
-                sink_type = section.getString('type', None)
-                if sink_type == None:
-                    raise Exception("missing required option 'type'")
-                sink = plugins.instance('output', sink_type, name)
-                sink.configure(section)
-                self._outputs[name] = sink
-            except Exception, e:
-                tb = "\nUnhandled Exception:\n%s\n---\n%s" % (e,traceback.format_exc())
-                logger.warning("failed to load output '%s':%s" % (name, tb))
-        # configure each input
-        for section in settings.sectionsLike('input:'):
-            name = section.name.split(':',1)[1]
-            try:
-                source_type = section.getString('type', None)
-                if source_type == None:
-                    raise Exception("missing required option 'type'")
-                source = plugins.instance('input', source_type, name)
-                source.configure(section)
-                self._inputs[name] = source
-            except Exception, e:
-                tb = "\nUnhandled Exception:\n%s\n---\n%s" % (e,traceback.format_exc())
-                logger.warning("failed to load input '%s':%s" % (name, tb))
-        # configure each filter
-        for section in settings.sectionsLike('filter:'):
-            name = section.name.split(':',1)[1]
-            try:
-                filter_type = section.getString('type', None)
-                if filter_type == None:
-                    raise Exception("missing required option 'type'")
-                filter = plugins.instance('filter', filter_type, name)
-                filter.configure(section)
-                self._filters[name] = filter
-            except Exception, e:
-                tb = "\nUnhandled Exception:\n%s\n---\n%s" % (e,traceback.format_exc())
-                logger.warning("failed to load filter '%s':%s" % (name, tb))
         # configure each route, composed of an input, filters, and an output
         for section in settings.sectionsLike('route:'):
             name = section.name.split(':',1)[1]
@@ -189,5 +151,6 @@ class RouteManager(MultiService):
             route.close()
         self._routes = []
         return MultiService.stopService(self)
+
 
 routes = RouteManager()

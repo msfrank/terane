@@ -16,11 +16,18 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import os, traceback
-from twisted.application.service import Service, MultiService
+from twisted.application.service import Service, MultiService, IServiceCollection
+from zope.interface import Attribute
 from pkg_resources import Environment, working_set
+from terane.settings import ConfigureError
 from terane.loggers import getLogger
 
 logger = getLogger('terane.plugins')
+
+class IPlugin(IServiceCollection):
+    factory = Attribute("The factory for producing plugin instances.")
+    def configure(section):
+        "Configure the plugin."
 
 class Plugin(MultiService):
     """
@@ -42,16 +49,6 @@ class Plugin(MultiService):
         :type section: :class:`terane.settings.Section`
         """
         pass
-
-    def instance(self, name):
-        """
-        """
-        if self.factory == None:
-            raise NotImplemented()
-        instance = self.factory()
-        instance.setName(name)
-        self.addService(instance)
-        return instance
 
     def startService(self):
         """
@@ -81,7 +78,8 @@ class PluginManager(MultiService):
         MultiService.__init__(self)
         self.setName("plugins")
         self._plugins = {}
-        
+        self._instances = {}
+
     def configure(self, settings):
         """
         Finds all discoverable plugins and configures them.  Plugins are
@@ -108,43 +106,78 @@ class PluginManager(MultiService):
         for ptype in ['protocol','input','output','filter']:
             plugins = {}
             for ep in working_set.iter_entry_points("terane.plugin.%s" % ptype):
+                if not settings.hasSection("plugin:%s:%s" % (ptype, ep.name)):
+                    continue
+                # if a configuration section exists, load and configure the plugin
                 try:
-                    # if a configuration section exists, load and configure the plugin
-                    if settings.hasSection("plugin:%s:%s" % (ptype, ep.name)):
-                        _Plugin = ep.load()
-                        section = settings.section("plugin:%s:%s" % (ptype, ep.name))
-                        plugin = _Plugin()
-                        plugin.setName("plugin:%s:%s" % (ptype, ep.name))
-                        plugin.configure(section)
-                        self.addService(plugin)
-                        plugins[ep.name] = plugin
-                        logger.info("loaded %s plugin '%s'" % (ptype, ep.name))
+                    _Plugin = ep.load()
+                    if not IPlugin.implementedBy(_Plugin):
+                        raise Exception("%s plugin '%s' doesn't implement IPlugin" % (ptype, ep.name))
+                    section = settings.section("plugin:%s:%s" % (ptype, ep.name))
+                    plugin = _Plugin()
+                    plugin.setName("plugin:%s:%s" % (ptype, ep.name))
+                    plugin.configure(section)
+                    self.addService(plugin)
+                    plugins[ep.name] = plugin
+                    logger.info("loaded %s plugin '%s'" % (ptype, ep.name))
+                except ConfigureError:
+                    raise
                 except Exception, e:
-                    tb = "\nUnhandled Exception:\n%s\n---\n%s" % (e,traceback.format_exc())
-                    logger.warning("failed to load %s plugin '%s':%s" % (ptype, ep.name, tb))
+                    logger.exception(e)
+                    logger.warning("failed to load %s plugin '%s'" % (ptype, ep.name))
             self._plugins[ptype] = plugins
-
-    def instance(self, ptype, pname, iname=None):
+        # instanciate all configured plugins for each type
+        for ptype in ['protocol','input','output','filter']:
+            instances = {}
+            for section in settings.sectionsLike("%s:" % ptype):
+                iname = section.name.split(':',1)[1]
+                try:
+                    itype = section.getString('type', None)
+                    if itype == None:
+                        raise ConfigureError("plugin instance missing required option 'type'")
+                    plugins = self._plugins[ptype]
+                    try:
+                        plugin = plugins[itype]
+                    except:
+                        raise ConfigureError("no registered %s plugin named '%s'" % (ptype, itype))
+                    instance = plugin.factory()
+                    instance.setName(iname)
+                    instance.configure(section)
+                    plugin.addService(instance)
+                    instances[iname] = instance
+                except ConfigureError:
+                    raise
+                except Exception, e:
+                    logger.exception(e)
+                    logger.warning("failed to load %s instance '%s'" % (ptype, iname))
+            self._instances[ptype] = instances
+ 
+    def instance(self, ptype, iname):
         """
         Returns an instance of the specified plugin.
         
         :param ptype: The type of plugin.
-        :type input_type: str
-        :param pname: The name of the plugin.
-        :type input_type: str
+        :type ptype: str
+        :param iname: The name of the plugin instance.
+        :type iname: str
         :returns: An instance of the specified plugin.
         :rtype: :class:`terane.plugins.Plugin`
         :raises Exception: The specified plugin was not found.
         """
-        try:
-            plugins = self._plugins[ptype]
-        except:
-            raise Exception("no registered plugin type named '%s'" % ptype)
-        try:
-            plugin = plugins[pname]
-        except:
-            raise Exception("no registered %s plugin named '%s'" % (ptype, pname))
-        return plugin.instance(iname)
+        return self._instances[ptype][iname]
+
+    def instancesImplementing(self, ptype, iface):
+        """
+        Returns a list of instances providing the specified interface.
+        
+        :param ptype: The type of plugin.
+        :type ptype: str
+        :param iface: The interface.
+        :type iname: zope.interface.Interface
+        :returns: A list of instances providing the specified interface.
+        :rtype: list
+        """
+        return [i for i in self._instances[ptype].values() if iface.providedBy(i)]
 
 
 plugins = PluginManager()
