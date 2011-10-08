@@ -28,12 +28,12 @@ from terane.loggers import getLogger
 
 MAX_ID = 2**64
 
-logger = getLogger('terane.xmlrpc')
+logger = getLogger('terane.protocols.xmlrpc')
 
-queries = stats.get('terane.xmlrpc.queries', 0, int)
-tails = stats.get('terane.xmlrpc.tails', 0, int)
-totalsearchtime = stats.get('terane.xmlrpc.search.totaltime', 0.0, float)
-totaltailtime = stats.get('terane.xmlrpc.tail.totaltime', 0.0, float)
+queries = stats.get('terane.protocols.xmlrpc.queries', 0, int)
+tails = stats.get('terane.protocols.xmlrpc.tails', 0, int)
+totalsearchtime = stats.get('terane.protocols.xmlrpc.search.totaltime', 0.0, float)
+totaltailtime = stats.get('terane.protocols.xmlrpc.tail.totaltime', 0.0, float)
 
 class FaultInternalError(xmlrpclib.Fault):
     def __init__(self):
