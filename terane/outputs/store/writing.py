@@ -36,7 +36,7 @@ from json import JSONEncoder
 from whoosh.fields import UnknownFieldError
 from whoosh.writing import IndexWriter as WhooshIndexWriter
 from terane.outputs.store.reading import json_decode
-from terane.outputs.store.storage import DocExists, Txn
+from terane.outputs.store.backend import DocExists, Txn
 from terane.loggers import getLogger
 
 logger = getLogger('terane.db.writing')

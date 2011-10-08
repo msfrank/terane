@@ -38,7 +38,7 @@ from whoosh.fields import FieldType, TEXT, DATETIME, NUMERIC
 from whoosh.analysis import SimpleAnalyzer
 from whoosh.searching import Searcher as WhooshSearcher
 from whoosh.qparser import QueryParser
-from terane.outputs.store.storage import TOC, Segment, Txn
+from terane.outputs.store.backend import TOC, Segment, Txn
 from terane.outputs.store.schema import Schema
 from terane.outputs.store.reading import MultiReader
 from terane.outputs.store.writing import IndexWriter
@@ -54,7 +54,7 @@ class Index(WhooshIndex):
     thus protected transactionally.
 
     :param env: The DB environment.
-    :type env: :class:`terane.db.storage.Env`
+    :type env: :class:`terane.db.backend.Env`
     :param name: The name of the index.
     :type name: str
     :param ids: The ID generator to use for allocating new document identifiers.
