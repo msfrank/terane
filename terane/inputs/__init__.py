@@ -15,10 +15,23 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-from twisted.application.service import Service
+from twisted.application.service import IService, Service
+from zope.interface import Attribute
 from terane.signals import Signal
 
+class IInput(IService):
+    def configure(section):
+        "Configure the plugin instance."
+    def outfields():
+         "Return a set of field names which the instance emits."
+    on_received_event = Attribute("")
+
 class Input(Service):
+    """
+    The Input base implementation.
+    """
+
+    on_received_event = None
 
     def __init__(self):
         self.on_received_event = Signal()

@@ -16,13 +16,16 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import re, time, dateutil.parser
-from terane.plugins import Plugin
-from terane.filters import Filter, FilterError
+from zope.interface import implements
+from terane.plugins import Plugin, IPlugin
+from terane.filters import Filter, IFilter, FilterError
 from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.mysql")
 
 class MysqlServerFilter(Filter):
+
+    implements(IFilter)
 
     def configure(self, section):
         self._regex = re.compile(r'(?P<date>\d{6})\w+(?P<time>\d\d:\d\d\:\d\d)\w+(?P<msg>.*)')
@@ -53,4 +56,5 @@ class MysqlServerFilter(Filter):
         return fields
 
 class MysqlServerFilterPlugin(Plugin):
+    implements(IPlugin)
     factory = MysqlServerFilter()

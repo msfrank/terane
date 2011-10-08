@@ -23,8 +23,8 @@ from twisted.cred.checkers import AllowAnonymousAccess
 from twisted.cred.error import Unauthorized
 from twisted.internet.defer import Deferred
 from zope.interface import implements
-from terane.plugins import Plugin
-from terane.inputs import Input
+from terane.plugins import Plugin, IPlugin
+from terane.inputs import Input, IInput
 from terane.loggers import getLogger
 
 logger = getLogger('terane.inputs.collect')
@@ -56,6 +56,8 @@ class CollectorRealm:
         
 class CollectInput(Input):
 
+    implements(IInput)
+
     def outfields(self):
         return set()
 
@@ -71,6 +73,8 @@ class CollectInput(Input):
         logger.debug("[input:%s] stopped input" % self.name)
         
 class CollectInputPlugin(Plugin):
+
+    implements(IPlugin)
 
     factory = CollectInput
 

@@ -16,13 +16,16 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import re, time, email.utils, datetime
-from terane.plugins import Plugin
-from terane.filters import Filter, FilterError, StopFiltering
+from zope.interface import implements
+from terane.plugins import Plugin, IPlugin
+from terane.filters import Filter, IFilter, FilterError, StopFiltering
 from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.datetime")
 
 class DatetimeFilter(Filter):
+
+    implements(IFilter)
 
     def configure(self, section):
         pass
@@ -94,4 +97,5 @@ class DatetimeFilter(Filter):
         return fields
 
 class DatetimeFilterPlugin(Plugin):
+    implements(IPlugin)
     factory = DatetimeFilter()

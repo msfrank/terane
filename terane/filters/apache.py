@@ -16,13 +16,16 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import re, time, dateutil.parser
-from terane.plugins import Plugin
-from terane.filters import Filter, FilterError
+from zope.interface import implements
+from terane.plugins import Plugin, IPlugin
+from terane.filters import Filter, IFilter, FilterError
 from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.apache")
 
 class ApacheCommonFilter(Filter):
+
+    implements(IFilter)
 
     def configure(self, section):
         self._regex = re.compile(r'''
@@ -68,9 +71,12 @@ class ApacheCommonFilter(Filter):
         return fields
 
 class ApacheCommonFilterPlugin(Plugin):
+    implements(IPlugin)
     factory = ApacheCommonFilter
 
 class ApacheCombinedFilter(Filter):
+
+    implements(IFilter)
 
     def configure(self, section):
         self._regex = re.compile(r'''
@@ -118,4 +124,5 @@ class ApacheCombinedFilter(Filter):
         return fields
 
 class ApacheCombinedFilterPlugin(Plugin):
+    implements(IPlugin)
     factory = ApacheCombinedFilter()

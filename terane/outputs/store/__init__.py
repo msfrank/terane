@@ -18,9 +18,10 @@
 import os, fcntl
 from twisted.internet import reactor
 from twisted.application.service import MultiService
-from terane.plugins import Plugin
-from terane.outputs import Output
-from terane.outputs.store.storage import Env
+from zope.interface import implements
+from terane.plugins import Plugin, IPlugin
+from terane.outputs import Output, ISearchableOutput
+from terane.outputs.store.backend import Env
 from terane.outputs.store.index import Index
 from terane.outputs.store.idgen import IDGenerator
 from terane.outputs.store.logfd import LogFD
@@ -29,6 +30,8 @@ from terane.loggers import getLogger
 logger = getLogger('terane.db')
 
 class StoreOutput(Output):
+
+    implements(ISearchableOutput)
 
     def __init__(self):
         self._index = None
@@ -75,7 +78,19 @@ class StoreOutput(Output):
                     for segment,segmentid in segments[0:len(segments)-self._segRetention]:
                         self._index.delete(segment, segmentid)
     
+    def search(self, query, limit, sorting, reverse):
+        # check that query is a Query object
+        if not isinstance(query, Query):
+            raise Exception("query must be of type whoosh.query.Query")
+        # check that limit is > 0
+        if limit < 1:
+            raise Exception("limit must be greater than 0")
+        # query the index
+        return self._index.search(query, limit, sorting, reverse)
+
 class StoreOutputPlugin(Plugin):
+
+    implements(IPlugin)
 
     factory = StoreOutput
 

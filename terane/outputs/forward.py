@@ -21,14 +21,17 @@ from twisted.spread.pb import PBClientFactory, DeadReferenceError
 from twisted.cred.credentials import Anonymous
 from twisted.internet import reactor
 from twisted.python.failure import Failure
-from terane.plugins import Plugin
-from terane.outputs import Output
+from zope.interface import implements
+from terane.plugins import Plugin, IPlugin
+from terane.outputs import Output, IOutput
 from terane.stats import stats
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.forward')
 
 class ForwardOutput(Output):
+
+    implements(IOutput)
 
     def configure(self, section):
         self.forwardserver = section.getString('forwarding address', None)
@@ -106,4 +109,5 @@ class ForwardOutput(Output):
         return reason
 
 class ForwardOutputPlugin(Plugin):
+    implements(IPlugin)
     factory = ForwardOutput

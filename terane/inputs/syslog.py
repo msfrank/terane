@@ -19,8 +19,9 @@ import os, sys, time, re
 from twisted.internet import reactor
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet.defer import Deferred
-from terane.plugins import Plugin
-from terane.inputs import Input
+from zope.interface import implements
+from terane.plugins import Plugin, IPlugin
+from terane.inputs import Input, IInput
 from terane.loggers import getLogger
 
 logger = getLogger('terane.inputs.syslog')
@@ -41,6 +42,8 @@ class SyslogUDPReceiver(DatagramProtocol):
             logger.debug(str(e))
 
 class SyslogInput(Input):
+
+    implements(IInput)
 
     def configure(self, section):
         allowed = section.getString('syslog udp allowed clients', '').strip()
@@ -65,6 +68,8 @@ class SyslogInput(Input):
         logger.debug("[input:%s] stopped input" % self.name)
         
 class SyslogInputPlugin(Plugin):
+
+    implements(IPlugin)
 
     factory = SyslogInput
 

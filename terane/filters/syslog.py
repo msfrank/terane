@@ -16,13 +16,16 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import re, time, dateutil.parser
-from terane.plugins import Plugin
-from terane.filters import Filter, FilterError, StopFiltering
+from zope.interface import implements
+from terane.plugins import Plugin, IPlugin
+from terane.filters import Filter, IFilter, FilterError, StopFiltering
 from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.syslog")
 
 class SyslogFilter(Filter):
+
+    implements(IFilter)
 
     def _updateselected(self, selector):
             # split the selector into the facility list and serverity
@@ -197,6 +200,7 @@ class SyslogFilter(Filter):
         return fields
 
 class SyslogFilterPlugin(Plugin):
+    implements(IPlugin)
     factory = SyslogFilter
 
 _severities = {

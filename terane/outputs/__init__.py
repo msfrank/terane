@@ -15,9 +15,25 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-from twisted.application.service import Service
+from twisted.application.service import IService, Service
+from zope.interface import Interface, Attribute
+
+class IOutput(IService):
+    def configure(section):
+        "Configure the plugin instance."
+    def infields():
+         "Return a set of field names which the receiveEvent method expects."
+    def receiveEvent(fields):
+        "Receive a dict of event fields and store them."
+
+class ISearchableOutput(IOutput):
+    def search(query, limit, sorting, reverse):
+        "Search the Output using the specified query."
 
 class Output(Service):
+    """
+    The Output base implementation.
+    """
 
     def configure(self, section):
         pass

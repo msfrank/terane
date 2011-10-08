@@ -16,13 +16,16 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import re
-from terane.plugins import Plugin
-from terane.filters import Filter, FilterError, StopFiltering
+from zope.interface import implements
+from terane.plugins import Plugin, IPlugin
+from terane.filters import Filter, IFilter, FilterError, StopFiltering
 from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.regex")
 
 class RegexFilter(Filter):
+
+    implements(IFilter)
 
     def configure(self, section):
         self._infield = section.getString('regex field', '_raw')
@@ -53,4 +56,5 @@ class RegexFilter(Filter):
         return fields
 
 class RegexFilterPlugin(Plugin):
+    implements(IPlugin)
     factory = RegexFilter()

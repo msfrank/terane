@@ -16,13 +16,16 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 from datetime import datetime
-from terane.plugins import Plugin
-from terane.filters import Filter, FilterError, StopFiltering
+from zope.interface import implements
+from terane.plugins import Plugin, IPlugin
+from terane.filters import Filter, IFilter, FilterError, StopFiltering
 from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.nagios")
 
 class NagiosFilter(Filter):
+
+    implements(IFilter)
 
     def configure(self, section):
         pass
@@ -102,4 +105,5 @@ class NagiosFilter(Filter):
         return fields
 
 class NagiosFilterPlugin(Plugin):
+    implements(IPlugin)
     factory = NagiosFilter()

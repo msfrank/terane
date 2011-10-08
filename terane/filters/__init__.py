@@ -15,13 +15,23 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-from twisted.application.service import Service
+from twisted.application.service import Service, IService
 
 class FilterError(Exception):
     pass
 
 class StopFiltering(Exception):
     pass
+
+class IFilter(IService):
+    def configure(section):
+        "Configure the plugin instance."
+    def infields():
+        "Return a set of field names which the instance requires."
+    def outfields():
+        "Return a set of field names which the instance emits."
+    def filter(fields):
+        "Filter fields."
 
 class Filter(Service):
 

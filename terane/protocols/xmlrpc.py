@@ -20,9 +20,9 @@ from twisted.internet import threads
 from twisted.web.xmlrpc import XMLRPC
 from twisted.web.server import Site
 from twisted.application.service import Service
-from terane.plugins import Plugin
+from zope.interface import implements
+from terane.plugins import Plugin, IPlugin
 from terane.dql import parseQuery, ParsingSyntaxError
-#from terane.db.plan import SearchPlan, TailPlan, ListIndicesPlan, ShowIndexPlan
 from terane.stats import stats
 from terane.loggers import getLogger
 
@@ -133,6 +133,8 @@ class XMLRPCDispatcher(XMLRPC):
             raise FaultInternalError()
 
 class XMLRPCProtocolPlugin(Plugin):
+
+    implements(IPlugin)
 
     def __init__(self):
         self._instance = None
