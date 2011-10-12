@@ -96,17 +96,17 @@ class Server(MultiService):
         f.close()
         atexit.register(self._removePid)
         # configure the statistics manager
+        stats.setServiceParent(self)
         stats.configure(self.settings)
-        self.addService(stats)
         # configure the plugin manager
+        plugins.setServiceParent(self)
         plugins.configure(self.settings)
-        self.addService(plugins)
         # configure the route manager
+        routes.setServiceParent(self)
         routes.configure(self.settings)
-        self.addService(routes)
         # configure the query manager
+        queries.setServiceParent(self)
         queries.configure(self.settings)
-        self.addService(queries)
         # catch SIGINT and SIGTERM
         signal.signal(signal.SIGINT, self._signal)
         signal.signal(signal.SIGTERM, self._signal)

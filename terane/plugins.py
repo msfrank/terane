@@ -56,7 +56,7 @@ class Plugin(MultiService):
         startup tasks, they should override this method (be sure to chain up
         to the parent method) and perform them here.
         """
-        Service.startService(self)
+        MultiService.startService(self)
 
     def stopService(self):
         """
@@ -64,7 +64,7 @@ class Plugin(MultiService):
         shutdown task, they should override this method (be sure to chain up
         to the parent method) and perform them here.
         """
-        return Service.stopService(self)
+        return MultiService.stopService(self)
 
 class PluginManager(MultiService):
     """
@@ -116,8 +116,8 @@ class PluginManager(MultiService):
                     section = settings.section("plugin:%s:%s" % (ptype, ep.name))
                     plugin = _Plugin()
                     plugin.setName("plugin:%s:%s" % (ptype, ep.name))
+                    plugin.setServiceParent(self)
                     plugin.configure(section)
-                    self.addService(plugin)
                     plugins[ep.name] = plugin
                     logger.info("loaded %s plugin '%s'" % (ptype, ep.name))
                 except ConfigureError:
@@ -142,8 +142,8 @@ class PluginManager(MultiService):
                         raise ConfigureError("no registered %s plugin named '%s'" % (ptype, itype))
                     instance = plugin.factory()
                     instance.setName(iname)
+                    instance.setServiceParent(plugin)
                     instance.configure(section)
-                    plugin.addService(instance)
                     instances[iname] = instance
                 except ConfigureError:
                     raise
