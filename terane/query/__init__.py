@@ -45,7 +45,7 @@ class QueryExecutionError(Exception):
 
 class QueryManager(Service):
     def __init__(self):
-        self._indices = {}
+        self._searchables = {}
 
     def configure(self, settings):
         pass
@@ -53,11 +53,11 @@ class QueryManager(Service):
     def startService(self):
         Service.startService(self)
         for index in plugins.instancesImplementing('output', ISearchableOutput):
-            self._indices[index.name] = index
-        logger.debug("found searchable indices: %s" % ', '.join(self._indices.keys()))
+            self._searchables[index.name] = index
+        logger.debug("found searchable indices: %s" % ', '.join(self._searchables.keys()))
 
     def stopService(self):
-        self._indices = None
+        self._searchables = None
         return Service.stopService(self)
 
     def parseSearchQuery(self, string):
@@ -78,10 +78,10 @@ class QueryManager(Service):
     def execute(self, query, indices=None, limit=100, restrictions=None, sorting=None, reverse=False, fields=None):
         # look up the named indices
         if indices == None:
-            indices = self._indices.values()
+            indices = self._searchables.values()
         else:
             try:
-                indices = tuple(self._indices[name] for name in indices)
+                indices = tuple(self._searchables[name] for name in indices)
             except KeyError, e:
                 raise QueryExecutionError("unknown index '%s'" % e)
         # check that limit is > 0
@@ -90,19 +90,42 @@ class QueryManager(Service):
         # FIXME: check that restrictions is a Restrictions object
         # FIXME: check each list item to make sure its in at least 1 schema
         # query each index, and aggregate the results
+        #try:
+        results = Results(sorting, fields, reverse)
+        rlist = []
+        runtime = 0.0
+        for index in indices:
+            result = index.search(query, limit, sorting, reverse)
+            rlist.append(result)
+            runtime += result.runtime
+        results = results.extend(*rlist, runtime=runtime)
+        # FIXME: check whether results satisfies all restrictions
+        return results
+        #except Exception, e:
+        #    raise QueryExecutionError(str(e))
+
+    def explain(self, query, indices=None, limit=100, restrictions=None, sorting=None, reverse=False, fields=None):
+        pass
+
+    def showIndex(self, name):
         try:
-            results = Results(sorting, fields, reverse)
-            rlist = []
-            runtime = 0.0
-            for index in indices:
-                result = index.search(query, limit, sorting, reverse)
-                rlist.append(result)
-                runtime += result.runtime
-            results = results.extend(*rlist, runtime=runtime)
-            # FIXME: check whether results satisfies all restrictions
-            return results
-        except Exception, e:
-            raise QueryExecutionError(str(e))
+            index = self._searchables[name]
+        except KeyError, e:
+            raise QueryExecutionError("unknown index '%s'" % e)
+        results = Results(None, None, False)
+        meta = {}
+        meta['name'] = name
+        meta['size'] = index.size()
+        meta['last-modified'] = index.lastModified()
+        meta['last-id'] = index.lastId()
+        results.extend([{'field':{'value':name}} for name in index.schema.names()], **meta)
+        return results
+
+    def listIndices(self):
+        indices = tuple(self._searchables.keys())
+        results = Results(None, None, False)
+        results.extend([{'index':{'value':v}} for v in indices])
+        return results
 
 
 queries = QueryManager()
