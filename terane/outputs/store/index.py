@@ -44,7 +44,7 @@ from terane.outputs.store.reading import MultiReader
 from terane.outputs.store.writing import IndexWriter
 from terane.loggers import getLogger
 
-logger = getLogger('terane.db.index')
+logger = getLogger('terane.outputs.store.index')
 
 class Index(WhooshIndex):
     """

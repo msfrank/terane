@@ -37,7 +37,7 @@ from whoosh.fields import Schema as WhooshSchema, FieldConfigurationError
 from terane.outputs.store.backend import Txn
 from terane.loggers import getLogger
 
-logger = getLogger('terane.db.schema')
+logger = getLogger('terane.outputs.store.schema')
 
 class FieldDict(MutableMapping):
     """

@@ -39,7 +39,7 @@ from terane.outputs.store.reading import json_decode
 from terane.outputs.store.backend import DocExists, Txn
 from terane.loggers import getLogger
 
-logger = getLogger('terane.db.writing')
+logger = getLogger('terane.outputs.store.writing')
 
 encoder = JSONEncoder(False, False)
 def json_encode(o):

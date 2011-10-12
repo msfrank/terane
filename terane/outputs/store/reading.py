@@ -40,7 +40,7 @@ from whoosh.reading import MultiReader as WhooshMultiReader
 from whoosh.matching import Matcher as WhooshMatcher, ReadTooFar
 from terane.loggers import getLogger
 
-logger = getLogger('terane.db.reading')
+logger = getLogger('terane.outputs.store.reading')
 
 decoder = JSONDecoder()
 def json_decode(u):

@@ -20,7 +20,7 @@ from twisted.application.service import Service
 from terane.settings import ConfigureError
 from terane.loggers import getLogger
 
-logger = getLogger('terane.db.idgen')
+logger = getLogger('terane.outputs.store.idgen')
 
 class IDGenerator(Service):
     """
