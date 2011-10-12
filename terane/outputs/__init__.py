@@ -29,6 +29,12 @@ class IOutput(IService):
 class ISearchableOutput(IOutput):
     def search(query, limit, sorting, reverse):
         "Search the Output using the specified query."
+    def size():
+        "Return the number of events stored."
+    def lastModified():
+        "Return the timestamp of the last event stored."
+    def lastId():
+        "Return the document ID of the last event stored."
 
 class Output(Service):
     """
