@@ -19,6 +19,7 @@ import os, fcntl
 from twisted.internet import reactor
 from twisted.application.service import MultiService
 from zope.interface import implements
+from whoosh.query import Query
 from terane.plugins import Plugin, IPlugin
 from terane.outputs import Output, ISearchableOutput
 from terane.outputs.store.backend import Env
@@ -27,7 +28,7 @@ from terane.outputs.store.idgen import IDGenerator
 from terane.outputs.store.logfd import LogFD
 from terane.loggers import getLogger
 
-logger = getLogger('terane.db')
+logger = getLogger('terane.outputs.store')
 
 class StoreOutput(Output):
 
@@ -43,14 +44,16 @@ class StoreOutput(Output):
         self._segOptimize = section.getBoolean("optimize segments", False)
         
     def startService(self):
-        if self._indexName in self._plugin._outputs:
-            raise Exception("[output:%s] index '%s' is already open" % self._indexName)
+        if self._indexName in self.parent._outputs:
+            raise Exception("[output:%s] index '%s' is already open" % (self.name,self._indexName))
         self._index = Index(self.parent._env, self._indexName, self.parent._ids)
+        logger.debug("[output:%s] opened index '%s'" % (self.name,self._indexName))
         Output.startService(self)
 
     def stopService(self):
         if self._index != None:
             self._index.close()
+        logger.debug("[output:%s] closed index '%s'" % (self.name,self._indexName))
         self._index = None
         return Output.stopService(self)
 
@@ -87,6 +90,15 @@ class StoreOutput(Output):
             raise Exception("limit must be greater than 0")
         # query the index
         return self._index.search(query, limit, sorting, reverse)
+
+    def size(self):
+        return self._index.doc_count()
+
+    def lastModified(self):
+        return self._index.last_modified()
+
+    def lastId(self):
+        return self._index.last_id()
 
 class StoreOutputPlugin(Plugin):
 
@@ -167,4 +179,4 @@ class StoreOutputPlugin(Plugin):
         except Exception, e:
             logger.warning("Failed to unlock the database directory: %s" % e)
         self._lock = None
-        logger.debug("closed database environment")
+        logger.debug("[plugin:output:store] closed database environment")
