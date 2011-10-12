@@ -15,22 +15,20 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import xmlrpclib, traceback, functools
+import xmlrpclib, functools
 from twisted.internet import threads
 from twisted.web.xmlrpc import XMLRPC
 from twisted.web.server import Site
 from twisted.application.service import Service
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
-from terane.dql import parseQuery, ParsingSyntaxError
+from terane.query import queries, QuerySyntaxError
 from terane.stats import stats
 from terane.loggers import getLogger
 
-MAX_ID = 2**64
-
 logger = getLogger('terane.protocols.xmlrpc')
 
-queries = stats.get('terane.protocols.xmlrpc.queries', 0, int)
+searches = stats.get('terane.protocols.xmlrpc.searches', 0, int)
 tails = stats.get('terane.protocols.xmlrpc.tails', 0, int)
 totalsearchtime = stats.get('terane.protocols.xmlrpc.search.totaltime', 0.0, float)
 totaltailtime = stats.get('terane.protocols.xmlrpc.tail.totaltime', 0.0, float)
@@ -57,79 +55,61 @@ class XMLRPCDispatcher(XMLRPC):
     def __init__(self):
         XMLRPC.__init__(self)
 
-    def logexception(self, e):
-        logger.debug("XMLRPC method exception: %s\n--------\n%s--------" % (e, traceback.format_exc()))
-
     @useThread
     def xmlrpc_search(self, query, indices=None, limit=100, reverse=False, fields=None):
         try:
-            queries.value += 1
-            # create a new execution plan
-            plan = SearchPlan(parseQuery(unicode(query)), indices, limit, None, ("ts",), reverse, fields)
-            # execute the plan
-            results = plan.execute()
-            # add to search query time counter
+            searches.value += 1
+            query = queries.parseSearchQuery(unicode(query))
+            results = queries.execute(query, indices, limit, None, ("ts",), reverse, fields)
+            import pdb; pdb.set_trace()
             totalsearchtime.value += float(results[0]['runtime'])
-            # return RPC result
             return list(results)
-        except ParsingSyntaxError, e:
+        except QuerySyntaxError, e:
             raise FaultBadRequest(e)
         except BaseException, e:
-            self.logexception(e)
+            logger.exception(e)
             raise FaultInternalError()
 
     @useThread
     def xmlrpc_explain(self, query, indices=None, limit=100, reverse=False, fields=None):
         try:
-            # create a new execution plan
-            plan = ExplainQueryPlan(parseQuery(unicode(query)), indices, limit, None, ("ts",), reverse, fields)
-            # execute the plan
-            results = plan.execute()
-            # return RPC result
+            query = queries.parseSearchQuery(unicode(query))
+            results = queries.explain(query, indices, limit, None, ("ts",), reverse, fields)
             return list(results)
-        except ParsingSyntaxError, e:
+        except QuerySyntaxError, e:
             raise FaultBadRequest(e)
         except BaseException, e:
-            self.logexception(e)
+            logger.exception(e)
             raise FaultInternalError()
-
 
     @useThread
     def xmlrpc_tail(self, query, last, indices=None, limit=100, fields=None):
         try:
             tails.value += 1
-            # create a new execution plan
-            plan = TailPlan(parseQuery(unicode(query)), last, indices, limit, fields)
-            # execute the plan
-            results = plan.execute()
-            # add to the tail query time counter
+            query = queries.parseTailQuery(unicode(query), last)
+            results = queries.execute(query, indices, limit, fields)
             totaltailtime.value += float(results[0]['runtime'])
-            # return RPC result
             return list(results)
-        except ParsingSyntaxError, e:
+        except QuerySyntaxError, e:
             raise FaultBadRequest(e)
         except BaseException, e:
-            self.logexception(e)
+            logger.exception(e)
             raise FaultInternalError()
 
     @useThread
     def xmlrpc_listIndices(self):
         try:
-            plan = ListIndicesPlan()
-            # return RPC result
-            return list(plan.execute())
+            return list(queries.listIndices())
         except BaseException, e:
-            self.logexception(e)
+            logger.exception(e)
             raise FaultInternalError()
 
     @useThread
     def xmlrpc_showIndex(self, name):
         try:
-            plan = ShowIndexPlan(name)
-            # return RPC result
-            return list(plan.execute())
+            return list(queries.showIndex(name))
         except BaseException, e:
-            self.logexception(e)
+            logger.exception(e)
             raise FaultInternalError()
 
 class XMLRPCProtocolPlugin(Plugin):
@@ -137,14 +117,12 @@ class XMLRPCProtocolPlugin(Plugin):
     implements(IPlugin)
 
     def __init__(self):
+        Plugin.__init__(self)
         self._instance = None
 
     def configure(self, section):
         self.listenAddress = section.getString('listen address', '0.0.0.0')
         self.listenPort = section.getInt('listen port', 45565)
-
-    def instance(self):
-        raise Exception("instance() method not implemented for XMLRPCProtocolPlugin")
 
     def startService(self):
         Plugin.startService(self)
