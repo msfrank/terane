@@ -64,7 +64,7 @@ class Result(urwid.WidgetWrap):
         # we always display these fields
         text = ["%s: " % parse(self.fields['ts']).strftime("%d %b %Y %H:%M:%S")]
         text.extend(_highlight(self.fields['default']))
-        # if we are collapsed, only show ts and default, otherwise show all fields
+        # if we are not collapsed, then show all fields
         if not resultslist.collapsed:
             fields = self.fields.copy()
             del fields['default']
@@ -74,7 +74,7 @@ class Result(urwid.WidgetWrap):
                 text.append('\n')
             for (k,v) in fields:
                 text.append("  %s=" % k)
-                text.extend(_highlight(v))
+                text.extend(_highlight(str(v)))
                 text.append('\n')
         self._text.set_text(text)
 
