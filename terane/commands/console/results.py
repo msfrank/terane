@@ -42,6 +42,7 @@ class Result(urwid.WidgetWrap):
         # reset highlighting
         self.highlighted = False
         def _highlight(_text):
+            _text = str(_text)
             if resultslist.pattern == None:
                 return _text
             markup = []
@@ -74,7 +75,7 @@ class Result(urwid.WidgetWrap):
                 text.append('\n')
             for (k,v) in fields:
                 text.append("  %s=" % k)
-                text.extend(_highlight(str(v)))
+                text.extend(_highlight(v))
                 text.append('\n')
         self._text.set_text(text)
 
