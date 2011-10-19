@@ -90,19 +90,19 @@ class QueryManager(Service):
         # FIXME: check that restrictions is a Restrictions object
         # FIXME: check each list item to make sure its in at least 1 schema
         # query each index, and aggregate the results
-        #try:
-        results = Results(sorting, fields, reverse)
-        rlist = []
-        runtime = 0.0
-        for index in indices:
-            result = index.search(query, limit, sorting, reverse)
-            rlist.append(result)
-            runtime += result.runtime
-        results = results.extend(*rlist, runtime=runtime)
-        # FIXME: check whether results satisfies all restrictions
-        return results
-        #except Exception, e:
-        #    raise QueryExecutionError(str(e))
+        try:
+            results = Results(sorting, fields, reverse)
+            rlist = []
+            runtime = 0.0
+            for index in indices:
+                result = index.search(query, limit, sorting, reverse)
+                rlist.append(result)
+                runtime += result.runtime
+            results.extend(*rlist, runtime=runtime)
+            # FIXME: check whether results satisfies all restrictions
+            return results
+        except Exception, e:
+            raise QueryExecutionError(str(e))
 
     def explain(self, query, indices=None, limit=100, restrictions=None, sorting=None, reverse=False, fields=None):
         pass

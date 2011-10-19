@@ -61,15 +61,15 @@ class ResultIterator(object):
     """
     """
 
-    def __init__(self, resultiter, fields):
-        self._iter = resultiter
+    def __init__(self, results, fields):
+        self._results = results
         self._fields = fields
 
     def __iter__(self):
         return self
 
     def next(self):
-        item = self._iter.next()
+        item = self._results.next()
         # if this is the meta row, then don't (potentially) filter on fields
         if isinstance(item, tuple):
             return item[0]

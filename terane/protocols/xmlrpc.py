@@ -61,7 +61,6 @@ class XMLRPCDispatcher(XMLRPC):
             searches.value += 1
             query = queries.parseSearchQuery(unicode(query))
             results = queries.execute(query, indices, limit, None, ("ts",), reverse, fields)
-            import pdb; pdb.set_trace()
             totalsearchtime.value += float(results[0]['runtime'])
             return list(results)
         except QuerySyntaxError, e:
