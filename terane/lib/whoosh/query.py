@@ -750,6 +750,7 @@ class And(CompoundQuery):
 
     def matcher(self, searcher):
         r = searcher.reader()
+        #return self._matcher(IntersectionMatcher, None, searcher)
         return self._matcher(IntersectionMatcher,
                              lambda q: 0 - q.estimate_size(r), searcher)
 
