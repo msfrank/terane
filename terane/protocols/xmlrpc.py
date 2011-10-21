@@ -22,7 +22,8 @@ from twisted.web.server import Site
 from twisted.application.service import Service
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
-from terane.query import queries, QuerySyntaxError
+from terane.query import queries
+from terane.query.dql import QuerySyntaxError
 from terane.stats import stats
 from terane.loggers import getLogger
 
@@ -59,21 +60,8 @@ class XMLRPCDispatcher(XMLRPC):
     def xmlrpc_search(self, query, indices=None, limit=100, reverse=False, fields=None):
         try:
             searches.value += 1
-            query = queries.parseSearchQuery(unicode(query))
-            results = queries.execute(query, indices, limit, None, ("ts",), reverse, fields)
+            results = queries.search(unicode(query), indices, limit, None, ("ts",), reverse, fields)
             totalsearchtime.value += float(results[0]['runtime'])
-            return list(results)
-        except QuerySyntaxError, e:
-            raise FaultBadRequest(e)
-        except BaseException, e:
-            logger.exception(e)
-            raise FaultInternalError()
-
-    @useThread
-    def xmlrpc_explain(self, query, indices=None, limit=100, reverse=False, fields=None):
-        try:
-            query = queries.parseSearchQuery(unicode(query))
-            results = queries.explain(query, indices, limit, None, ("ts",), reverse, fields)
             return list(results)
         except QuerySyntaxError, e:
             raise FaultBadRequest(e)
@@ -85,8 +73,7 @@ class XMLRPCDispatcher(XMLRPC):
     def xmlrpc_tail(self, query, last, indices=None, limit=100, fields=None):
         try:
             tails.value += 1
-            query = queries.parseTailQuery(unicode(query), last)
-            results = queries.execute(query, indices, limit, fields)
+            results = queries.tail(unicode(query), last, indices, limit, fields)
             totaltailtime.value += float(results[0]['runtime'])
             return list(results)
         except QuerySyntaxError, e:

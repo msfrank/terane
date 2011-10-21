@@ -16,26 +16,14 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 from twisted.application.service import Service
-from pyparsing import ParseBaseException
+from whoosh.query import NumericRange, And
 from terane.plugins import plugins
 from terane.outputs import ISearchableOutput
-from terane.query.query import searchQuery
+from terane.query.dql import parseSearchQuery, parseTailQuery
 from terane.query.results import Results
 from terane.loggers import getLogger
 
 logger = getLogger('terane.query')
-
-class QuerySyntaxError(BaseException):
-    """
-    There was an error parsing the query synatx.
-    """
-    def __init__(self, exc, qstring):
-        self._exc = exc
-        tokens = qstring[exc.col-1:].splitlines()[0]
-        self._message = "Syntax error starting at '%s': %s (line %i, col %i)" % (
-            tokens, exc.msg, exc.lineno, exc.col)
-    def __str__(self):
-        return self._message
 
 class QueryExecutionError(Exception):
     """
@@ -60,22 +48,8 @@ class QueryManager(Service):
         self._searchables = None
         return Service.stopService(self)
 
-    def parseSearchQuery(self, string):
-        """
-        Parse the query specified by qstring.  Returns a Query object.
-        """
-        try:
-            return searchQuery.parseString(string, parseAll=True).asList()[0]
-        except ParseBaseException, e:
-            raise QuerySyntaxError(e, string)
-
-    def parseRestriction(self, string):
-        """
-        Parse the restriction specified by rstring.  Returns a Restriction object.
-        """
-        return None
-
-    def execute(self, query, indices=None, limit=100, restrictions=None, sorting=None, reverse=False, fields=None):
+    def search(self, query, indices=None, limit=100, restrictions=None, sorting=None, reverse=False, fields=None):
+        query = parseSearchQuery(query)
         # look up the named indices
         if indices == None:
             indices = self._searchables.values()
@@ -88,7 +62,7 @@ class QueryManager(Service):
         if limit < 1:
             raise QueryExecutionError("limit must be greater than 0")
         # FIXME: check that restrictions is a Restrictions object
-        # FIXME: check each list item to make sure its in at least 1 schema
+        # FIXME: check each fields item to make sure its in at least 1 schema
         # query each index, and aggregate the results
         try:
             results = Results(sorting, fields, reverse)
@@ -104,8 +78,57 @@ class QueryManager(Service):
         except Exception, e:
             raise QueryExecutionError(str(e))
 
-    def explain(self, query, indices=None, limit=100, restrictions=None, sorting=None, reverse=False, fields=None):
-        pass
+    def tail(self, query, last, indices=None, limit=100, fields=None):
+        # look up the named indices
+        if indices == None:
+            indices = self._searchables.values()
+        else:
+            try:
+                indices = tuple(self._searchables[name] for name in indices)
+            except KeyError, e:
+                raise QueryExecutionError("unknown index '%s'" % e)
+        # check that limit is > 0
+        if limit < 1:
+            raise QueryExecutionError("limit must be greater than 0")
+        # FIXME: check each fields item to make sure its in at least 1 schema
+        try:
+            results = Results(("ts"), fields, False)
+            # determine the id of the last document
+            lastId = 0
+            for index in indices:
+                l = index.lastId()
+                if l > lastId: lastId = l
+            # if last is 0, then return the id of the latest document
+            if last == 0:
+                results.extend(last=lastId, runtime=0.0)
+                return results
+            # if the latest document id is smaller or equal to supplied last id value,
+            # then return the id of the latest document
+            if lastId <= last:
+                results.extend(last=lastId, runtime=0.0)
+                return results
+            query = parseTailQuery(query)
+            # add the additional restriction that the id must be newer than 'last'.
+            query = And([NumericRange('id', last, 2**64, True), query]).normalize()
+            # query each index, and aggregate the results
+            rlist = []
+            runtime = 0.0
+            lastId = 0
+            # query each index, and aggregate the results
+            for index in indices:
+                result = index.search(query, limit, ("ts"), False)
+                rlist.append(result)
+                runtime += result.runtime
+                try:
+                    l = result.docnum(-1)
+                    if l > lastId: lastId = l
+                except IndexError:
+                    # if there are no results, result.docnum() raises IndexError
+                    pass
+            results.extend(*rlist, last=lastId, runtime=runtime)
+            return results
+        except Exception, e:
+            raise QueryExecutionError(str(e))
 
     def showIndex(self, name):
         try:
