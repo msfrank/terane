@@ -72,8 +72,10 @@ class FileInput(Input):
             reactor.callLater(0, self._deferred.callback, None)
         else:
             reactor.callLater(self._interval, self._deferred.callback, None)
+        logger.trace("[input:%s] rescheduled tail" % self.name)
 
     def _tail(self, unused):
+        logger.trace("[input:%s] checking for file modification" % self.name)
         try:
             # open the file if necessary
             if self._file == None:
