@@ -42,6 +42,7 @@ class Result(urwid.WidgetWrap):
         # reset highlighting
         self.highlighted = False
         def _highlight(_text):
+            _text = str(_text)
             if resultslist.pattern == None:
                 return _text
             markup = []
@@ -64,7 +65,7 @@ class Result(urwid.WidgetWrap):
         # we always display these fields
         text = ["%s: " % parse(self.fields['ts']).strftime("%d %b %Y %H:%M:%S")]
         text.extend(_highlight(self.fields['default']))
-        # if we are collapsed, only show ts and default, otherwise show all fields
+        # if we are not collapsed, then show all fields
         if not resultslist.collapsed:
             fields = self.fields.copy()
             del fields['default']
