@@ -143,17 +143,18 @@ class StoreOutputPlugin(Plugin):
             os.mkdir(tmpdir)
         # lock the database directory
         try:
-            self._lock = os.open(os.path.join(self.dbdir, 'lock'), os.O_WRONLY | os.O_CREAT, 0600)
-            fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except IOError, e:
-            from errno import EACCES, EAGAIN
-            if e.errno in (EACCES, EAGAIN):
-                raise Exception("Failed to lock the database directory: database is already locked")
+            try:
+                self._lock = os.open(os.path.join(self.dbdir, 'lock'), os.O_WRONLY | os.O_CREAT, 0600)
+                fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except IOError, e:
+                from errno import EACCES, EAGAIN
+                if e.errno in (EACCES, EAGAIN):
+                    raise Exception("database is already locked")
         except Exception, e:
-            raise Exception("Failed to lock the database directory: %s" % e)
+            raise Exception("[%s] failed to lock the database directory: %s" % (self.name,e))
         # open the db environment
         self._env = Env(envdir, datadir, tmpdir, cachesize=self.cachesize)
-        logger.debug("[plugin:output:store] opened database environment in %s" % self.dbdir)
+        logger.debug("[%s] opened database environment in %s" % (self.name,self.dbdir))
         # start the id generator
         self._ids.startService()
         Plugin.startService(self)
@@ -177,6 +178,6 @@ class StoreOutputPlugin(Plugin):
             if self._lock != None:
                 fcntl.flock(self._lock, fcntl.LOCK_UN | fcntl.LOCK_NB)
         except Exception, e:
-            logger.warning("Failed to unlock the database directory: %s" % e)
+            logger.warning("[%s] failed to unlock the database directory: %s" % (self.name,e))
         self._lock = None
-        logger.debug("[plugin:output:store] closed database environment")
+        logger.debug("[%s] closed database environment" % self.name)

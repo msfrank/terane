@@ -91,15 +91,15 @@ class CollectInputPlugin(Plugin):
             portal.registerChecker(AllowAnonymousAccess())
             factory = PBServerFactory(portal)
             self._listener = reactor.listenTCP(self._port, factory, interface=self._address)
-            logger.info("[plugin:input:collect] listening for remote messages on %s:%i" % (self._address,self._port))
+            logger.info("[%s] listening for remote messages on %s:%i" % (self.name,self._address,self._port))
         else:
-            logger.info("[plugin:input:collect] no inputs configured")
+            logger.info("[%s] no inputs configured" % self.name)
 
     def stopService(self):
         if not self._listener == None:
             self._listener.stopListening()
             self._listener = None
         Plugin.stopService(self)
-        logger.info("[plugin:input:collect] stopped listening for remote messages")
+        logger.info("[%s] stopped listening for remote messages" % self.name)
 
 

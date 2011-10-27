@@ -42,7 +42,10 @@ class QueryManager(Service):
         Service.startService(self)
         for index in plugins.instancesImplementing('output', ISearchableOutput):
             self._searchables[index.name] = index
-        logger.debug("found searchable indices: %s" % ', '.join(self._searchables.keys()))
+        if len(self._searchables) < 1:
+            logger.info("no searchable indices found")
+        else:
+            logger.info("found searchable indices: %s" % ', '.join(self._searchables.keys()))
 
     def stopService(self):
         self._searchables = None

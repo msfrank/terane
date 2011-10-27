@@ -114,9 +114,9 @@ class XMLRPCProtocolPlugin(Plugin):
         Plugin.startService(self)
         from twisted.internet import reactor
         self.listener = reactor.listenTCP(self.listenPort, Site(XMLRPCDispatcher()), interface=self.listenAddress)
-        logger.debug("[listener:%s] started xmlrpc listener on %s:%i" % (self.name, self.listenAddress, self.listenPort))
+        logger.debug("[%s] started xmlrpc listener on %s:%i" % (self.name, self.listenAddress, self.listenPort))
 
     def stopService(self):
         Plugin.stopService(self)
         self.listener.stopListening()
-        logger.debug("[listener:%s] stopped xmlrpc listener" % self.name)
+        logger.debug("[%s] stopped xmlrpc listener" % self.name)
