@@ -22,7 +22,7 @@ from twisted.web.server import Site
 from twisted.application.service import Service
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
-from terane.query import queries
+from terane.query import queries, QueryExecutionError
 from terane.query.dql import QuerySyntaxError
 from terane.stats import stats
 from terane.loggers import getLogger
@@ -63,7 +63,7 @@ class XMLRPCDispatcher(XMLRPC):
             results = queries.search(unicode(query), indices, limit, None, ("ts",), reverse, fields)
             totalsearchtime.value += float(results[0]['runtime'])
             return list(results)
-        except QuerySyntaxError, e:
+        except (QuerySyntaxError, QueryExecutionError), e:
             raise FaultBadRequest(e)
         except BaseException, e:
             logger.exception(e)
@@ -76,7 +76,7 @@ class XMLRPCDispatcher(XMLRPC):
             results = queries.tail(unicode(query), last, indices, limit, fields)
             totaltailtime.value += float(results[0]['runtime'])
             return list(results)
-        except QuerySyntaxError, e:
+        except (QuerySyntaxError, QueryExecutionError), e:
             raise FaultBadRequest(e)
         except BaseException, e:
             logger.exception(e)
@@ -86,6 +86,8 @@ class XMLRPCDispatcher(XMLRPC):
     def xmlrpc_listIndices(self):
         try:
             return list(queries.listIndices())
+        except (QuerySyntaxError, QueryExecutionError), e:
+            raise FaultBadRequest(e)
         except BaseException, e:
             logger.exception(e)
             raise FaultInternalError()
@@ -94,6 +96,8 @@ class XMLRPCDispatcher(XMLRPC):
     def xmlrpc_showIndex(self, name):
         try:
             return list(queries.showIndex(name))
+        except (QuerySyntaxError, QueryExecutionError), e:
+            raise FaultBadRequest(e)
         except BaseException, e:
             logger.exception(e)
             raise FaultInternalError()
