@@ -16,7 +16,7 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import os, sys, traceback
-from terane.commands.console.console import Console
+from terane.commands.console.console import console
 from terane.settings import Settings, ConfigureError
 
 def console_main():
@@ -31,10 +31,7 @@ def console_main():
         settings.addSwitch("-d","--debug", ("console","debug"),
             help="Print debugging information"
             )
-        # load configuration
         settings.load()
-        # create the Searcher and run it
-        console = Console()
         console.configure(settings)
         return console.run()
     except ConfigureError, e:

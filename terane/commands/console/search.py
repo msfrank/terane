@@ -19,27 +19,34 @@ import os, sys, urwid
 from dateutil.parser import parse
 from xmlrpclib import Fault
 from twisted.web.xmlrpc import Proxy
+from terane.commands.console.switcher import Window
 from terane.commands.console.results import ResultsListbox
-from terane.commands.console.ui import ui, useMainThread
+from terane.commands.console.console import console
+from terane.commands.console.ui import useMainThread
 from terane.loggers import getLogger
 
 logger = getLogger('terane.commands.console.search')
 
-class Searcher(urwid.WidgetWrap):
-    def __init__(self, console, args):
+class Searcher(Window):
+    def __init__(self, args):
         # configure the searcher
-        self._console = console
-        self.title = "Search results for '%s'" % args
+        title = "Search results for '%s'" % args
         self._query = args
         self._results = ResultsListbox()
-        url = "http://%s/XMLRPC" % console.host
+        self._url = "http://%s/XMLRPC" % console.host
         logger.debug("using proxy url %s" % url)
+        Window.__init__(self, title, self._results)
+
+    def startService(self):
+        logger.debug("startService")
         # make the xmlrpc search request
         proxy = Proxy(url, allowNone=True)
         deferred = proxy.callRemote('search', self._query)
         deferred.addCallback(self._getResult)
         deferred.addErrback(self._getError)
-        urwid.WidgetWrap.__init__(self, self._results)
+
+    def stopService(self):
+        logger.debug("stopService")
 
     @useMainThread
     def _getResult(self, results):
@@ -49,7 +56,7 @@ class Searcher(urwid.WidgetWrap):
         self._meta = results.pop(0)
         for r in results:
             self._results.append(r)
-        ui.redraw()
+        console.redraw()
 
     @useMainThread
     def _getError(self, failure):
@@ -57,17 +64,17 @@ class Searcher(urwid.WidgetWrap):
         Display the error popup.
         """
         # close the search window
-        self._console.switcher.closeWindow(self.console.switcher.findWindow(self))
+        console.switcher.closeWindow(console.switcher.findWindow(self))
         # display the error on screen
         try:
             raise failure.value
         except Fault, e:
             errtext = "Search failed: %s (code %i)" % (e.faultString,e.faultCode)
-            ui.error(errtext)
+            console.error(errtext)
             logger.debug(errtext)
         except BaseException, e:
             errtext = "Search failed: %s" % str(e)
-            ui.error(errtext)
+            console.error(errtext)
             logger.debug(errtext)
 
     def command(self, cmd, args):

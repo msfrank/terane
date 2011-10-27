@@ -16,32 +16,24 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import os, sys, urwid
-from terane.commands.console.ui import ui
+from twisted.application.service import Service, MultiService
 from terane.loggers import getLogger
 
 logger = getLogger('terane.commands.console.switcher')
 
-class WindowHandle(object):
-    def __init__(self, window, title, wid):
-        self.window = window
+class Window(Service, urwid.WidgetWrap):
+    def __init__(self, title, body):
+        Service.__init__(self)
+        self.body = body
         self.title = title
-        self.wid = wid
+        self.wid = None
         self.prev = None
         self.next = None
+        urwid.WidgetWrap.__init__(self, body)
 
-    def getText(self, isFocused=False, isCurr=False):
-        if isFocused == True:
-            attr = 'highlight'
-        else:
-            attr = 'normal'
-        if isCurr == True:
-            text = "* %s" % self.title
-        else:
-            text = self.title
-        return urwid.Text((attr, text))
-
-class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
+class WindowSwitcher(MultiService, urwid.WidgetWrap, urwid.ListWalker):
     def __init__(self, frame):
+        MultiService.__init__(self)
         self._frame = frame
         self._blank = urwid.SolidFill()
         self._windows = None
@@ -68,6 +60,7 @@ class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
         return key
 
     def command(self, cmd, args):
+        from terane.commands.console.console import console
         # window management commands
         if cmd == 'windows':
             return self.showWindowlist()
@@ -79,9 +72,9 @@ class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
             try:
                 return self.jumpToWindow(self.findWindow(int(args)))
             except IndexError:
-                ui.error(Exception("No such window '%s'" % args))
+                console.error(Exception("No such window '%s'" % args))
             except BaseException, e:
-                ui.error(e)
+                console.error(e)
             return None
         if cmd == 'close':
             if args == '':
@@ -93,9 +86,9 @@ class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
                 try:
                     return self.closeWindow(self.findWindow(int(args)))
                 except IndexError:
-                    ui.error(Exception("No such window '%s'" % args))
+                    console.error(Exception("No such window '%s'" % args))
                 except BaseException, e:
-                    ui.error(e)
+                    console.error(e)
             return None
         # forward other commands to the active window
         if self._curr != None:
@@ -149,32 +142,30 @@ class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
             raise Exception("Failed to add window: window is already added")    
         except:
             pass
-        try:
-            title = "Window #%i - %s" % (self._nextwid, getattr(window, 'title'))
-        except:
-            title = "Window #%i" % self._nextwid
-        handle = WindowHandle(window, title, self._nextwid)
+        title = "Window #%i - %s" % (self._nextwid, window.title)
+        window.wid = self._nextwid
         if self._nwindows == 0:
-            self._windows = handle
-            handle.prev = handle
-            handle.next = handle
-            self._curr = handle
+            self._windows = window
+            window.prev = window
+            window.next = window
+            self._curr = window
         elif self._nwindows == 1:
-            self._windows.prev = handle
-            self._windows.next = handle
-            handle.prev = self._windows
-            handle.next = self._windows
-            self._curr = handle
+            self._windows.prev = window
+            self._windows.next = window
+            window.prev = self._windows
+            window.next = self._windows
+            self._curr = window
         else:
-            handle.prev = self._windows.prev
-            handle.next = self._windows
-            self._windows.prev.next = handle
-            self._windows.prev = handle
-            self._curr = handle
+            window.prev = self._windows.prev
+            window.next = self._windows
+            self._windows.prev.next = window
+            self._windows.prev = window
+            self._curr = window
         self._nwindows += 1
         self._nextwid += 1
         self._frame.set_body(window)
         self._frame.set_focus('footer')
+        self.addService(window)
 
     def nextWindow(self):
         """
@@ -207,26 +198,27 @@ class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
         self._frame.set_body(self._curr.window)
         self._frame.set_focus('footer')
 
-    def closeWindow(self, handle):
-        # detach handle from the circular linked list
-        handle.prev.next = handle.next
-        handle.next.prev = handle.prev
+    def closeWindow(self, window):
+        # detach window from the circular linked list
+        window.prev.next = window.next
+        window.next.prev = window.prev
         self._nwindows -= 1
         # fix up the _windows reference, if needed
-        if self._windows == handle:
+        if self._windows == window:
             if self._nwindows == 0:
                 self._windows = None
             else:
-                self._windows = handle.next
+                self._windows = window.next
         # fix up the _curr reference, if needed
-        if self._curr == handle:
+        if self._curr == window:
             if self._nwindows == 0:
                 self._curr = None
             else:
                 # display the new current window   
-                self._curr = handle.next
+                self._curr = window.next
                 self._frame.set_body(self._curr.window)
                 self._frame.set_focus('footer')
+        self.removeService(window)
 
     def __len__(self):
         return self._nwindows
@@ -246,6 +238,17 @@ class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
                 i += 1
         return curr
 
+    def _getText(self, window, isFocused=False, isCurr=False):
+        if isFocused == True:
+            attr = 'highlight'
+        else:
+            attr = 'normal'
+        if isCurr == True:
+            text = "* %s" % window.title
+        else:
+            text = window.title
+        return urwid.Text((attr, text))
+
     def get_focus(self):
         if self._focus == None:
             return (None,None)
@@ -253,7 +256,7 @@ class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
         isCurr = False
         if self._curr == handle:
             isCurr = True
-        return (handle.getText(isFocused=True, isCurr=isCurr), self._focus)
+        return (self._getText(handle, True, isCurr), self._focus)
 
     def set_focus(self, focus):
         if focus < 0 or focus > self._nwindows - 1:
@@ -269,7 +272,7 @@ class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
         isCurr = False
         if self._curr == handle:
             isCurr = True
-        return (handle.getText(isCurr=isCurr), position)
+        return (self._getText(handle, isCurr=isCurr), position)
 
     def get_next(self, position):
         if position == None or position >= self._nwindows - 1:
@@ -279,4 +282,4 @@ class WindowSwitcher(urwid.WidgetWrap, urwid.ListWalker):
         isCurr = False
         if self._curr == handle:
             isCurr = True
-        return (handle.getText(isCurr=isCurr), position)
+        return (self._getText(handle, isCurr=isCurr), position)

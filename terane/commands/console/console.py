@@ -17,22 +17,32 @@
 
 import os, sys, urwid
 from logging import StreamHandler, DEBUG, Formatter
+from twisted.application.service import MultiService
 from twisted.internet import reactor
 from terane.commands.console.switcher import WindowSwitcher
 from terane.commands.console.input import Input
 from terane.commands.console.search import Searcher
 from terane.commands.console.outfile import Outfile
-from terane.commands.console.ui import ui
 from terane.loggers import getLogger, startLogging, StdoutHandler, DEBUG
 
 logger = getLogger('terane.commands.console.console')
 
-class Console(urwid.WidgetWrap):
+class Console(MultiService, urwid.WidgetWrap):
     def __init__(self):
+        MultiService.__init__(self)
+        self._root = None
+        self._loop = None
+        self._palette = [
+            ('normal', 'default', 'default'),
+            ('highlight', 'standout', 'default'),
+            ('bold', 'bold', 'default'),
+            ]
+        self._ui = urwid.Frame(urwid.SolidFill())
         self._input = Input()
         self._frame = urwid.Frame(urwid.SolidFill(), footer=self._input)
         self._frame.set_focus('footer')
         self.switcher = WindowSwitcher(self._frame)
+        self.addService(self.switcher)
         urwid.WidgetWrap.__init__(self, self._frame)
 
     def configure(self, settings):
@@ -67,10 +77,10 @@ class Console(urwid.WidgetWrap):
         """
         logger.debug("command=%s, args='%s'" % (cmd, args))
         if cmd == 'search':
-            searcher = Searcher(self, args)
+            searcher = Searcher(args)
             return self.switcher.addWindow(searcher)
         if cmd == 'load':
-            outfile = Outfile(self, args)
+            outfile = Outfile(args)
             return self.switcher.addWindow(outfile)
         if cmd == 'quit':
             return reactor.stop()
@@ -90,8 +100,48 @@ class Console(urwid.WidgetWrap):
         if self.executecmd != None:
             cmdline = self.executecmd.split(None, 1)
             self.command(cmdline[0], cmdline[1])
-        ui.run(self)
+        self._root = root
+        self._ui.set_body(self._root)
+        ev = urwid.TwistedEventLoop(reactor=reactor)
+        self._loop = urwid.MainLoop(self._ui, 
+            palette=self._palette,
+            unhandled_input=self._unhandled_input,
+            event_loop=ev)
+        self.startService()
+        self._loop.run()
         logger.debug("exited urwid main loop")
         if self.debug == True:
             startLogging(StdoutHandler(), DEBUG)
         return 0
+
+    def _unhandled_input(self, unhandled):
+        logger.debug("caught unhandled input '%s'" % str(unhandled))
+
+    def quit(self):
+        if not reactor.running or not self.running:
+            return
+        d = maybeDeferred(self.stopService)
+        d.addCallback(self._quit)
+
+    def _quit(self, result):
+        if self._loop != None: reactor.stop()
+
+    def redraw(self):
+        if self._loop != None: self._loop.draw_screen()
+
+    def error(self, exception):
+        self._ui.set_body(Error(exception))
+        self.redraw()
+
+class Error(urwid.WidgetWrap):
+    def __init__(self, exception):
+        self._text = urwid.Text([('bold',str(exception)), '\nPress any key to continue'])
+        self._frame = urwid.Frame(urwid.SolidFill(), footer=self._text)
+        self._frame.set_focus('footer')
+        urwid.WidgetWrap.__init__(self, self._frame)
+
+    def keypress(self, size, key):
+        console._ui.set_body(console._root)
+
+
+console = Console()

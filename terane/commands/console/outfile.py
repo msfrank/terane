@@ -18,23 +18,23 @@
 import os, sys, urwid
 from csv import DictReader
 from twisted.internet import reactor
+from terane.commands.console.switcher import Window
 from terane.commands.console.results import ResultsListbox
-from terane.commands.console.ui import ui, useMainThread
+from terane.commands.console.console import console
+from terane.commands.console.ui import useMainThread
 from terane.loggers import getLogger
 
 logger = getLogger('terane.commands.console.outfile')
 
-class Outfile(urwid.WidgetWrap):
-    def __init__(self, console, args):
-        self._console = console
+class Outfile(Window):
+    def __init__(self, args):
         self._path = os.path.expanduser(args)
-        self.title = "Results from file %s" % self._path
+        title = "Results from file %s" % self._path
         self._results = ResultsListbox()
-        reactor.callLater(0, self._load)
-        urwid.WidgetWrap.__init__(self, self._results)
+        Window.__init__(self, title, self._results)
 
-    @useMainThread
-    def _load(self):
+    def startService(self):
+        logger.debug("startService")
         try:
             # load data from path
             with file(self._path, 'r') as f:
@@ -42,14 +42,17 @@ class Outfile(urwid.WidgetWrap):
                 reader = DictReader(f)
                 for row in reader:
                     self._results.append(row)
-                ui.redraw()
+                console.redraw()
         except BaseException, e:
             # close the search window
-            self._console.switcher.closeWindow(self._console.switcher.findWindow(self))
+            console.switcher.closeWindow(console.switcher.findWindow(self))
             # display the error on screen
             errtext = "Load failed: %s" % str(e)
-            ui.error(errtext)
+            console.error(errtext)
             logger.debug(errtext)
+
+    def stopService(self):
+        logger.debug("stopService")
 
     def command(self, cmd, args):
         if self._results != None:
