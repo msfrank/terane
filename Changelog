@@ -1,3 +1,12 @@
+Release 0.1.2
+-------------
+
+ * (#26) added configuration options for database locking.
+ * (#27) moved database code into store output plugin.
+ * (#29) fixed exception when expanding search results in the console.
+ * refactored plugin infrastructure.
+ * moved generic search code into terane.query package.
+
 Release 0.1.1
 -------------
 
