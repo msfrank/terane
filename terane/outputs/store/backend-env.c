@@ -85,12 +85,12 @@ _Env_log_msg (const DB_ENV *env, const char *msg)
 /*
  * terane_Env_new: allocate a new Env object.
  *
- * callspec: Env(envdir, datadir, tmpdir, [cachesize])
+ * callspec: Env(envdir, datadir, tmpdir, options)
  * parameters:
  *  envdir (string): A path to the DB environment
  *  datadir (string): A path to where the database data is stored
  *  tmpdir (string): A path to a directory used for temporary data
- *  cachesize (int): The size of the database cache
+ *  options (dict): A dict mapping string keys to option values
  * returns: A new Env object
  * exceptions:
  *  Exception: failed to create the DB_ENV handle
@@ -99,9 +99,8 @@ PyObject *
 terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     terane_Env *self;
-    char *kwlist[] = {"envdir", "datadir", "tmpdir", "cachesize", NULL};
     char *envdir = NULL, *datadir = NULL, *tmpdir = NULL;
-    unsigned int cachesize = 0;
+    PyObject *options = NULL, *value = NULL;
     int dbret;
 
     /* allocate the Env object */
@@ -121,8 +120,7 @@ terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     self->env->set_verbose (self->env, DB_VERB_RECOVERY, 1);
     self->env->set_verbose (self->env, DB_VERB_REGISTER, 1);
     /* parse constructor parameters */
-    if (!PyArg_ParseTupleAndKeywords (args, kwds, "sss|I",
-        kwlist, &envdir, &datadir, &tmpdir, &cachesize))
+    if (!PyArg_ParseTuple (args, "sssO!", &envdir, &datadir, &tmpdir, &PyDict_Type, &options))
         goto error;
     /* set the data_dir.  datadir string should not be freed. */
     dbret = self->env->set_data_dir (self->env, datadir);
@@ -136,11 +134,35 @@ terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
         PyErr_Format (PyExc_Exception, "Failed to set tmpdir: %s", db_strerror (dbret));
         goto error;
     }
-    /* if the cachesize was specified, then set it, otherwise use the default (256kb) */
-    if (cachesize > 0) {
-        dbret = self->env->set_cachesize (self->env, 0, cachesize, 0);
+    /* set the cache size */
+    if ((value = PyDict_GetItemString (options, "cache size")) && PyLong_Check (value)) {
+        dbret = self->env->set_cachesize (self->env, 0, (u_int32_t) PyLong_AsLong (value), 0);
         if (dbret != 0) {
-            PyErr_Format (PyExc_Exception, "Failed to set cachesize: %s", db_strerror (dbret));
+            PyErr_Format (PyExc_Exception, "Failed to set cache size: %s", db_strerror (dbret));
+            goto error;
+        }
+    }
+    /* set max txn lockers */
+    if ((value = PyDict_GetItemString (options, "max lockers")) && PyLong_Check (value)) {
+        dbret = self->env->set_lk_max_lockers (self->env, (u_int32_t) PyLong_AsLong (value));
+        if (dbret != 0) {
+            PyErr_Format (PyExc_Exception, "Failed to set max lockers: %s", db_strerror (dbret));
+            goto error;
+        }
+    }
+    /* set max txn locks */
+    if ((value = PyDict_GetItemString (options, "max locks")) && PyLong_Check (value)) {
+        dbret = self->env->set_lk_max_locks (self->env, (u_int32_t) PyLong_AsLong (value));
+        if (dbret != 0) {
+            PyErr_Format (PyExc_Exception, "Failed to set max locks: %s", db_strerror (dbret));
+            goto error;
+        }
+    }
+    /* set max txn objects */
+    if ((value = PyDict_GetItemString (options, "max objects")) && PyLong_Check (value)) {
+        dbret = self->env->set_lk_max_objects (self->env, (u_int32_t) PyLong_AsLong (value));
+        if (dbret != 0) {
+            PyErr_Format (PyExc_Exception, "Failed to set max objects: %s", db_strerror (dbret));
             goto error;
         }
     }
@@ -151,10 +173,6 @@ terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
             db_strerror (dbret));
         goto error;
     }
-    /* set db txn management parameters */
-    self->env->set_lk_max_lockers (self->env, 65535);
-    self->env->set_lk_max_locks (self->env, 65535);
-    self->env->set_lk_max_objects (self->env, 65535);
     /* open the database environment */
     dbret = self->env->open (self->env, envdir, DB_CREATE | 
         DB_INIT_TXN | DB_INIT_MPOOL | DB_INIT_LOCK | DB_INIT_LOG |

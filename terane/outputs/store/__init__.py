@@ -117,10 +117,13 @@ class StoreOutputPlugin(Plugin):
         """
         Configure the store plugin.
         """
-        self.dbdir = os.path.abspath(section.getPath('data directory', '/var/lib/terane/db/'))
-        self.cachesize = section.getInt('cache size', 256 * 1024)
-        self.ncaches = section.getInt('multiple caches', 1)
-        self._ids.configure(section, self.dbdir)
+        self._dbdir = os.path.abspath(section.getPath('data directory', '/var/lib/terane/db/'))
+        self._options = {}
+        self._options['cache size'] = section.getInt('cache size', 64 * 1024 * 1024)
+        self._options['max lockers'] = section.getInt('max lockers', 65536)
+        self._options['max locks'] = section.getInt('max locks', 65536)
+        self._options['max objects'] = section.getInt('max objects', 65536)
+        self._ids.configure(section, self._dbdir)
 
     def startService(self):
         """
@@ -130,11 +133,11 @@ class StoreOutputPlugin(Plugin):
         self._logfd = LogFD()
         self._logfd.startReading()
         # create berkeleydb-specific directories under the dbdir root
-        datadir = os.path.join(self.dbdir, "data")
-        envdir = os.path.join(self.dbdir, "env")
-        tmpdir = os.path.join(self.dbdir, "tmp")
-        if not os.path.exists(self.dbdir):
-            os.mkdir(self.dbdir)
+        datadir = os.path.join(self._dbdir, "data")
+        envdir = os.path.join(self._dbdir, "env")
+        tmpdir = os.path.join(self._dbdir, "tmp")
+        if not os.path.exists(self._dbdir):
+            os.mkdir(self._dbdir)
         if not os.path.exists(datadir):
             os.mkdir(datadir)
         if not os.path.exists(envdir):
@@ -144,7 +147,7 @@ class StoreOutputPlugin(Plugin):
         # lock the database directory
         try:
             try:
-                self._lock = os.open(os.path.join(self.dbdir, 'lock'), os.O_WRONLY | os.O_CREAT, 0600)
+                self._lock = os.open(os.path.join(self._dbdir, 'lock'), os.O_WRONLY | os.O_CREAT, 0600)
                 fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except IOError, e:
                 from errno import EACCES, EAGAIN
@@ -153,8 +156,8 @@ class StoreOutputPlugin(Plugin):
         except Exception, e:
             raise Exception("[%s] failed to lock the database directory: %s" % (self.name,e))
         # open the db environment
-        self._env = Env(envdir, datadir, tmpdir, cachesize=self.cachesize)
-        logger.debug("[%s] opened database environment in %s" % (self.name,self.dbdir))
+        self._env = Env(envdir, datadir, tmpdir, self._options)
+        logger.debug("[%s] opened database environment in %s" % (self.name,self._dbdir))
         # start the id generator
         self._ids.startService()
         Plugin.startService(self)

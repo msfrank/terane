@@ -50,7 +50,6 @@ setup(
         'terane.commands.search',
         'terane.commands.server',
         'terane.commands.tail',
-        'terane.dql',
         'terane.filters',
         'terane.inputs',
         'terane.lib',
@@ -63,6 +62,7 @@ setup(
         'terane.outputs',
         'terane.outputs.store',
         'terane.protocols',
+        'terane.query',
         ],
     ext_modules=[
         Extension('terane.outputs.store.backend', [
