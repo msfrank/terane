@@ -23,7 +23,6 @@ logger = getLogger('terane.commands.console.switcher')
 
 class Window(Service, urwid.WidgetWrap):
     def __init__(self, title, body):
-        Service.__init__(self)
         self.body = body
         self.title = title
         self.wid = None
@@ -43,6 +42,14 @@ class WindowSwitcher(MultiService, urwid.WidgetWrap, urwid.ListWalker):
         self._focus = None
         self._windowlist = urwid.ListBox(self)
         urwid.WidgetWrap.__init__(self, self._windowlist)
+
+    def startService(self):
+        MultiService.startService(self)
+        logger.debug("started window management service")
+
+    def stopService(self):
+        MultiService.stopService(self)
+        logger.debug("stopped window management service")
 
     def keypress(self, size, key):
         if self._frame.get_body() == self:
@@ -166,6 +173,7 @@ class WindowSwitcher(MultiService, urwid.WidgetWrap, urwid.ListWalker):
         self._frame.set_body(window)
         self._frame.set_focus('footer')
         self.addService(window)
+        logger.debug("added window #%i: '%s'" % (window.wid,window.title))
 
     def nextWindow(self):
         """
@@ -219,6 +227,7 @@ class WindowSwitcher(MultiService, urwid.WidgetWrap, urwid.ListWalker):
                 self._frame.set_body(self._curr.window)
                 self._frame.set_focus('footer')
         self.removeService(window)
+        logger.debug("closed window #%i: '%s'" % (window.wid,window.title))
 
     def __len__(self):
         return self._nwindows
