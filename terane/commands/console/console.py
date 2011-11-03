@@ -19,10 +19,9 @@ import os, sys, urwid
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.application.service import MultiService
 from twisted.internet import reactor
+from twisted.internet.defer import maybeDeferred
 from terane.commands.console.switcher import WindowSwitcher
 from terane.commands.console.input import Input
-from terane.commands.console.search import Searcher
-from terane.commands.console.outfile import Outfile
 from terane.loggers import getLogger, startLogging, StdoutHandler, DEBUG
 
 logger = getLogger('terane.commands.console.console')
@@ -30,7 +29,6 @@ logger = getLogger('terane.commands.console.console')
 class Console(MultiService, urwid.WidgetWrap):
     def __init__(self):
         MultiService.__init__(self)
-        self._root = None
         self._loop = None
         self._palette = [
             ('normal', 'default', 'default'),
@@ -51,6 +49,14 @@ class Console(MultiService, urwid.WidgetWrap):
         self.host = section.getString("host", 'localhost:45565')
         self.executecmd = section.getString('execute command', None)
         self.debug = section.getBoolean("debug", False)
+
+    def startService(self):
+        MultiService.startService(self)
+        logger.debug("started console service")
+
+    def stopService(self):
+        MultiService.stopService(self)
+        logger.debug("stopped console service")
 
     def keypress(self, size, key):
         """
@@ -77,13 +83,15 @@ class Console(MultiService, urwid.WidgetWrap):
         """
         logger.debug("command=%s, args='%s'" % (cmd, args))
         if cmd == 'search':
+            from terane.commands.console.search import Searcher
             searcher = Searcher(args)
             return self.switcher.addWindow(searcher)
         if cmd == 'load':
+            from terane.commands.console.outfile import Outfile
             outfile = Outfile(args)
             return self.switcher.addWindow(outfile)
         if cmd == 'quit':
-            return reactor.stop()
+            return self.quit()
         # forward other commands to the active window
         return self.switcher.command(cmd, args)
 
@@ -100,8 +108,7 @@ class Console(MultiService, urwid.WidgetWrap):
         if self.executecmd != None:
             cmdline = self.executecmd.split(None, 1)
             self.command(cmdline[0], cmdline[1])
-        self._root = root
-        self._ui.set_body(self._root)
+        self._ui.set_body(self)
         ev = urwid.TwistedEventLoop(reactor=reactor)
         self._loop = urwid.MainLoop(self._ui, 
             palette=self._palette,
