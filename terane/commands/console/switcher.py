@@ -59,7 +59,7 @@ class WindowSwitcher(MultiService, urwid.WidgetWrap, urwid.ListWalker):
             if key == 'down' or key == 'j':
                 self._windowlist.keypress(size, 'down')
                 self._windowlist.set_focus(self._focus + 1, 'above')
-            if key == 'enter':
+            if key == 'enter' and len(self) > 0:
                 self.jumpToWindow(self[self._focus])
             return None
         if self._curr != None:
