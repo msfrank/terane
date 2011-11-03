@@ -148,7 +148,7 @@ class Error(urwid.WidgetWrap):
         urwid.WidgetWrap.__init__(self, self._frame)
 
     def keypress(self, size, key):
-        console._ui.set_body(console._root)
+        console._ui.set_body(console)
 
 
 console = Console()
