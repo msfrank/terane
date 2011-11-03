@@ -34,19 +34,19 @@ class Searcher(Window):
         self._query = args
         self._results = ResultsListbox()
         self._url = "http://%s/XMLRPC" % console.host
-        logger.debug("using proxy url %s" % url)
+        logger.debug("using proxy url %s" % self._url)
         Window.__init__(self, title, self._results)
 
     def startService(self):
-        logger.debug("startService")
         # make the xmlrpc search request
-        proxy = Proxy(url, allowNone=True)
+        proxy = Proxy(self._url, allowNone=True)
         deferred = proxy.callRemote('search', self._query)
         deferred.addCallback(self._getResult)
         deferred.addErrback(self._getError)
+        logger.debug("started search using query '%s'" % self._query)
 
     def stopService(self):
-        logger.debug("stopService")
+        logger.debug("stopped search")
 
     @useMainThread
     def _getResult(self, results):
