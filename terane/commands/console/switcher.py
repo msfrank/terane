@@ -63,7 +63,7 @@ class WindowSwitcher(MultiService, urwid.WidgetWrap, urwid.ListWalker):
                 self.jumpToWindow(self[self._focus])
             return None
         if self._curr != None:
-            return self._curr.window.keypress(size, key)
+            return self._curr.keypress(size, key)
         return key
 
     def command(self, cmd, args):
@@ -99,7 +99,7 @@ class WindowSwitcher(MultiService, urwid.WidgetWrap, urwid.ListWalker):
             return None
         # forward other commands to the active window
         if self._curr != None:
-            return self._curr.window.command(cmd, args)
+            return self._curr.command(cmd, args)
         return None
 
     def showWindowlist(self):
@@ -122,7 +122,7 @@ class WindowSwitcher(MultiService, urwid.WidgetWrap, urwid.ListWalker):
         if self._curr == None:
             self._frame.set_body(self._blank)
         else:
-            self._frame.set_body(self._curr.window)
+            self._frame.set_body(self._curr)
         self._frame.set_focus('footer')
 
     def findWindow(self, target):
@@ -133,7 +133,7 @@ class WindowSwitcher(MultiService, urwid.WidgetWrap, urwid.ListWalker):
                     return curr
                 if isinstance(target, str) and re.search(target, curr.title) != None:
                     return curr
-                if curr.window == target:
+                if curr == target:
                     return curr
                 curr = curr.next
                 if curr == self._windows:
@@ -185,7 +185,7 @@ class WindowSwitcher(MultiService, urwid.WidgetWrap, urwid.ListWalker):
         if self._windows == None:
             return
         self._curr = self._curr.next
-        self._frame.set_body(self._curr.window)
+        self._frame.set_body(self._curr)
         self._frame.set_focus('footer')
 
     def prevWindow(self):
@@ -198,12 +198,12 @@ class WindowSwitcher(MultiService, urwid.WidgetWrap, urwid.ListWalker):
         if self._windows == None:
             return
         self._curr = self._curr.prev
-        self._frame.set_body(self._curr.window)
+        self._frame.set_body(self._curr)
         self._frame.set_focus('footer')
 
     def jumpToWindow(self, handle):
         self._curr = handle
-        self._frame.set_body(self._curr.window)
+        self._frame.set_body(self._curr)
         self._frame.set_focus('footer')
 
     def closeWindow(self, window):
@@ -222,10 +222,13 @@ class WindowSwitcher(MultiService, urwid.WidgetWrap, urwid.ListWalker):
             if self._nwindows == 0:
                 self._curr = None
             else:
-                # display the new current window   
                 self._curr = window.next
-                self._frame.set_body(self._curr.window)
-                self._frame.set_focus('footer')
+        # display the new current window, or a blank window if there are none
+        if self._curr != None:
+            self._frame.set_body(self._curr)
+        else:
+            self._frame.set_body(self._blank)
+        self._frame.set_focus('footer')
         self.removeService(window)
         logger.debug("closed window #%i: '%s'" % (window.wid,window.title))
 
