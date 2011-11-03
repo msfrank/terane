@@ -105,9 +105,6 @@ class Input(urwid.FlowWidget):
                 self._offset = 0
                 self._mode = Input.RFIND_MODE
                 key = None
-            elif key == 'q':
-                reactor.stop()
-                key = None
         # otherwise we are in one of the command input modes (COMMAND, FIND, 
         # RFIND).  in this mode, backspace or delete removes the last
         # character in the input buffer, enter or return executes the command,
