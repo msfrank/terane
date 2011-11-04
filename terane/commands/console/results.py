@@ -81,11 +81,15 @@ class Result(urwid.WidgetWrap):
 
 class ResultsListWalker(urwid.ListWalker):
     def __init__(self):
-        self.results = []
-        self.pos = 0
+        self.reset()
 
     def append(self, result):
         self.results.append(result)
+        self._modified()
+
+    def reset(self):
+        self.results = []
+        self.pos = 0
         self._modified()
 
     def __iter__(self):
@@ -182,6 +186,8 @@ class ResultsListbox(urwid.WidgetWrap):
             self.find(args)
         if cmd == 'rfind':
             self.rfind(args)
+        if cmd == 'clear':
+            self.clear()
         if cmd == 'save':
             self.save(args)
 
@@ -270,6 +276,9 @@ class ResultsListbox(urwid.WidgetWrap):
             r.reformat(self)
         self._results.reset_focus()
         self._results._modified()
+
+    def clear(self):
+        self._results.reset()
 
     def save(self, args):
         logger.debug("saving search to %s" % args)
