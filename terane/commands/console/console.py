@@ -86,6 +86,10 @@ class Console(MultiService, urwid.WidgetWrap):
             from terane.commands.console.search import Searcher
             searcher = Searcher(args)
             return self.switcher.addWindow(searcher)
+        if cmd == 'tail':
+            from terane.commands.console.tail import Tailer
+            tailer = Tailer(args)
+            return self.switcher.addWindow(tailer)
         if cmd == 'load':
             from terane.commands.console.outfile import Outfile
             outfile = Outfile(args)
