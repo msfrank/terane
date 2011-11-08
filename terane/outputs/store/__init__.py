@@ -100,6 +100,9 @@ class StoreOutput(Output):
     def lastId(self):
         return self._index.last_id()
 
+    def schema(self):
+        return self._index.schema
+
 class StoreOutputPlugin(Plugin):
 
     implements(IPlugin)

@@ -35,6 +35,8 @@ class ISearchableOutput(IOutput):
         "Return the timestamp of the last event stored."
     def lastId():
         "Return the document ID of the last event stored."
+    def schema():
+        "Return the schema of the Output."
 
 class Output(Service):
     """

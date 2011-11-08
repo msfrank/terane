@@ -53,6 +53,7 @@ class QueryManager(Service):
 
     def search(self, query, indices=None, limit=100, restrictions=None, sorting=None, reverse=False, fields=None):
         query = parseSearchQuery(query)
+        logger.trace("parsed query: %s" % str(query))
         # look up the named indices
         if indices == None:
             indices = self._searchables.values()
@@ -144,7 +145,7 @@ class QueryManager(Service):
         meta['size'] = index.size()
         meta['last-modified'] = index.lastModified()
         meta['last-id'] = index.lastId()
-        results.extend([{'field':{'value':name}} for name in index.schema.names()], **meta)
+        results.extend([{'field':{'value':name}} for name in index.schema().names()], **meta)
         return results
 
     def listIndices(self):
