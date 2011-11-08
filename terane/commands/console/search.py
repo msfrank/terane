@@ -34,19 +34,17 @@ class Searcher(Window):
         self._query = args
         self._results = ResultsListbox()
         self._url = "http://%s/XMLRPC" % console.host
-        logger.debug("using proxy url %s" % self._url)
+        self._deferred = None
         Window.__init__(self, title, self._results)
 
     def startService(self):
-        # make the xmlrpc search request
-        proxy = Proxy(self._url, allowNone=True)
-        deferred = proxy.callRemote('search', self._query)
-        deferred.addCallback(self._getResult)
-        deferred.addErrback(self._getError)
-        logger.debug("started search using query '%s'" % self._query)
+        logger.debug("started searcher")
+        self.reload()
 
     def stopService(self):
-        logger.debug("stopped search")
+        if self._deferred != None:
+            self._deferred.cancel()
+        logger.debug("stopped searcher")
 
     @useMainThread
     def _getResult(self, results):
@@ -77,7 +75,19 @@ class Searcher(Window):
             console.error(errtext)
             logger.debug(errtext)
 
+    def reload(self):
+        if self._deferred != None:
+            self._deferred.cancel()
+        self._results.clear()
+        proxy = Proxy(self._url, allowNone=True)
+        self._deferred = proxy.callRemote('search', self._query)
+        self._deferred.addCallback(self._getResult)
+        self._deferred.addErrback(self._getError)
+        logger.debug("searching with query '%s'" % self._query)
+
     def command(self, cmd, args):
+        if cmd == 'reload':
+            return self.reload()
         if self._results != None:
             return self._results.command(cmd, args)
         return None
