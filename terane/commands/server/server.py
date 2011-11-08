@@ -39,7 +39,7 @@ class Server(MultiService):
         section = settings.section('server')
         self.pidfile = section.getPath('pid file', '/var/run/terane/server.pid')
         self.debug = section.getBoolean('debug', False)
-        logconfigfile = section.getString('log config file', '/etc/terane/server.logconfig')
+        logconfigfile = section.getString('log config file', "%s.logconfig" % settings.appname)
         if section.getBoolean("debug", False):
             startLogging(StdoutHandler(), DEBUG, logconfigfile)
         else:
