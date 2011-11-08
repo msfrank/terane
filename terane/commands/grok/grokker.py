@@ -34,9 +34,10 @@ class Grokker(object):
         # load configuration
         section = settings.section("grok")
         self.host = section.getString("host", 'localhost:45565')
+        logconfigfile = section.getString('log config file', "%s.logconfig" % settings.appname)
         # configure server logging
         if section.getBoolean("debug", False):
-            startLogging(StdoutHandler(), DEBUG)
+            startLogging(StdoutHandler(), DEBUG, logconfigfile)
         else:
             startLogging(None)
         try:

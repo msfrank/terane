@@ -25,6 +25,9 @@ def grok_main():
         settings.addOption("-H","--host", ("grok","host"),
             help="Connect to terane server HOST", metavar="HOST"
             )
+        settings.addOption('',"--log-config", ("grok","log config file"),
+            help="use logging configuration file FILE", metavar="FILE"
+            )
         settings.addSwitch("-d","--debug", ("grok","debug"),
             help="Print debugging information"
             )
