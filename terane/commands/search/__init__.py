@@ -40,6 +40,9 @@ def search_main():
         settings.addOption("-f","--fields", ("search","display fields"),
             help="Display only the specified FIELDS (comma-separated)", metavar="FIELDS"
             )
+        settings.addOption('',"--log-config", ("search","log config file"),
+            help="use logging configuration file FILE", metavar="FILE"
+            )
         settings.addSwitch("-d","--debug", ("search","debug"),
             help="Print debugging information"
             )
