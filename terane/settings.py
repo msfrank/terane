@@ -44,11 +44,12 @@ class Settings(object):
     def __init__(self, usage=None, description=None):
         self._parser = OptionParser(version="%prog " + versionstring(),
             usage=usage, description=description)
+        self.appname = self._parser.get_prog_name()
         self._parser.add_option("-c","--config-file",
             dest="config_file",
             help="use global configuration file FILE",
             metavar="FILE",
-            default="/etc/terane/terane.conf"
+            default="/etc/terane/%s.conf" % self.appname
             )
         self._config = SafeConfigParser()
         self._overrides = SafeConfigParser()
@@ -109,9 +110,12 @@ class Settings(object):
             action="callback", callback=self._switchCallback, callback_args=(override,reverse)
             )
 
-    def load(self):
+    def load(self, needsconfig=False):
         """
         Load configuration from the configuration file and from command-line arguments.
+
+        :param needsconfig: True if the config file must be present for the application to function.
+        :type needsconfig: bool
         """
         # parse command line arguments
         opts,self._args = self._parser.parse_args()
@@ -122,7 +126,9 @@ class Settings(object):
                 self._config.readfp(f, path)
             logger.debug("loaded settings from %s" % path)
         except EnvironmentError, e:
-            raise ConfigureError("failed to read configuration %s: %s" % (path,e.strerror))
+            if needsconfig:
+                raise ConfigureError("failed to read configuration %s: %s" % (path,e.strerror))
+            logger.info("didn't load configuration %s: %s" % (path,e.strerror))
         # merge command line settings with config file settings
         for section in self._overrides.sections():
             for name,value in self._overrides.items(section):
