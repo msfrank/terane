@@ -193,7 +193,7 @@ def parseIDTo(pstr, loc, tokens):
 idTo.setParseAction(parseIDTo)
 subjectId = pp.Suppress('ID') + idFrom + pp.Optional(idTo) | pp.Suppress('ID') + idTo + pp.Optional(idFrom) 
 def parseSubjectId(tokens):
-    docid = {'from': 0, 'to': 4294967295, 'fromExcl': False, 'toExcl': False}
+    docid = {'from': 0, 'to': 2**64, 'fromExcl': False, 'toExcl': False}
     docid.update(tokens[0])
     if len(tokens) > 1:
         docid.update(tokens[1])
