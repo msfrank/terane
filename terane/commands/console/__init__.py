@@ -28,6 +28,9 @@ def console_main():
         settings.addOption("-e","--execute", ("console","execute command"),
             help="Execute CMD after startup", metavar="CMD"
             )
+        settings.addOption('',"--log-config", ("console","log config file"),
+            help="use logging configuration file FILE", metavar="FILE"
+            )
         settings.addSwitch("-d","--debug", ("console","debug"),
             help="Print debugging information"
             )

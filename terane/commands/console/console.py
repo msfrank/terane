@@ -49,6 +49,8 @@ class Console(MultiService, urwid.WidgetWrap):
         self.host = section.getString("host", 'localhost:45565')
         self.executecmd = section.getString('execute command', None)
         self.debug = section.getBoolean("debug", False)
+        self.logconfigfile = section.getString('log config file', "%s.logconfig" % settings.appname)
+
 
     def startService(self):
         MultiService.startService(self)
@@ -122,7 +124,7 @@ class Console(MultiService, urwid.WidgetWrap):
         self._loop.run()
         logger.debug("exited urwid main loop")
         if self.debug == True:
-            startLogging(StdoutHandler(), DEBUG)
+            startLogging(StdoutHandler(), DEBUG, self.logconfigfile)
         return 0
 
     def _unhandled_input(self, unhandled):
