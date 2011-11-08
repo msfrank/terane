@@ -224,6 +224,7 @@ def startLogging(observer, level=INFO, configfile=None):
                     _setLevel(logger, WARNING)
                 elif level == 'ERROR':
                     _setLevel(logger, ERROR)
+            _loggerslogger.info("loaded log config file %s" % configfile)
     # flush all buffered log messages to the real observer
     while not _records.empty():
         _ObserverWrapper(_records.get())
