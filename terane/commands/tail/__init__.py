@@ -41,6 +41,9 @@ def tail_main():
         settings.addOption("-f","--fields", ("tail","display fields"),
             help="Display only the specified FIELDS (comma-separated)", metavar="FIELDS"
             )
+        settings.addOption('',"--log-config", ("tail","log config file"),
+            help="use logging configuration file FILE", metavar="FILE"
+            )
         settings.addSwitch("-d","--debug", ("tail", "debug"),
             help="Print debugging information"
             )

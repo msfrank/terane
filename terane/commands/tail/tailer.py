@@ -39,8 +39,9 @@ class Tailer(object):
         # concatenate the command args into the query string
         self.query = ' '.join(settings.args())
         # configure server logging
+        logconfigfile = section.getString('log config file', "%s.logconfig" % settings.appname)
         if section.getBoolean("debug", False):
-            startLogging(StdoutHandler(), DEBUG)
+            startLogging(StdoutHandler(), DEBUG, logconfigfile)
         else:
             startLogging(None)
 
