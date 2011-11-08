@@ -80,16 +80,27 @@ class Result(urwid.WidgetWrap):
         self._text.set_text(text)
 
 class ResultsListWalker(urwid.ListWalker):
-    def __init__(self):
+    def __init__(self, maxsize=1000):
+        self.maxsize = maxsize
         self.reset()
 
     def append(self, result):
         self.results.append(result)
+        if len(self.results) > self.maxsize:
+            self.results.pop(0)
         self._modified()
 
     def reset(self):
         self.results = []
         self.pos = 0
+        self._modified()
+
+    def resize(self, maxsize):
+        self.maxsize = maxsize
+        remove = self.maxsize - len(self.results)
+        while remove > 0:
+            self.results.pop(0)
+            remove -= 1
         self._modified()
 
     def __iter__(self):
@@ -148,7 +159,6 @@ class ResultsListbox(urwid.WidgetWrap):
         self.hidefields = []
         self.filters = []
         self.pattern = None
-        # build the listbox widget
         self._listbox = urwid.ListBox(self._results)
         urwid.WidgetWrap.__init__(self, self._listbox)
  
@@ -161,21 +171,16 @@ class ResultsListbox(urwid.WidgetWrap):
     def keypress(self, size, key):
         if key == 'up' or key == 'k':
             self._listbox.keypress(size, 'up')
-            return None
         if key == 'page up' or key == 'ctrl u':
             self._listbox.keypress(size, 'page up')
-            return None
         if key == 'down' or key == 'j':
             self._listbox.keypress(size, 'down')
-            return None
         if key == 'page down' or key == 'ctrl d':
             self._listbox.keypress(size, 'page down')
-            return None
         if key == 'c':
             self.collapsed = not self.collapsed
             for r in self._results:
                 r.reformat(self)
-            return None
 
     def command(self, cmd, args):
         if cmd == 'filter':
