@@ -96,9 +96,9 @@ TOC_new_DID (terane_TOC *toc)
 }
 
 /*
- * terane_TOC_get_metadata: retrieve a metadata item
+ * terane_TOC_get_meta: get a TOC metadata value
  *
- * callspec: TOC.get_metadata(txn, id)
+ * callspec: TOC.get_meta(txn, id)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   id (string): The metadata id
@@ -108,7 +108,7 @@ TOC_new_DID (terane_TOC *toc)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to retrieve the record
  */
 PyObject *
-terane_TOC_get_metadata (terane_TOC *self, PyObject *args)
+terane_TOC_get_meta (terane_TOC *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     const char *id = NULL;
@@ -158,9 +158,9 @@ terane_TOC_get_metadata (terane_TOC *self, PyObject *args)
 }
 
 /*
- * terane_TOC_set_metadata: set metadata for the specified id
+ * terane_TOC_set_meta: set a TOC metadata value
  *
- * callspec: TOC.set_metadata(txn, id, value)
+ * callspec: TOC.set_meta(txn, id, value)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  *   id (string): The metadata id
@@ -170,7 +170,7 @@ terane_TOC_get_metadata (terane_TOC *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
  */
 PyObject *
-terane_TOC_set_metadata (terane_TOC *self, PyObject *args)
+terane_TOC_set_meta (terane_TOC *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     const char *id = NULL;
@@ -918,9 +918,9 @@ error:
 /* TOC methods declaration */
 PyMethodDef _TOC_methods[] =
 {
-    { "get_metadata", (PyCFunction) terane_TOC_get_metadata, METH_VARARGS,
+    { "get_meta", (PyCFunction) terane_TOC_get_meta, METH_VARARGS,
         "Get a TOC metadata value." },
-    { "set_metadata", (PyCFunction) terane_TOC_set_metadata, METH_VARARGS,
+    { "set_meta", (PyCFunction) terane_TOC_set_meta, METH_VARARGS,
         "Set a TOC metadata value." },
     { "get_field", (PyCFunction) terane_TOC_get_field, METH_VARARGS,
         "Get a field in the TOC." },

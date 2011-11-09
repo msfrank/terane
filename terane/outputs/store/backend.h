@@ -87,8 +87,8 @@ typedef struct _terane_Segment {
     terane_TOC *toc;
     terane_Env *env;
     char *name;
+    DB *metadata;
     DB *documents;
-    unsigned long ndocuments;
     terane_Field **fields;
     unsigned long nfields;
     int deleted;
@@ -109,8 +109,8 @@ PyObject *terane_Txn_commit (terane_Txn *self);
 PyObject *terane_Txn_abort (terane_Txn *self);
 
 terane_DID_num TOC_new_DID (terane_TOC *toc);
-PyObject *terane_TOC_get_metadata (terane_TOC *self, PyObject *args);
-PyObject *terane_TOC_set_metadata (terane_TOC *self, PyObject *args);
+PyObject *terane_TOC_get_meta (terane_TOC *self, PyObject *args);
+PyObject *terane_TOC_set_meta (terane_TOC *self, PyObject *args);
 PyObject *terane_TOC_get_field (terane_TOC *self, PyObject *args);
 PyObject *terane_TOC_add_field (terane_TOC *self, PyObject *args);
 PyObject *terane_TOC_remove_field (terane_TOC *self, PyObject *args);
@@ -126,6 +126,8 @@ PyObject *terane_TOC_delete_segment (terane_TOC *toc, PyObject *args);
 PyObject *terane_TOC_close (terane_TOC *toc);
 
 PyObject *terane_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds);
+PyObject *terane_Segment_get_meta (terane_Segment *self, PyObject *args);
+PyObject *terane_Segment_set_meta (terane_Segment *self, PyObject *args);
 PyObject *terane_Segment_get_field_meta (terane_Segment *self, PyObject *args);
 PyObject *terane_Segment_set_field_meta (terane_Segment *self, PyObject *args);
 DB *Segment_get_field_DB (terane_Segment *store, terane_Txn *txn, PyObject *fieldname);
