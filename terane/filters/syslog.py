@@ -172,7 +172,7 @@ class SyslogFilter(Filter):
         data = data[len(timestamp):]
         # parse the timestamp
         try:
-            fields['ts'] = dateutils.parser.parse(timestamp).isoformat()
+            fields['ts'] = dateutils.parser.parse(timestamp)
         except Exception, e:
             raise FilterError("[filter:%s] failed to parse date '%s': %s" % (self.name, timestamp, e))
         # the remainder of the data consists of the HOSTNAME, a space, then the MSG
