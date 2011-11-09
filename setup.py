@@ -74,6 +74,7 @@ setup(
             'terane/outputs/store/backend-segment.c',
             'terane/outputs/store/backend-segment-doc.c',
             'terane/outputs/store/backend-segment-field.c',
+            'terane/outputs/store/backend-segment-meta.c',
             'terane/outputs/store/backend-segment-word.c',
             'terane/outputs/store/backend-toc.c',
             'terane/outputs/store/backend-txn.c',

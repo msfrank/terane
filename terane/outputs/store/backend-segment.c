@@ -28,11 +28,20 @@ _Segment_close (terane_Segment *segment)
     int i, dbret;
     terane_Field *field;
 
+    /* close the metadata db */
+    if (segment->metadata != NULL) {
+        dbret = segment->metadata->close (segment->metadata, 0);
+        if (dbret != 0)
+            PyErr_Format (terane_Exc_Error, "Failed to close _metadata DB: %s",
+                db_strerror (dbret));
+    }
+    segment->metadata = NULL;
+
     /* close the documents db */
     if (segment->documents != NULL) {
         dbret = segment->documents->close (segment->documents, 0);
         if (dbret != 0)
-            PyErr_Format (terane_Exc_Error, "Failed to close segment documents: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to close _documents DB: %s",
                 db_strerror (dbret));
     }
     segment->documents = NULL;
@@ -133,7 +142,6 @@ terane_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     terane_Segment *self;
     DB_TXN *txn = NULL;
     db_recno_t segment_id = 0;
-    DB_BTREE_STAT *stats = NULL;
     int exists, dbret;
 
     /* allocate the Segment object */
@@ -145,8 +153,8 @@ terane_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     self->toc = NULL;
     self->env = NULL;
     self->name = NULL;
+    self->metadata = NULL;
     self->documents = NULL;
-    self->ndocuments = 0;
     self->fields = NULL;
     self->nfields = 0;
     self->deleted = 0;
@@ -185,7 +193,24 @@ terane_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto error;
     }
 
-    /* create the DB handle for the documents segment */
+    /* create the DB handle for metadata */
+    dbret = db_create (&self->metadata, self->env->env, 0);
+    if (dbret != 0) {
+        PyErr_Format (terane_Exc_Error, "Failed to create handle for _metadata: %s",
+            db_strerror (dbret));
+        goto error;
+    }
+
+    /* open the metadata DB */
+    dbret = self->metadata->open (self->metadata, txn, self->name,
+        "_metadata", DB_BTREE, DB_CREATE | DB_THREAD, 0);
+    if (dbret != 0) {
+        PyErr_Format (terane_Exc_Error, "Failed to open _metadata: %s",
+            db_strerror (dbret));
+        goto error;
+    }
+
+    /* create the DB handle for documents */
     dbret = db_create (&self->documents, self->env->env, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create handle for _documents: %s",
@@ -193,7 +218,7 @@ terane_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto error;
     }
 
-    /* open the documents segment */
+    /* open the documents DB */
     dbret = self->documents->open (self->documents, txn, self->name,
         "_documents", DB_BTREE, DB_CREATE | DB_THREAD, 0);
     if (dbret != 0) {
@@ -201,22 +226,6 @@ terane_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
             db_strerror (dbret));
         goto error;
     }
-
-    /* get an initial count of documents.  we don't wrap this call in
-     * a transaction because we aren't making any modifications, and there
-     * is no possibility of external modification during this call.
-     */
-    dbret = self->documents->stat (self->documents, txn, &stats, 0);
-    if (dbret != 0) {
-        if (stats)
-            PyMem_Free (stats);
-        PyErr_Format (terane_Exc_Error, "Failed to get document count: %s",
-            db_strerror (dbret));
-        goto error;
-    }
-    self->ndocuments = (unsigned long) stats->bt_nkeys;
-    if (stats)
-        PyMem_Free (stats);
 
     /* commit new databases */
     dbret = txn->commit (txn, 0);
@@ -242,10 +251,14 @@ error:
 /* Segment methods declaration */
 PyMethodDef _Segment_methods[] =
 {
+    { "get_meta", (PyCFunction) terane_Segment_get_meta, METH_VARARGS,
+        "Get a Segment metadata value." },
+    { "set_meta", (PyCFunction) terane_Segment_set_meta, METH_VARARGS,
+        "Set a Segment metadata value." },
     { "get_field_meta", (PyCFunction) terane_Segment_get_field_meta, METH_VARARGS,
-        "Get metadata for an inverted index." },
+        "Get a field metadata value." },
     { "set_field_meta", (PyCFunction) terane_Segment_set_field_meta, METH_VARARGS,
-        "Set metadata for an inverted index." },
+        "Set a field metadata value." },
     { "new_doc", (PyCFunction) terane_Segment_new_doc, METH_VARARGS,
         "Create a new document." },
     { "get_doc", (PyCFunction) terane_Segment_get_doc, METH_VARARGS,
@@ -258,8 +271,6 @@ PyMethodDef _Segment_methods[] =
         "Returns True if the segment contains the specified document." },
     { "iter_docs", (PyCFunction) terane_Segment_iter_docs, METH_VARARGS,
         "Iterates through all documents in the index." },
-    { "count_docs", (PyCFunction) terane_Segment_count_docs, METH_NOARGS,
-        "Returns the total number of documents in the index." },
     { "first_doc", (PyCFunction) terane_Segment_first_doc, METH_VARARGS,
         "Return the first (lowest numbered) document." },
     { "last_doc", (PyCFunction) terane_Segment_last_doc, METH_VARARGS,

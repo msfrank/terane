@@ -60,8 +60,6 @@ terane_Segment_new_doc (terane_Segment *self, PyObject *args)
             return PyErr_Format (terane_Exc_Error, "Failed to create document: %s",
                 db_strerror (dbret));
     }
-    /* increment the internal document count */
-    self->ndocuments += 1;
     Py_RETURN_NONE;
 }
 
@@ -328,20 +326,6 @@ terane_Segment_iter_docs (terane_Segment *self, PyObject *args)
     if (iter == NULL)
         cursor->close (cursor);
     return iter;
-}
-
-/*
- * terane_Segment_count_docs: Return the number of documents in the db.
- *
- * callspec: Segment.count_docs()
- * parameters: None
- * returns: The number of documents in the segment.
- * exceptions: None
- */
-PyObject *
-terane_Segment_count_docs (terane_Segment *self)
-{
-    return PyLong_FromUnsignedLong (self->ndocuments);
 }
 
 /*
