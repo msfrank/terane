@@ -69,7 +69,7 @@ Query Grammar
 <TailQuery>       ::= <TailOrGroup>
 """
 
-import datetime
+import datetime, dateutil
 import pyparsing as pp
 from whoosh.query import Prefix, DateRange, NumericRange, And, Or, Not
 
@@ -114,6 +114,16 @@ def parseSubjectTerm(tokens):
     return Prefix(tokens[0], unicode(tokens[1]))
 subjectTerm.setParseAction(parseSubjectTerm)
 
+def makeUTC(dt):
+    # if no timezone is specified, then assume local tz
+    if dt.tzinfo == None:
+        dt = dt.replace(tzinfo=dateutil.tz.tzlocal())
+    # convert to UTC, if necessary
+    if not dt.tzinfo == dateutil.tz.tzutc():
+        dt = dt.astimezone(dateutil.tz.tzutc())
+    # return a timezone-naive datetime object for Whoosh
+    return dt.replace(tzinfo=None) - dt.utcoffset()
+
 # absoluteDate
 dateOnly = pp.Combine(pp.Word(pp.nums) + '/' + pp.Word(pp.nums) + '/' + pp.Word(pp.nums))
 dateTime = dateOnly + pp.Combine('T' + pp.Word(pp.nums) + ':' + pp.Word(pp.nums) + ':' + pp.Word(pp.nums))
@@ -121,8 +131,8 @@ absoluteDate = dateTime | dateOnly
 def parseAbsoluteDate(pstr, loc, tokens):
     try:
         if len(tokens) > 1:
-            return datetime.datetime.strptime(tokens[0] + tokens[1], "%Y/%m/%dT%H:%M:%S")
-        return datetime.datetime.strptime(tokens[0], "%Y/%m/%d")
+            return makeUTC(datetime.datetime.strptime(tokens[0] + tokens[1], "%Y/%m/%dT%H:%M:%S"))
+        return makeUTC(datetime.datetime.strptime(tokens[0], "%Y/%m/%d"))
     except ValueError, e:
         raise ParseFatalException(pstr, loc, "Invalid date specification")
 absoluteDate.setParseAction(parseAbsoluteDate)
@@ -140,7 +150,7 @@ daysAgo.setParseAction(lambda tokens: datetime.timedelta(days=int(tokens[0])))
 weeksAgo = positiveNumber + pp.Suppress(pp.oneOf('WEEKS WEEK'))
 weeksAgo.setParseAction(lambda tokens: datetime.timedelta(weeks=int(tokens[0])))
 relativeDate = ( secondsAgo | minutesAgo | hoursAgo | daysAgo | weeksAgo ) + pp.Suppress('AGO')
-relativeDate.setParseAction(lambda tokens: datetime.datetime.now() - tokens[0])
+relativeDate.setParseAction(lambda tokens: makeUTC(datetime.datetime.now()) - tokens[0])
 
 # subjectDate
 dateSpec = relativeDate | absoluteDate
@@ -161,7 +171,8 @@ def parseDateTo(tokens):
 dateTo.setParseAction(parseDateTo)
 subjectDate = pp.Suppress('DATE') + dateFrom + pp.Optional(dateTo) | pp.Suppress('DATE') + dateTo + pp.Optional(dateFrom) 
 def parseSubjectDate(tokens):
-    date = {'from': datetime.datetime.min, 'to': datetime.datetime.now(), 'fromExcl': False, 'toExcl': False}
+
+    date = {'from': makeUTC(datetime.datetime.min), 'to': makeUTC(datetime.datetime.now()), 'fromExcl': False, 'toExcl': False}
     date.update(tokens[0])
     if len(tokens) > 1:
         date.update(tokens[1])
