@@ -32,20 +32,15 @@
 # limitations under the License.
 
 from time import clock as now
-from json import JSONDecoder
 from heapq import nlargest, nsmallest
 from bisect import bisect_right
 from whoosh.reading import IndexReader as WhooshIndexReader
 from whoosh.reading import MultiReader as WhooshMultiReader
 from whoosh.matching import Matcher as WhooshMatcher, ReadTooFar
+from terane.outputs.store.encoding import json_encode, json_decode
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.reading')
-
-decoder = JSONDecoder()
-def json_decode(u):
-    # return the specified JSON string as a python object
-    return decoder.decode(u)
 
 class SegmentReader(WhooshIndexReader):
     def __init__(self, ix, segment):
@@ -107,7 +102,8 @@ class SegmentReader(WhooshIndexReader):
     def doc_count_all(self):
         # return the total number of documents in the store.
         logger.trace("IndexReader.doc_count_all()")
-        return self._segment.count_docs()
+        last_update = json_decode(self._segment.get_meta(None, 'last-update'))
+        return last_update['size']
     
     def doc_count(self):
         # return the total number of documents in the store.  This returns the
@@ -117,7 +113,8 @@ class SegmentReader(WhooshIndexReader):
         # deleted documents (we just delete em :) these two values are always the
         # same.
         logger.trace("IndexReader.doc_count()")
-        return self._segment.count_docs()
+        last_update = json_decode(self._segment.get_meta(None, 'last-update'))
+        return last_update['size']
     
     def field_length(self, fieldname):
         # return the total number of terms in the specified field. 

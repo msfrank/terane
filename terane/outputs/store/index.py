@@ -31,7 +31,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pickle
+import pickle, time
 import datetime, dateutil.parser, dateutil.tz
 from whoosh.index import Index as WhooshIndex
 from whoosh.fields import FieldType, TEXT, DATETIME, NUMERIC
@@ -42,6 +42,7 @@ from terane.outputs.store.backend import TOC, Segment, Txn
 from terane.outputs.store.schema import Schema
 from terane.outputs.store.reading import MultiReader
 from terane.outputs.store.writing import IndexWriter
+from terane.outputs.store.encoding import json_encode, json_decode
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.index')
@@ -71,46 +72,37 @@ class Index(WhooshIndex):
             # load schema
             self.schema = Schema(self._env, self._toc)
             self._segments = []
-            self._size = 0
+            self._indexsize = 0
+            self._currsize = 0
             self._lastmodified = 0
             self._lastid = 0
             # load data segments
-            nsegs = 0
             for segmentid in self._toc.iter_segments(None):
                 segment = Segment(self._toc, segmentid)
-                # get document count from each segment
-                self._size += segment.count_docs()
+                last_update = json_decode(segment.get_meta(None, 'last-update'))
+                self._currsize = last_update['size']
+                self._indexsize += last_update['size']
+                if last_update['last-id'] > self._lastid:
+                    self._lastid = last_update['last-id']
+                if last_update['last-modified'] > self._lastmodified:
+                    self._lastmodified = last_update['last-modified']
                 self._segments.append((segment, segmentid))
             if self._segments == []:
                 with Txn(self._env) as txn:
                     segmentid = self._toc.new_segment(txn)
                 segment = Segment(self._toc, segmentid)
+                with Txn(self._env) as txn:
+                    segment.set_meta(txn, 'created-on', json_encode(int(time.time())))
+                    last_update = {'size': 0, 'last-id': 0, 'last-modified': 0}
+                    segment.set_meta(txn, 'last-update', json_encode(last_update))
                 self._segments.append((segment, segmentid))
                 logger.info("created first segment for new index '%s'" % name)
             else:
                 logger.info("found %i documents in %i segments for index '%s'" % (
-                    self._size, self._toc.count_segments(), name))
+                    self._indexsize, self._toc.count_segments(), name))
+            logger.debug("last document id is %s" % self._lastid)
             # get a reference to the current segment
             self._current = self._segments[-1]
-            # get last-modified timestamp (stored in seconds since the epoch)
-            try:
-                self._lastmodified = int(self._toc.get_metadata(None, 'last-modified'))
-            except KeyError:
-                pass
-            # get the last document id
-            try:
-                self._lastid, unused = self._segments[-1][0].last_doc(None)
-            except IndexError:
-                # the latest segment could be new, in which case it would
-                # have no documents.  in this case, check the second to last
-                # segment.
-                try:
-                    self._lastid, unused = self._segments[-2][0].last_doc(None)
-                except IndexError:
-                    # if we still get IndexError, then we have an empty
-                    # index.  in this case, set self._lastid to 0.
-                    self._lastid = 0
-            logger.debug("last document id is %s" % self._lastid)
             # check for the ts field
             if 'ts' in self.schema:
                 ts = self.schema['ts']
@@ -162,7 +154,7 @@ class Index(WhooshIndex):
         :returns: The total number of documents in the index.
         :rtype: long.
         """
-        return self._size
+        return self._indexsize
     
     def doc_count(self):
         """
@@ -178,7 +170,7 @@ class Index(WhooshIndex):
         :returns: The total number of documents in the index.
         :rtype: long.
         """
-        return self._size
+        return self._indexsize
 
     def is_empty(self):
         """
@@ -186,7 +178,7 @@ class Index(WhooshIndex):
 
         This method overrides WhooshIndex.is_empty().
         """
-        if self._size == 0:
+        if self._indexsize == 0:
             return True
         return False
        
@@ -245,7 +237,11 @@ class Index(WhooshIndex):
                 self.schema.add(key, TEXT(SimpleAnalyzer(), stored=True))
         # write the fields to the index
         with self.writer() as writer:
-            writer.add_document(**_fields)
+            lastid, lastmodified = writer.add_document(**_fields)
+        self._lastid = lastid
+        self._lastmodified = lastmodified
+        self._currsize += 1
+        self._indexsize += 1
 
     def search(self, query, limit=100, sortedby='ts', reverse=False):
         """
@@ -253,12 +249,6 @@ class Index(WhooshIndex):
         """
         searcher = self.searcher()
         return searcher.search(query, limit, sortedby, reverse)
-
-    def current(self):
-        """
-        Return the current Segment.
-        """
-        return self._current
 
     def segments(self):
         """
@@ -273,8 +263,13 @@ class Index(WhooshIndex):
         with Txn(self._env) as txn:
             segmentid = self._toc.new_segment(txn)
         segment = Segment(self._toc, segmentid)
+        with Txn(self._env) as txn:
+            segment.set_meta(txn, 'created-on', json_encode(int(time.time())))
+            last_update = {'size': 0, 'last-id': 0, 'last-modified': 0}
+            segment.set_meta(txn, 'last-update', json_encode(last_update))
         self._segments.append((segment,segmentid))
         self._current = (segment,segmentid)
+        self._currsize = 0
         logger.debug("rotated current segment, new segment is %s.%i" % (self.name, segmentid))
 
     def optimize(self, segment):
@@ -303,9 +298,6 @@ class Index(WhooshIndex):
         Release all resources related to the store.  After calling this method
         the Index instance cannot be used anymore.
         """
-        # save the last-modified date (in seconds since the epoch)
-        with Txn(self._env) as txn:
-            self._toc.set_metadata(txn, 'last-modified', str(self._lastmodified))
         # close each underlying segment
         for segment,segmentid in self._segments:
             segment.close()

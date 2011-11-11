@@ -32,19 +32,13 @@
 # limitations under the License.
 
 import pickle, time
-from json import JSONEncoder
 from whoosh.fields import UnknownFieldError
 from whoosh.writing import IndexWriter as WhooshIndexWriter
-from terane.outputs.store.reading import json_decode
+from terane.outputs.store.encoding import json_encode, json_decode
 from terane.outputs.store.backend import DocExists, Txn
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.writing')
-
-encoder = JSONEncoder(False, False)
-def json_encode(o):
-    # return the specified object as a JSON-encoded unicode string
-    return unicode(encoder.encode(o))
 
 class WriterExpired(Exception):
     pass
@@ -65,9 +59,7 @@ class IndexWriter(WhooshIndexWriter):
         if not self._txn:
             raise WriterExpired("IndexWriter transaction was already commited")
         with Txn(self._ix._env, self._txn) as doc_txn:
-            self._lastid = self._add(doc_txn, fields)
-        self._ix._size += 1
-        self._ix._lastmodified = int(time.time())
+            return self._add(doc_txn, fields)
 
     def _add(self, doc_txn, fields):
         # create a list of valid field names from the passed in fields. a valid
@@ -208,8 +200,18 @@ class IndexWriter(WhooshIndexWriter):
         logger.trace("doc=%s: data=%s" % (doc_id,document))
         self._segment.set_doc(doc_txn, doc_id, document)
 
+        # get the field metadata
+        try:
+            last_update = json_decode(self._segment.get_meta(doc_txn, 'last-update'))
+            last_update['size'] += 1
+            last_update['last-id'] = doc_id
+            last_update['last-modified'] = int(time.time())
+            self._segment.set_meta(doc_txn, 'last-update', json_encode(last_update))
+        except KeyError:
+            fmeta = {'fieldlength': 0, 'maxfreq': 0}
+
         # return the document id
-        return doc_id
+        return doc_id, last_update['last-modified']
     
     def delete_document(self, doc_id, delete=True):
         raise Exception("IndexWriter.delete_document() not implemented")
@@ -228,8 +230,6 @@ class IndexWriter(WhooshIndexWriter):
     def commit(self):
         # commit the event data
         self._txn.commit()
-        # save the last id
-        self._ix._lastid = self._lastid
         # close the writer so it can't be used again
         self._close()
         

@@ -70,8 +70,7 @@ class StoreOutput(Output):
         self._index.add(fields)
         # if the current segment contains more events than specified by
         # _segRotation, then rotate the index to generate a new segment.
-        segment,segmentid = self._index.current()
-        if self._segRotation > 0 and segment.count_docs() >= self._segRotation:
+        if self._segRotation > 0 and self._index._currsize >= self._segRotation:
             self._index.rotate()
             # if the index contains more segments than specified by _segRetention,
             # then delete the oldest segment.
