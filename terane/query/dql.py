@@ -72,6 +72,7 @@ Query Grammar
 import datetime, dateutil
 import pyparsing as pp
 from whoosh.query import Prefix, DateRange, NumericRange, And, Or, Not
+from whoosh.analysis import SimpleAnalyzer
 
 class QuerySyntaxError(BaseException):
     """
@@ -107,14 +108,30 @@ def parseTailQuery(string):
 unreservedChars = pp.alphanums + '_+-*/\,.&|^~@#$%:;'
 fieldSeparator = pp.Suppress('=')
 subjectWord = pp.quotedString | pp.Word(unreservedChars)
-subjectTerm = pp.Optional(pp.Word(unreservedChars) + fieldSeparator) + subjectWord
+subjectTerm = ( pp.Word(unreservedChars) + fieldSeparator + subjectWord ) | subjectWord
 def parseSubjectTerm(tokens):
+    """
+    Parse a subject term.  The term is normalized by splitting on common boundaries,
+    and converting to lowercase.  Internally, a term consists of a field and a value, but
+    if a field is not specified in the query, the 'default' field is used.  Quotes
+    (both single and double) affect the parsing of a term, as well.  Some examples:
+
+    foo             ->  Prefix('default', 'foo')
+    foo-bar         ->  And([Prefix('default','foo'), Prefix('default', 'bar')])
+    foo=bar         ->  Prefix('foo', 'bar')
+    foo="bar baz"   ->  And([Prefix('foo', 'bar'), Prefix('foo', 'baz')])
+    "foo=bar baz"   ->  And([Prefix('default', 'foo', Prefix('default', 'bar'), Prefix('default', 'baz')])
+    """
+    analyze = SimpleAnalyzer()
     if len(tokens) == 1:
-        return Prefix('default', unicode(tokens[0]))
-    return Prefix(tokens[0], unicode(tokens[1]))
+        field,terms = unicode('default'), analyze(unicode(tokens[0]))
+    else:
+        field,terms = tokens[0], analyze(unicode(tokens[1]))
+    return And([Prefix(field, term.text) for term in terms]).normalize()
 subjectTerm.setParseAction(parseSubjectTerm)
 
 def makeUTC(dt):
+    "Convert the supplied datetime object to UTC, if necessary."
     # if no timezone is specified, then assume local tz
     if dt.tzinfo == None:
         dt = dt.replace(tzinfo=dateutil.tz.tzlocal())
@@ -129,12 +146,13 @@ dateOnly = pp.Combine(pp.Word(pp.nums) + '/' + pp.Word(pp.nums) + '/' + pp.Word(
 dateTime = dateOnly + pp.Combine('T' + pp.Word(pp.nums) + ':' + pp.Word(pp.nums) + ':' + pp.Word(pp.nums))
 absoluteDate = dateTime | dateOnly
 def parseAbsoluteDate(pstr, loc, tokens):
+    "Parse an absolute date or datetime."
     try:
         if len(tokens) > 1:
             return makeUTC(datetime.datetime.strptime(tokens[0] + tokens[1], "%Y/%m/%dT%H:%M:%S"))
         return makeUTC(datetime.datetime.strptime(tokens[0], "%Y/%m/%d"))
     except ValueError, e:
-        raise ParseFatalException(pstr, loc, "Invalid date specification")
+        raise ParseFatalException(pstr, loc, "Invalid DATE specification")
 absoluteDate.setParseAction(parseAbsoluteDate)
 
 # relativeDate
@@ -157,6 +175,7 @@ dateSpec = relativeDate | absoluteDate
 optionalExclusive = pp.Optional(pp.Literal('EXCLUSIVE'))
 dateFrom = pp.Suppress('FROM') + dateSpec + optionalExclusive
 def parseDateFrom(tokens):
+    "Parse DATE lower bound."
     date = {'from': tokens[0]}
     if len(tokens) > 1:
         date['fromExcl'] = True
@@ -164,6 +183,7 @@ def parseDateFrom(tokens):
 dateFrom.setParseAction(parseDateFrom)
 dateTo = pp.Suppress('TO') + dateSpec + optionalExclusive
 def parseDateTo(tokens):
+    "Parse DATE upper bound."
     date = {'to': tokens[0]}
     if len(tokens) > 1:
         date['toExcl'] = True
@@ -171,7 +191,7 @@ def parseDateTo(tokens):
 dateTo.setParseAction(parseDateTo)
 subjectDate = pp.Suppress('DATE') + dateFrom + pp.Optional(dateTo) | pp.Suppress('DATE') + dateTo + pp.Optional(dateFrom) 
 def parseSubjectDate(tokens):
-
+    "Parse DATE range."
     date = {'from': makeUTC(datetime.datetime.min), 'to': makeUTC(datetime.datetime.now()), 'fromExcl': False, 'toExcl': False}
     date.update(tokens[0])
     if len(tokens) > 1:
@@ -184,6 +204,7 @@ naturalNumber = '0' | pp.Word(pp.srange('[1-9]'), pp.nums)
 optionalExclusive = pp.Optional(pp.Literal('EXCLUSIVE'))
 idFrom = pp.Suppress('FROM') + naturalNumber + optionalExclusive
 def parseIDFrom(pstr, loc, tokens):
+    "Parse ID lower bound."
     try:
         docid = {'from': long(tokens[0])}
     except ValueError:
@@ -194,6 +215,7 @@ def parseIDFrom(pstr, loc, tokens):
 idFrom.setParseAction(parseIDFrom)
 idTo = pp.Suppress('TO') + naturalNumber + optionalExclusive
 def parseIDTo(pstr, loc, tokens):
+    "Parse ID upper bound."
     try:
         docid = {'to': long(tokens[0])}
     except ValueError:
@@ -204,6 +226,7 @@ def parseIDTo(pstr, loc, tokens):
 idTo.setParseAction(parseIDTo)
 subjectId = pp.Suppress('ID') + idFrom + pp.Optional(idTo) | pp.Suppress('ID') + idTo + pp.Optional(idFrom) 
 def parseSubjectId(tokens):
+    "Parse ID range."
     docid = {'from': 0, 'to': 2**64, 'fromExcl': False, 'toExcl': False}
     docid.update(tokens[0])
     if len(tokens) > 1:
@@ -213,12 +236,14 @@ subjectId.setParseAction(parseSubjectId)
 
 # groupings
 def parseNotGroup(tokens):
+    "Parse NOT statement."
     if len(tokens) == 1:
         q = tokens[0]
     else:
         q = Not(tokens[1])
     return q
 def parseAndGroup(tokens):
+    "Parse AND statement."
     tokens = tokens[0]
     if len(tokens) == 1:
         q = tokens[0]
@@ -230,6 +255,7 @@ def parseAndGroup(tokens):
             i += 1
     return q
 def parseOrGroup(tokens):
+    "Parse OR statement."
     tokens = tokens[0]
     if len(tokens) == 1:
         q = tokens[0]
