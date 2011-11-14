@@ -83,7 +83,9 @@ class Console(MultiService, urwid.WidgetWrap):
         """
         Parse input commands.
         """
-        logger.debug("command=%s, args='%s'" % (cmd, args))
+        if cmd == 'set':
+            name,value = [v.strip() for v in args.strip().split(' ', 1)]
+            return self.setvar(name, value)
         if cmd == 'search':
             from terane.commands.console.search import Searcher
             searcher = Searcher(args)
@@ -100,6 +102,16 @@ class Console(MultiService, urwid.WidgetWrap):
             return self.quit()
         # forward other commands to the active window
         return self.switcher.command(cmd, args)
+
+    def setvar(self, name, value):
+        """
+        Parse runtime variable set command.
+        """
+        if name == 'default-host':
+            logger.debug("set %s = %s" % (name, value))
+            self.host = value
+        else:
+            self.switcher.setvar(name, value)
 
     def mouse_event(self, size, event, button, col, row, focus):
         """

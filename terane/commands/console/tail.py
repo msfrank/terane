@@ -112,3 +112,6 @@ class Tailer(Window):
         if self._results != None:
             return self._results.command(cmd, args)
         return None
+
+    def setvar(self, name, value):
+        pass

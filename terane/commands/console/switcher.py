@@ -103,6 +103,11 @@ class WindowSwitcher(MultiService, urwid.WidgetWrap, urwid.ListWalker):
             return self._curr.command(cmd, args)
         return None
 
+    def setvar(self, name, value):
+        # forward setvar to the active window
+        if self._curr != None:
+            self._curr.setvar(name, value)
+
     def showWindowlist(self):
         window = self._frame.get_body()
         # window list is already displayed
