@@ -34,7 +34,30 @@ class Console(MultiService, urwid.WidgetWrap):
             ('normal', 'default', 'default'),
             ('highlight', 'standout', 'default'),
             ('bold', 'bold', 'default'),
+            ('black', 'black', 'default'),
+            ('dark red', 'dark red', 'default'),
+            ('dark green', 'dark green', 'default'),
+            ('brown', 'brown', 'default'),
+            ('dark blue', 'dark blue', 'default'),
+            ('dark magenta', 'dark magenta', 'default'),
+            ('dark cyan', 'dark cyan', 'default'),
+            ('light gray', 'light gray', 'default'),
+            ('dark gray', 'dark gray', 'default'),
+            ('light red', 'light red', 'default'),
+            ('light green', 'light green', 'default'),
+            ('yellow', 'yellow', 'default'),
+            ('light blue',  'light blue', 'default'),
+            ('light magenta', 'light magenta', 'default'),
+            ('light cyan', 'light cyan', 'default'),
+            ('white', 'white', 'default'),
             ]
+        self.palette = {
+            'text': 'normal',
+            'highlight': 'highlight',
+            'date': 'normal',
+            'field-name': 'normal',
+            'field-value': 'normal'
+            }
         self._ui = urwid.Frame(urwid.SolidFill())
         self._input = Input()
         self._frame = urwid.Frame(urwid.SolidFill(), footer=self._input)
@@ -50,7 +73,12 @@ class Console(MultiService, urwid.WidgetWrap):
         self.executecmd = section.getString('execute command', None)
         self.debug = section.getBoolean("debug", False)
         self.logconfigfile = section.getString('log config file', "%s.logconfig" % settings.appname)
-
+        # set palette entries
+        self.palette['text'] = section.getString('text color', self.palette['text'])
+        self.palette['highlight'] = section.getString('highlight color', self.palette['highlight'])
+        self.palette['date'] = section.getString('date color', self.palette['date'])
+        self.palette['field-name'] = section.getString('field name color', self.palette['field-name'])
+        self.palette['field-value'] = section.getString('field value color', self.palette['field-value'])
 
     def startService(self):
         MultiService.startService(self)

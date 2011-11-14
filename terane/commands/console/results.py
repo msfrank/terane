@@ -20,6 +20,7 @@ from dateutil.parser import parse
 from itertools import cycle, islice
 from csv import DictWriter
 from terane.commands.console import filters
+from terane.commands.console.console import console
 from terane.loggers import getLogger
 
 logger = getLogger('terane.commands.console.results')
@@ -41,14 +42,14 @@ class Result(urwid.WidgetWrap):
         self.visible = True
         # reset highlighting
         self.highlighted = False
-        def _highlight(_text):
+        def _highlight(_text, text_color, highlight_color):
             _text = str(_text)
             if resultslist.pattern == None:
                 return _text
             markup = []
             iterables = [
-                resultslist.pattern.split(_text),
-                [('highlight', t) for t in resultslist.pattern.findall(_text)]
+                [(text_color, t) for t in resultslist.pattern.split(_text)],
+                [(highlight_color, t) for t in resultslist.pattern.findall(_text)]
                 ]
             if len(iterables[1]) > 0:
                 self.highlighted = True
@@ -63,8 +64,8 @@ class Result(urwid.WidgetWrap):
                     nexts = cycle(islice(nexts, pending))
             return markup
         # we always display these fields
-        text = ["%s: " % parse(self.fields['ts']).strftime("%d %b %Y %H:%M:%S")]
-        text.extend(_highlight(self.fields['default']))
+        text = [(console.palette['date'], "%s: " % parse(self.fields['ts']).strftime("%d %b %Y %H:%M:%S"))]
+        text.extend(_highlight(self.fields['default'], console.palette['text'], console.palette['highlight']))
         # if we are not collapsed, then show all fields
         if not resultslist.collapsed:
             fields = self.fields.copy()
@@ -74,8 +75,8 @@ class Result(urwid.WidgetWrap):
             if len(fields) > 0:
                 text.append('\n')
             for (k,v) in fields:
-                text.append("  %s=" % k)
-                text.extend(_highlight(v))
+                text.append((console.palette['field-name'], "  %s=" % k))
+                text.extend(_highlight(v, console.palette['field-value'], console.palette['highlight']))
                 text.append('\n')
         self._text.set_text(text)
 
