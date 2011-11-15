@@ -58,7 +58,9 @@ class Result(urwid.WidgetWrap):
             while pending:
                 try:
                     for next in nexts:
-                        markup.append(next())
+                        attr,text = next()
+                        if text != '':
+                            markup.append((attr,text))
                 except StopIteration:
                     pending -= 1
                     nexts = cycle(islice(nexts, pending))
