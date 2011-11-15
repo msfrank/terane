@@ -35,20 +35,20 @@ class Console(MultiService, urwid.WidgetWrap):
             ('highlight', 'standout', 'default'),
             ('bold', 'bold', 'default'),
             ('black', 'black', 'default'),
-            ('dark red', 'dark red', 'default'),
-            ('dark green', 'dark green', 'default'),
+            ('dark-red', 'dark red', 'default'),
+            ('dark-green', 'dark green', 'default'),
             ('brown', 'brown', 'default'),
-            ('dark blue', 'dark blue', 'default'),
-            ('dark magenta', 'dark magenta', 'default'),
-            ('dark cyan', 'dark cyan', 'default'),
-            ('light gray', 'light gray', 'default'),
-            ('dark gray', 'dark gray', 'default'),
-            ('light red', 'light red', 'default'),
-            ('light green', 'light green', 'default'),
+            ('dark-blue', 'dark blue', 'default'),
+            ('dark-magenta', 'dark magenta', 'default'),
+            ('dark-cyan', 'dark cyan', 'default'),
+            ('light-gray', 'light gray', 'default'),
+            ('dark-gray', 'dark gray', 'default'),
+            ('light-red', 'light red', 'default'),
+            ('light-green', 'light green', 'default'),
             ('yellow', 'yellow', 'default'),
-            ('light blue',  'light blue', 'default'),
-            ('light magenta', 'light magenta', 'default'),
-            ('light cyan', 'light cyan', 'default'),
+            ('light-blue',  'light blue', 'default'),
+            ('light-magenta', 'light magenta', 'default'),
+            ('light-cyan', 'light cyan', 'default'),
             ('white', 'white', 'default'),
             ]
         self.palette = {
@@ -73,6 +73,21 @@ class Console(MultiService, urwid.WidgetWrap):
         self.executecmd = section.getString('execute command', None)
         self.debug = section.getBoolean("debug", False)
         self.logconfigfile = section.getString('log config file', "%s.logconfig" % settings.appname)
+        # load external palette, if specified
+        palettefile = section.getPath('palette file', None)
+        if palettefile and os.access(palettefile, os.R_OK):
+            with open(palettefile, 'r') as f:
+                logger.debug("loading palette from %s" % palettefile)
+                for line in f.readlines():
+                    line = line.strip()
+                    # ignore blank lines and lines beginning with '#'
+                    if line == '' or line.startswith('#'):
+                        continue
+                    spec = [s.strip() for s in line.split(',')]
+                    if len(spec) < 3:
+                        continue
+                    self._palette.append(spec[0:5])
+                    logger.debug("loaded palette entry '%s': %s" % (spec[0], ', '.join(spec[1:5])))
         # set palette entries
         self.palette['text'] = section.getString('text color', self.palette['text'])
         self.palette['highlight'] = section.getString('highlight color', self.palette['highlight'])
@@ -138,6 +153,26 @@ class Console(MultiService, urwid.WidgetWrap):
         if name == 'default-host':
             logger.debug("set %s = %s" % (name, value))
             self.host = value
+        elif name == 'text-color':
+            self.palette['text'] = value
+            logger.debug("set %s = %s" % (name, value))
+            self.redraw()
+        elif name == 'highlight-color':
+            self.palette['highlight'] = value
+            logger.debug("set %s = %s" % (name, value))
+            self.redraw()
+        elif name == 'date-color':
+            self.palette['date'] = value
+            logger.debug("set %s = %s" % (name, value))
+            self.redraw()
+        elif name == 'field-name-color':
+            self.palette['field-name'] = value
+            logger.debug("set %s = %s" % (name, value))
+            self.redraw()
+        elif name == 'field-value-color':
+            self.palette['field-value'] = value
+            logger.debug("set %s = %s" % (name, value))
+            self.redraw()
         else:
             self.switcher.setvar(name, value)
 
@@ -180,7 +215,11 @@ class Console(MultiService, urwid.WidgetWrap):
         if self._loop != None: reactor.stop()
 
     def redraw(self):
-        if self._loop != None: self._loop.draw_screen()
+        if self._loop == None:
+            return
+        self.switcher.redraw()
+        self._input.redraw()
+        self._loop.draw_screen()
 
     def error(self, exception):
         self._ui.set_body(Error(exception))

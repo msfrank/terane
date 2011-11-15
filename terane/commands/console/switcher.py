@@ -30,6 +30,9 @@ class Window(Service, urwid.WidgetWrap):
         self.next = None
         urwid.WidgetWrap.__init__(self, body)
 
+    def redraw(self):
+        pass
+
 class WindowSwitcher(MultiService, urwid.WidgetWrap, urwid.ListWalker):
     def __init__(self, frame):
         MultiService.__init__(self)
@@ -107,6 +110,10 @@ class WindowSwitcher(MultiService, urwid.WidgetWrap, urwid.ListWalker):
         # forward setvar to the active window
         if self._curr != None:
             self._curr.setvar(name, value)
+
+    def redraw(self):
+        if self._curr != None:
+            return self._curr.redraw()
 
     def showWindowlist(self):
         window = self._frame.get_body()

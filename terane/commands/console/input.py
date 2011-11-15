@@ -138,6 +138,8 @@ class Input(urwid.FlowWidget):
         self._invalidate()
         return key
 
+    def redraw(self):
+        pass
 
     def get_cursor_coords(self, size):
         """

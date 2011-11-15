@@ -45,7 +45,7 @@ class Result(urwid.WidgetWrap):
         def _highlight(_text, text_color, highlight_color):
             _text = str(_text)
             if resultslist.pattern == None:
-                return _text
+                return [(text_color, _text)]
             markup = []
             iterables = [
                 [(text_color, t) for t in resultslist.pattern.split(_text)],
@@ -196,6 +196,12 @@ class ResultsListbox(urwid.WidgetWrap):
             self.clear()
         if cmd == 'save':
             self.save(args)
+
+    def redraw(self):
+        logger.debug("redrawing ResultsListbox")
+        for r in self._results:
+            r.reformat(self)
+        self._results._modified()
 
     def find(self, args):
         # if there is a new search regex, then redo results highlighting

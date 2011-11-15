@@ -94,3 +94,6 @@ class Searcher(Window):
 
     def setvar(self, name, value):
         pass
+
+    def redraw(self):
+        self._results.redraw()
