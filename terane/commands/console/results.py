@@ -15,8 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, sys, re, urwid
-from dateutil.parser import parse
+import os, sys, re, urwid, dateutil.parser, dateutil.tz
 from itertools import cycle, islice
 from csv import DictWriter
 from terane.commands.console import filters
@@ -65,8 +64,12 @@ class Result(urwid.WidgetWrap):
                     pending -= 1
                     nexts = cycle(islice(nexts, pending))
             return markup
+        # convert timestamp timezone if necessary
+        ts = dateutil.parser.parse(self.fields['ts']).replace(tzinfo=dateutil.tz.tzutc())
+        if console.tz:
+            ts = ts.astimezone(console.tz)
         # we always display these fields
-        text = [(console.palette['date'], "%s: " % parse(self.fields['ts']).strftime("%d %b %Y %H:%M:%S"))]
+        text = [(console.palette['date'], "%s: " % ts.strftime("%d %b %Y %H:%M:%S %Z"))]
         text.extend(_highlight(self.fields['default'], console.palette['text'], console.palette['highlight']))
         # if we are not collapsed, then show all fields
         if not resultslist.collapsed:

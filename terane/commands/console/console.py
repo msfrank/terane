@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, sys, urwid
+import os, sys, urwid, dateutil.tz
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.application.service import MultiService
 from twisted.internet import reactor
@@ -70,6 +70,9 @@ class Console(MultiService, urwid.WidgetWrap):
         # load configuration
         section = settings.section("console")
         self.host = section.getString("host", 'localhost:45565')
+        self.tz = section.getString("convert timezone", None)
+        if self.tz != None:
+            self.tz = dateutil.tz.gettz(self.tz)
         self.executecmd = section.getString('execute command', None)
         self.debug = section.getBoolean("debug", False)
         self.logconfigfile = section.getString('log config file', "%s.logconfig" % settings.appname)
