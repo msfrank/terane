@@ -40,7 +40,7 @@ def search_main():
         settings.addOption("-f","--fields", ("search","display fields"),
             help="Display only the specified FIELDS (comma-separated)", metavar="FIELDS"
             )
-        settings.addOption("-t","--convert-tz", ("search","convert timezone"),
+        settings.addOption("-t","--timezone", ("search","timezone"),
             help="Convert timestamps to specified timezone", metavar="TZ"
             )
         settings.addOption('',"--log-config", ("search","log config file"),

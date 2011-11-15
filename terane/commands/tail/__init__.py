@@ -41,7 +41,7 @@ def tail_main():
         settings.addOption("-f","--fields", ("tail","display fields"),
             help="Display only the specified FIELDS (comma-separated)", metavar="FIELDS"
             )
-        settings.addOption("-t","--convert-tz", ("tail","convert timezone"),
+        settings.addOption("-t","--timezone", ("tail","timezone"),
             help="Convert timestamps to specified timezone", metavar="TZ"
             )
         settings.addOption('',"--log-config", ("tail","log config file"),

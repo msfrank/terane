@@ -30,7 +30,7 @@ class Searcher(object):
         self.reverse = section.getBoolean("display reverse", False)
         self.longfmt = section.getBoolean("long format", False)
         self.indices = section.getList(str, "use indices", None)
-        self.tz = section.getString("convert timezone", None)
+        self.tz = section.getString("timezone", None)
         if self.tz != None:
             self.tz = dateutil.tz.gettz(self.tz)
         # get the list of fields to display

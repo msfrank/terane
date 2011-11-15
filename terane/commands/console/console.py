@@ -70,7 +70,7 @@ class Console(MultiService, urwid.WidgetWrap):
         # load configuration
         section = settings.section("console")
         self.host = section.getString("host", 'localhost:45565')
-        self.tz = section.getString("convert timezone", None)
+        self.tz = section.getString("timezone", None)
         if self.tz != None:
             self.tz = dateutil.tz.gettz(self.tz)
         self.executecmd = section.getString('execute command', None)
