@@ -60,7 +60,7 @@ class Outfile(Window):
         return None
 
     def setvar(self, name, value):
-        pass
+        self._results.setvar(name, value)
 
     def redraw(self):
         self._results.redraw()

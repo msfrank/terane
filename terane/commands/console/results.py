@@ -66,8 +66,8 @@ class Result(urwid.WidgetWrap):
             return markup
         # convert timestamp timezone if necessary
         ts = dateutil.parser.parse(self.fields['ts']).replace(tzinfo=dateutil.tz.tzutc())
-        if console.tz:
-            ts = ts.astimezone(console.tz)
+        if resultslist.tz:
+            ts = ts.astimezone(resultslist.tz)
         # we always display these fields
         text = [(console.palette['date'], "%s: " % ts.strftime("%d %b %Y %H:%M:%S %Z"))]
         text.extend(_highlight(self.fields['default'], console.palette['text'], console.palette['highlight']))
@@ -165,6 +165,7 @@ class ResultsListbox(urwid.WidgetWrap):
         self.hidefields = []
         self.filters = []
         self.pattern = None
+        self.tz = console.tz
         self._listbox = urwid.ListBox(self._results)
         urwid.WidgetWrap.__init__(self, self._listbox)
  
@@ -201,6 +202,14 @@ class ResultsListbox(urwid.WidgetWrap):
             self.clear()
         if cmd == 'save':
             self.save(args)
+
+    def setvar(self, name, value):
+        if name == 'timezone':
+            tz = dateutil.tz.gettz(value)
+            if tz != None:
+                self.tz = tz
+                self.redraw()
+                logger.debug("set %s = %s" % (name, value))
 
     def redraw(self):
         logger.debug("redrawing ResultsListbox")

@@ -156,6 +156,11 @@ class Console(MultiService, urwid.WidgetWrap):
         if name == 'default-host':
             logger.debug("set %s = %s" % (name, value))
             self.host = value
+        elif name == 'default-timezone':
+            tz = dateutil.tz.gettz(value)
+            if tz != None:
+                self.tz = tz
+                logger.debug("set %s = %s" % (name, value))
         elif name == 'text-color':
             self.palette['text'] = value
             logger.debug("set %s = %s" % (name, value))
