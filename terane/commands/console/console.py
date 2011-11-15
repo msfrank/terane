@@ -198,7 +198,7 @@ class Console(MultiService, urwid.WidgetWrap):
             palette=self._palette,
             unhandled_input=self._unhandled_input,
             event_loop=ev)
-        self.startService()
+        reactor.callLater(0, self.startService)
         self._loop.run()
         logger.debug("exited urwid main loop")
         if self.debug == True:
