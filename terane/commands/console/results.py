@@ -77,12 +77,10 @@ class Result(urwid.WidgetWrap):
             del fields['default']
             del fields['ts']
             fields = sorted([(k,v) for k,v in fields.items() if k not in resultslist.hidefields and v != ''])
-            if len(fields) > 0:
-                text.append('\n')
             for (k,v) in fields:
+                text.append('\n')
                 text.append((console.palette['field-name'], "  %s=" % k))
                 text.extend(_highlight(v, console.palette['field-value'], console.palette['highlight']))
-                text.append('\n')
         self._text.set_text(text)
 
 class ResultsListWalker(urwid.ListWalker):
