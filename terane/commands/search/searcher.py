@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, sys, dateutil.parser, xmlrpclib
+import os, sys, dateutil.parser, dateutil.tz, xmlrpclib
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.web.xmlrpc import Proxy
 from twisted.internet import reactor
@@ -30,6 +30,9 @@ class Searcher(object):
         self.reverse = section.getBoolean("display reverse", False)
         self.longfmt = section.getBoolean("long format", False)
         self.indices = section.getList(str, "use indices", None)
+        self.tz = section.getString("convert timezone", None)
+        if self.tz != None:
+            self.tz = dateutil.tz.gettz(self.tz)
         # get the list of fields to display
         self.fields = section.getList(str, "display fields", None)
         if not self.fields == None:
@@ -57,8 +60,10 @@ class Searcher(object):
         meta = results.pop(0)
         if len(results) > 0:
             for doc in results:
-                ts = dateutil.parser.parse(doc['ts']).strftime("%d %b %Y %H:%M:%S")
-                print "%s: %s" % (ts, doc['default'])
+                ts = dateutil.parser.parse(doc['ts']).replace(tzinfo=dateutil.tz.tzutc())
+                if self.tz:
+                    ts = ts.astimezone(self.tz)
+                print "%s: %s" % (ts.strftime("%d %b %Y %H:%M:%S %Z"), doc['default'])
                 if self.longfmt:
                     del doc['default']
                     del doc['ts']
