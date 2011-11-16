@@ -1,4 +1,4 @@
-# Copyright 2010,2011 Michael Frank <msfrank@syntaxjockey.com>
+#Copyright 2010,2011 Michael Frank <msfrank@syntaxjockey.com>
 #
 # This file is part of Terane.
 #
@@ -17,9 +17,9 @@
 
 import socket, datetime
 from twisted.application.service import MultiService
-from twisted.internet.defer import CancelledError
 from terane.plugins import plugins
 from terane.filters import FilterError, StopFiltering
+from terane.signals import SignalCancelled
 from terane.settings import ConfigureError
 from terane.loggers import getLogger
 
@@ -119,7 +119,7 @@ class Route(object):
         self._scheduleReceivedEvent()
 
     def _errorReceivingEvent(self, failure):
-        if failure.check(CancelledError) == None:
+        if failure.check(SignalCancelled) == None:
             logger.debug("[route:%s] error processing event: %s" % (self.name,str(failure)))
             self._scheduleReceivedEvent()
 

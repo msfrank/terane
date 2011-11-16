@@ -20,6 +20,9 @@ from terane.loggers import getLogger
 
 logger = getLogger('terane.signals')
 
+class SignalCancelled(Exception):
+    pass
+
 class Signal(object):
 
     def __init__(self):
@@ -44,7 +47,7 @@ class Signal(object):
         """Disconnect a receiver from a signal."""
         if not d in self._receivers:
             raise KeyError()
-        d.cancel()
+        d.errback(SignalCancelled())
         del self._receivers[d]
 
     def signal(self, result):
