@@ -69,7 +69,7 @@ Query Grammar
 <TailQuery>       ::= <TailOrGroup>
 """
 
-import datetime, dateutil
+import datetime, dateutil.tz
 import pyparsing as pp
 from whoosh.query import Prefix, DateRange, NumericRange, And, Or, Not
 from whoosh.analysis import SimpleAnalyzer
@@ -192,7 +192,7 @@ dateTo.setParseAction(parseDateTo)
 subjectDate = pp.Suppress('DATE') + dateFrom + pp.Optional(dateTo) | pp.Suppress('DATE') + dateTo + pp.Optional(dateFrom) 
 def parseSubjectDate(tokens):
     "Parse DATE range."
-    date = {'from': makeUTC(datetime.datetime.min), 'to': makeUTC(datetime.datetime.now()), 'fromExcl': False, 'toExcl': False}
+    date = {'from': datetime.datetime.min, 'to': makeUTC(datetime.datetime.now()), 'fromExcl': False, 'toExcl': False}
     date.update(tokens[0])
     if len(tokens) > 1:
         date.update(tokens[1])
