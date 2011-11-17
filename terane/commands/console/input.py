@@ -23,6 +23,16 @@ logger = getLogger('terane.commands.console.input')
 
 
 class Input(urwid.FlowWidget):
+    """
+    The Input widget allows user input in a style similar to Vi(m).  There are
+    two modes that the widget can be in: view and command (find and rfind modes
+    are submodes of the command mode).  View mode is the default mode.  The user
+    enters command mode, find mode, or rfind mode by typing ':', '/', or '?',
+    respectively.  In command mode, user input is displayed on the screen.  The
+    user exits command mode by either pressing enter/return to submit the
+    command, or pressing escape to discard the command.  While in command mode,
+    the user can also press up or down to scroll through command history.
+    """
 
     VIEW_MODE = 0
     COMMAND_MODE = 1
@@ -33,6 +43,8 @@ class Input(urwid.FlowWidget):
         self._buffer = None
         self._offset = 0
         self._mode = Input.VIEW_MODE
+        self._cmdhistory = CommandHistory()
+        self._findhistory = CommandHistory()
 
     def selectable(self):
         """
@@ -116,6 +128,8 @@ class Input(urwid.FlowWidget):
                 self._offset = 0
                 self._mode = Input.VIEW_MODE
                 key = None
+                self._cmdhistory.reset()
+                self._findhistory.reset()
             elif key == 'backspace' or key == 'delete':
                 if len(self._buffer) > 0:
                     self._buffer.pop()
@@ -126,12 +140,29 @@ class Input(urwid.FlowWidget):
                 self._offset = 0
                 line = line.strip()
                 if self._mode == Input.COMMAND_MODE and len(line) > 0:
+                    self._cmdhistory.push(line)
                     key = "command %s" % line
                 elif self._mode == Input.FIND_MODE:
+                    self._findhistory.push(line)
                     key = "command find /%s" % line
                 elif self._mode == Input.RFIND_MODE:
+                    self._findhistory.push(line)
                     key = "command rfind ?%s" % line
                 self._mode = Input.VIEW_MODE
+                self._cmdhistory.reset()
+                self._findhistory.reset()
+            elif key == 'up':
+                if self._mode == Input.COMMAND_MODE:
+                    self._buffer = self._cmdhistory.next()
+                elif self._mode == Input.FIND_MODE or self._mode == Input.RFIND_MODE:
+                    self._buffer = self._findhistory.next()
+                key = None
+            elif key == 'down':
+                if self._mode == Input.COMMAND_MODE:
+                    self._buffer = self._cmdhistory.prev()
+                elif self._mode == Input.FIND_MODE or self._mode == Input.RFIND_MODE:
+                    self._buffer = self._findhistory.prev()
+                key = None
             elif len(key) == 1:
                 self._buffer.append(key)
                 key = None
@@ -148,3 +179,42 @@ class Input(urwid.FlowWidget):
         if self._buffer == None:
             return (0, 0)
         return (1 + len(self._buffer) - self._offset, 0)
+
+class CommandHistory(object):
+    """
+    Stores history of commands, and allows for navigating forwards and
+    backwards through the history.
+    """
+
+    def __init__(self, size=1000):
+        self._history = []
+        self._size = size
+        self._curr = 0
+
+    def push(self, line):
+        if len(self._history) >= self._size:
+            self._history.pop()
+        self._history.insert(0, line)
+
+    def next(self):
+        if len(self._history) == 0:
+            return None
+        line = self._history[self._curr]
+        if self._curr == len(self._history) - 1:
+            self._curr = 0
+        else:
+            self._curr += 1
+        return line
+
+    def prev(self):
+        if len(self._history) == 0:
+            return None
+        line = self._history[self._curr]
+        if self._curr == 0:
+            self._curr = len(self._history) - 1
+        else:
+            self._curr -= 1
+        return line
+
+    def reset(self):
+        self._curr = 0
