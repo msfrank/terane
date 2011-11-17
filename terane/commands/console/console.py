@@ -73,6 +73,7 @@ class Console(MultiService, urwid.WidgetWrap):
         self.tz = section.getString("timezone", None)
         if self.tz != None:
             self.tz = dateutil.tz.gettz(self.tz)
+        self.scrollback = section.getInt("scrollback", 1000)
         self.executecmd = section.getString('execute command', None)
         self.debug = section.getBoolean("debug", False)
         self.logconfigfile = section.getString('log config file', "%s.logconfig" % settings.appname)
@@ -161,26 +162,49 @@ class Console(MultiService, urwid.WidgetWrap):
             if tz != None:
                 self.tz = tz
                 logger.debug("set %s = %s" % (name, value))
+            else:
+                self.error("Unknown timezone '%s'" % value)
+        elif name == 'default-scrollback':
+            try:
+                self.scrollback = int(value)
+                logger.debug("set %s = %s" % (name, value))
+            except:
+                self.error("Invalid scrollback value '%s'" % value)
         elif name == 'text-color':
-            self.palette['text'] = value
-            logger.debug("set %s = %s" % (name, value))
-            self.redraw()
+            if value in [v[0] for v in self._palette]:
+                self.palette['text'] = value
+                logger.debug("set %s = %s" % (name, value))
+                self.redraw()
+            else:
+                self.error("Unknown color name '%s'" % value)
         elif name == 'highlight-color':
-            self.palette['highlight'] = value
-            logger.debug("set %s = %s" % (name, value))
-            self.redraw()
+            if value in [v[0] for v in self._palette]:
+                self.palette['highlight'] = value
+                logger.debug("set %s = %s" % (name, value))
+                self.redraw()
+            else:
+                self.error("Unknown color name '%s'" % value)
         elif name == 'date-color':
-            self.palette['date'] = value
-            logger.debug("set %s = %s" % (name, value))
-            self.redraw()
+            if value in [v[0] for v in self._palette]:
+                self.palette['date'] = value
+                logger.debug("set %s = %s" % (name, value))
+                self.redraw()
+            else:
+                self.error("Unknown color name '%s'" % value)
         elif name == 'field-name-color':
-            self.palette['field-name'] = value
-            logger.debug("set %s = %s" % (name, value))
-            self.redraw()
+            if value in [v[0] for v in self._palette]:
+                self.palette['field-name'] = value
+                logger.debug("set %s = %s" % (name, value))
+                self.redraw()
+            else:
+                self.error("Unknown color name '%s'" % value)
         elif name == 'field-value-color':
-            self.palette['field-value'] = value
-            logger.debug("set %s = %s" % (name, value))
-            self.redraw()
+            if value in [v[0] for v in self._palette]:
+                self.palette['field-value'] = value
+                logger.debug("set %s = %s" % (name, value))
+                self.redraw()
+            else:
+                self.error("Unknown color name '%s'" % value)
         else:
             self.switcher.setvar(name, value)
 
