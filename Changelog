@@ -1,3 +1,21 @@
+Release 0.1.3
+-------------
+
+ * (#30) added console 'tail' command.
+ * added console 'clear' command to clear results from ResultsListbox.
+ * process logconfig file for all commands.
+ * changed config file names to <appname>.conf.
+ * added console 'reload' command to resubmit search query.
+ * fixed DQL parsing to convert all dates to UTC.
+ * (#31) removed usage of DB->stat() to count segment documents.
+ * added console 'set' command to set runtime variables.
+ * (#32) colorized ResultsListbox items.
+ * (#33) converted result timestamps via configurable timezone.
+ * removed Deferred cancellation routine introduced in twisted 10.2.0.
+ * (#34) analyze/normalize subject terms before searching.
+ * added command history in console.
+ * added scrollback runtime variable.
+
 Release 0.1.2
 -------------
 
