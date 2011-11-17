@@ -101,11 +101,12 @@ class ResultsListWalker(urwid.ListWalker):
 
     def resize(self, maxsize):
         self.maxsize = maxsize
-        remove = self.maxsize - len(self.results)
-        while remove > 0:
+        if maxsize > len(self.results):
+            return
+        remove = len(self.results) - maxsize
+        for _ in range(remove):
             self.results.pop(0)
-            remove -= 1
-        self._modified()
+        self.pos = 0
 
     def __iter__(self):
         return iter(self.results)
@@ -157,7 +158,7 @@ class ResultsListWalker(urwid.ListWalker):
 
 class ResultsListbox(urwid.WidgetWrap):
     def __init__(self):
-        self._results = ResultsListWalker()
+        self._results = ResultsListWalker(console.scrollback)
         self._fields = []
         self.collapsed = True
         self.hidefields = []
@@ -208,6 +209,15 @@ class ResultsListbox(urwid.WidgetWrap):
                 self.tz = tz
                 self.redraw()
                 logger.debug("set %s = %s" % (name, value))
+            else:
+                console.error("Unknown timezone '%s'" % value)
+        if name == 'scrollback':
+            try:
+                self._results.resize(int(value))
+                self.redraw()
+                logger.debug("set %s = %s" % (name, value))
+            except:
+                console.error("Invalid scrollback value '%s'" % value)
 
     def redraw(self):
         logger.debug("redrawing ResultsListbox")
