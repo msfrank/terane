@@ -18,6 +18,10 @@ Prerequisite Software
     Any recent version should work.  Terane is tested with 0.6.10.
     http://pypi.python.org/pypi/setuptools
 
+ * zope.interface
+    Any recent version should work.  Terane is tested with version 3.6.1.
+    http://pypi.python.org/pypi/zope.interface
+
  * twisted
     Any recent version should work.  Terane is tested with version 10.0.0.
     http://www.twistedmatrix.com

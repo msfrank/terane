@@ -8,7 +8,7 @@ from setuptools import setup, Extension, find_packages
 
 # verify required dependencies are installed
 try:
-    import twisted, pyparsing, dateutil, urwid
+    import twisted, pyparsing, dateutil, urwid, zope.interface
 except ImportError, e:
     print "Missing required dependency: %s" % e
     sys.exit(1)
