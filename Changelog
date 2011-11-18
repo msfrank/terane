@@ -1,6 +1,8 @@
 Release 0.1.3
 -------------
 
+Note: This release includes a backwards-incompatible DB change!
+
  * (#30) added console 'tail' command.
  * added console 'clear' command to clear results from ResultsListbox.
  * process logconfig file for all commands.
