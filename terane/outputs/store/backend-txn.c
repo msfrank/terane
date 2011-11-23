@@ -20,6 +20,84 @@
 #include "backend.h"
 
 /*
+ * _Txn_dealloc: free resources for the Txn object.
+ */
+static void
+_Txn_dealloc (terane_Txn *self)
+{
+    if (self->txn != NULL)
+        terane_Txn_abort (self);
+    if (self->env)
+        Py_DECREF (self->env);
+    self->ob_type->tp_free ((PyObject *) self);
+}
+
+/*
+ * Txn_new: allocate a new Txn object.
+ *
+ * parameters:
+ *  env (terane.outputs.store.backend:Env): The database environment
+ *  parent (terane.outputs.store.backend:Txn): A parent Txn, or NULL
+ * returns: A new terane.outputs.store.backend:Txn object
+ * exceptions:
+ *  terane.outputs.store.backend:Error: failed to create the DB_TXN handle
+ */
+PyObject *
+terane_Txn_new (terane_Env *env, terane_Txn *parent)
+{
+    terane_Txn *txn, *prev;
+    int dbret;
+
+    assert (env != NULL);
+
+    /* allocate the Txn object */
+    txn = PyObject_New (terane_Txn, &terane_TxnType);
+    if (txn == NULL)
+        return NULL;
+    /* add a reference to the Env object */
+    Py_INCREF (env);
+    txn->env = env;
+    /* create the DB_TXN handle */
+    dbret = env->env->txn_begin (env->env, parent ? parent->txn : NULL, &txn->txn, 0);
+    if (dbret != 0) {
+        PyErr_Format (terane_Exc_Error, "Failed to create DB_TXN: %s", db_strerror (dbret));
+        goto error;
+    }
+    /* if there is a parent Txn, then add self to parent's list of children */
+    if (parent != NULL) {
+        Py_INCREF (txn);
+        if (parent->children == NULL)
+            parent->children = txn;
+        else {
+            prev = parent->children;
+            while (prev->next)
+                prev = prev->next;
+            prev->next = txn;
+        }
+    }
+    return (PyObject *) txn;
+
+/* if there was an error, clean up and bail out */
+error:
+    _Txn_dealloc ((terane_Txn *) txn);
+    return NULL;
+}
+
+/*
+ * terane_Txn_new_txn: Create a child Txn.
+ *
+ * parameters: None
+ * returns: A new terane.outputs.store.backend:Txn object
+ * exceptions:
+ *  terane.outputs.store.backend:Error: failed to create a DB_TXN handle.
+ */
+PyObject *
+terane_Txn_new_txn (terane_Txn *self)
+{
+    return terane_Txn_new (self->env, self);
+}
+
+/*
  * _Txn_discard: discard the invalid Txn handle, and all child handles.
  */
 static void
@@ -42,153 +120,6 @@ _Txn_discard (terane_Txn *txn)
 }
 
 /*
- * _Txn_commit: commit the transaction operations.
- *
- * parameters: None
- * returns: 0 if the operation succeeded, otherwise < 0 on error
- * exceptions:
- *  terane.outputs.store.backend:Deadlock: deadlock was detected.
- *  terane.outputs.store.backend:LockTimeout: timed out trying to grab the lock.
- *  terane.outputs.store.backend:Error: the commit failed.
- */
-static int
-_Txn_commit (terane_Txn *txn)
-{
-    int dbret;
-
-    if (txn->txn == NULL) {
-        PyErr_Format (terane_Exc_Error, "Failed to commit transaction: DB_TXN handle is NULL");
-        return -1;
-    }
-    /* try to commit the transaction */
-    dbret = txn->txn->commit (txn->txn, 0);
-    /* 
-     * regardless of return status, the DB_TXN handle is invalid now, as are all child
-     * transactions, so discard all references to them.
-     */
-    _Txn_discard (txn);
-    /* if dbret is not 0, then set exception and return -1 indicating failure */
-    switch (dbret) {
-        case 0:
-            return 0;
-        case DB_LOCK_DEADLOCK:
-            PyErr_Format (terane_Exc_Deadlock, "Failed to commit transaction: %s", db_strerror (dbret));
-            break;
-        case DB_LOCK_NOTGRANTED:
-            PyErr_Format (terane_Exc_LockTimeout, "Failed to commit transaction: %s", db_strerror (dbret));
-            break;
-        default:
-            PyErr_Format (terane_Exc_Error, "Failed to commit transaction: %s", db_strerror (dbret));
-            break;
-    }
-    return -1;
-}
-
-/*
- * _Txn_abort: abort the transaction operations.
- *
- * parameters: None
- * returns: 0 if the operation succeeded, otherwise < 0 on error
- * exceptions:
- *  terane.outputs.store.backend:Error: the abort failed.
- */
-static int
-_Txn_abort (terane_Txn *txn)
-{
-    int dbret;
-
-    if (txn->txn == NULL) {
-        PyErr_Format (terane_Exc_Error, "Failed to abort transaction: DB_TXN handle is NULL");
-        return -1;
-    }
-    dbret = txn->txn->abort (txn->txn);
-    /* 
-     * regardless of return status, the DB_TXN handle is invalid now, as are all child
-     * transactions, so discard all references to them.
-     */
-    _Txn_discard (txn);
-    /* if dbret is not 0, then set exception and return -1 indicating failure */
-    switch (dbret) {
-        case 0:
-            return 0;
-        default:
-            PyErr_Format (terane_Exc_Error, "Failed to abort transaction: %s", db_strerror (dbret));
-            break;
-    }
-    return -1;
-}
-
-/*
- * _Txn_dealloc: free resources for the Txn object.
- */
-static void
-_Txn_dealloc (terane_Txn *self)
-{
-    if (self->txn != NULL)
-        _Txn_abort (self);
-    if (self->env)
-        Py_DECREF (self->env);
-    self->ob_type->tp_free ((PyObject *) self);
-}
-
-/*
- * terane_Txn_new: allocate a new Txn object.
- *
- * callspec: Txn(env[,parent])
- * parameters:
- *  env (terane.outputs.store.backend:Env): The database environment
- *  parent (terane.outputs.store.backend:Txn): A parent Txn
- * returns: A new terane.outputs.store.backend:Txn object
- * exceptions:
- *  terane.outputs.store.backend:Error: failed to create the DB_TXN handle
- */
-PyObject *
-terane_Txn_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
-{
-    terane_Txn *self;
-    char *kwlist[] = {"env", "parent", NULL};
-    terane_Env *env = NULL;
-    terane_Txn *parent = NULL;
-    int dbret;
-
-    /* allocate the Txn object */
-    self = (terane_Txn *) type->tp_alloc (type, 0);
-    if (self == NULL)
-        return NULL;
-    /* parse constructor parameters */
-    if (!PyArg_ParseTupleAndKeywords (args, kwds, "O!|O!", kwlist,
-        &terane_EnvType, &env, &terane_TxnType, &parent))
-        goto error;
-    /* add a reference to the Env object */
-    Py_INCREF (env);
-    self->env = env;
-    /* create the DB_TXN handle */
-    dbret = env->env->txn_begin (env->env, parent ? parent->txn : NULL, &self->txn, 0);
-    if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to create DB_TXN: %s", db_strerror (dbret));
-        goto error;
-    }
-    /* if there is a parent Txn, then add self to parent's list of children */
-    if (parent != NULL) {
-        Py_INCREF (self);
-        if (parent->children == NULL)
-            parent->children = self;
-        else {
-            terane_Txn *prev = parent->children;
-            while (prev->next)
-                prev = prev->next;
-            prev->next = self;
-        }
-    }
-    return (PyObject *) self;
-
-/* if there was an error, clean up and bail out */
-error:
-    _Txn_dealloc ((terane_Txn *) self);
-    return NULL;
-}
-
-/*
  * terane_Txn_commit: commit the transaction operations.
  *
  * callspec: Txn.commit()
@@ -202,7 +133,31 @@ error:
 PyObject *
 terane_Txn_commit (terane_Txn *self)
 {
-    _Txn_commit (self);
+    int dbret;
+
+    if (self->txn == NULL)
+        return PyErr_Format (terane_Exc_Error, "Failed to commit transaction: DB_TXN handle is NULL");
+    /* try to commit the transaction */
+    dbret = self->txn->commit (self->txn, 0);
+    /* 
+     * regardless of return status, the DB_TXN handle is invalid now, as are all child
+     * transactions, so discard all references to them.
+     */
+    _Txn_discard (self);
+    /* if dbret is not 0, then set exception and return -1 indicating failure */
+    switch (dbret) {
+        case 0:
+            break;
+        case DB_LOCK_DEADLOCK:
+            PyErr_Format (terane_Exc_Deadlock, "Failed to commit transaction: %s", db_strerror (dbret));
+            break;
+        case DB_LOCK_NOTGRANTED:
+            PyErr_Format (terane_Exc_LockTimeout, "Failed to commit transaction: %s", db_strerror (dbret));
+            break;
+        default:
+            PyErr_Format (terane_Exc_Error, "Failed to commit transaction: %s", db_strerror (dbret));
+            break;
+    }
     Py_RETURN_NONE;
 }
 
@@ -218,7 +173,25 @@ terane_Txn_commit (terane_Txn *self)
 PyObject *
 terane_Txn_abort (terane_Txn *self)
 {
-    _Txn_abort (self);
+    int dbret;
+
+    if (self->txn == NULL)
+        return PyErr_Format (terane_Exc_Error, "Failed to abort transaction: DB_TXN handle is NULL");
+    /* abort the transaction */
+    dbret = self->txn->abort (self->txn);
+    /* 
+     * regardless of return status, the DB_TXN handle is invalid now, as are all child
+     * transactions, so discard all references to them.
+     */
+    _Txn_discard (self);
+    /* if dbret is not 0, then set exception and return -1 indicating failure */
+    switch (dbret) {
+        case 0:
+            break;
+        default:
+            PyErr_Format (terane_Exc_Error, "Failed to abort transaction: %s", db_strerror (dbret));
+            break;
+    }
     Py_RETURN_NONE;
 }
 
@@ -265,15 +238,16 @@ terane_Txn_exit (terane_Txn *self, PyObject *args)
         return NULL;
     /* if all parameters are None, then the operations succeeded */
     if (type == Py_None && value == Py_None && tb == Py_None)
-        _Txn_commit (self);
+        terane_Txn_commit (self);
     else
-        _Txn_abort (self);
+        terane_Txn_abort (self);
     Py_RETURN_FALSE;
 }
 
 /* Txn methods declaration */
 PyMethodDef _Txn_methods[] =
 {
+    { "new_txn", (PyCFunction) terane_Txn_new_txn, METH_NOARGS, "Create a child Txn." },
     { "commit", (PyCFunction) terane_Txn_commit, METH_NOARGS, "Close the DB Txn." },
     { "abort", (PyCFunction) terane_Txn_abort, METH_NOARGS, "Close the DB Txn." },
     { "__enter__", (PyCFunction) terane_Txn_enter, METH_NOARGS, "Enter the DB Txn context." },
@@ -321,5 +295,5 @@ PyTypeObject terane_TxnType = {
     0,                         /* tp_dictoffset */
     0,                         /* tp_init */
     0,                         /* tp_alloc */
-    terane_Txn_new
+    0,                         /* tp_new */
 };
