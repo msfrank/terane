@@ -25,7 +25,7 @@
 static void
 _Segment_dealloc (terane_Segment *self)
 {
-    _Segment_close (self);
+    terane_Segment_close (self);
     if (self->env != NULL)
         Py_DECREF (self->env);
     self->env = NULL;

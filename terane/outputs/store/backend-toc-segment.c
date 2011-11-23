@@ -33,7 +33,7 @@ PyObject *
 terane_TOC_new_segment (terane_TOC *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    db_recno_t segment_id = 0;
+    db_recno_t sid = 0;
     DBT key, data;
     int dbret;
 
@@ -57,26 +57,26 @@ terane_TOC_new_segment (terane_TOC *self, PyObject *args)
     /* increment the internal segment count */
     self->nsegments += 1;
     /* return the segment record number */
-    segment_id = *((db_recno_t *) key.data);
+    sid = *((db_recno_t *) key.data);
     /* free allocated memory */
     if (key.data)
         PyMem_Free (key.data);
-    return PyLong_FromUnsignedLong ((unsigned long) segment_id);
+    return PyLong_FromUnsignedLong ((unsigned long) sid);
 }
 
 /*
  * TOC_contains_segment: return true if segment exists in the TOC
  */
 int
-TOC_contains_segment (terane_TOC *toc, terane_Txn *txn, db_recno_t segment_id)
+terane_TOC_contains_segment (terane_TOC *self, terane_Txn *txn, db_recno_t sid)
 {
     DBT key;
     int dbret;
 
     memset (&key, 0, sizeof (key));
-    key.data = &segment_id;
-    key.size = sizeof (segment_id);
-    dbret = toc->schema->exists (toc->segments, txn? txn->txn : NULL, &key, 0);
+    key.data = &sid;
+    key.size = sizeof (sid);
+    dbret = self->schema->exists (self->segments, txn? txn->txn : NULL, &key, 0);
     switch (dbret) {
         case 0:
             return 1;
@@ -84,7 +84,7 @@ TOC_contains_segment (terane_TOC *toc, terane_Txn *txn, db_recno_t segment_id)
             return 0;
         default:
             PyErr_Format (terane_Exc_Error, "Failed to lookup segment %lu in segments: %s",
-                (unsigned long int) segment_id, db_strerror (dbret));
+                (unsigned long int) sid, db_strerror (dbret));
             break;
     }
     return -1;
@@ -96,10 +96,10 @@ TOC_contains_segment (terane_TOC *toc, terane_Txn *txn, db_recno_t segment_id)
 static PyObject *
 _TOC_next_segment (terane_Iter *iter, DBT *key, DBT *data)
 {
-    db_recno_t segmentid = 0;
+    db_recno_t sid = 0;
 
-    segmentid = *((db_recno_t *) key->data);
-    return PyLong_FromUnsignedLong ((unsigned long) segmentid);
+    sid = *((db_recno_t *) key->data);
+    return PyLong_FromUnsignedLong ((unsigned long) sid);
 }
 
 /*
@@ -138,7 +138,7 @@ terane_TOC_iter_segments (terane_TOC *self, PyObject *args)
             db_strerror (dbret));
         return NULL;
     }
-    iter = Iter_new ((PyObject *) self, cursor, &ops);
+    iter = terane_Iter_new ((PyObject *) self, cursor, &ops);
     if (iter == NULL)
         cursor->close (cursor);
     return iter;
@@ -173,17 +173,17 @@ PyObject *
 terane_TOC_delete_segment (terane_TOC *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    unsigned long segment_id= 0;
+    unsigned long sid= 0;
     DBT key;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!k", &terane_TxnType, &txn, &segment_id))
+    if (!PyArg_ParseTuple (args, "O!k", &terane_TxnType, &txn, &sid))
         return NULL;
 
     /* delete segment id from the TOC */
     memset (&key, 0, sizeof (DBT));
-    key.data = &segment_id;
+    key.data = &sid;
     key.size = sizeof (unsigned long);
     dbret = self->segments->del (self->segments, txn->txn, &key, 0);
     switch (dbret) {
