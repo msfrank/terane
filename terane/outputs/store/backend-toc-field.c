@@ -148,32 +148,6 @@ terane_TOC_remove_field (terane_TOC *self, PyObject *args)
 }
 
 /*
- * TOC_contains_field:
- */
-int
-TOC_contains_field (terane_TOC *toc, DB_TXN *txn, PyObject *fieldname)
-{
-    DBT key;
-    int dbret;
-
-    memset (&key, 0, sizeof (key));
-    key.data = PyString_AsString (fieldname);
-    key.size = PyString_Size (fieldname) + 1;
-    dbret = toc->schema->exists (toc->schema, txn? txn : NULL, &key, 0);
-    switch (dbret) {
-        case 0:
-            return 1;
-        case DB_NOTFOUND:
-            return 0;
-        default:
-            PyErr_Format (terane_Exc_Error, "Failed to lookup field %s in schema: %s",
-                PyString_AsString (fieldname), db_strerror (dbret));
-            break;
-    }
-    return -1;
-}
-
-/*
  * terane_TOC_contains_field: return True if field exists in the schema
  *
  * callspec: TOC.contains_field(txn, fieldname)
@@ -189,7 +163,8 @@ terane_TOC_contains_field (terane_TOC *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
-    int ret;
+    DBT key;
+    int dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OO!", &txn, &PyString_Type, &fieldname))
@@ -198,11 +173,22 @@ terane_TOC_contains_field (terane_TOC *self, PyObject *args)
         txn = NULL;
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-    ret = TOC_contains_field (self, txn? txn->txn : NULL, fieldname);
-    if (ret > 0)
-        Py_RETURN_TRUE;
-    if (ret == 0)
-        Py_RETURN_FALSE;
+
+    /* see if fieldname exists in the schema */
+    memset (&key, 0, sizeof (key));
+    key.data = PyString_AsString (fieldname);
+    key.size = PyString_Size (fieldname) + 1;
+    dbret = self->schema->exists (self->schema, txn? txn->txn : NULL, &key, 0);
+    switch (dbret) {
+        case 0:
+            Py_RETURN_TRUE;
+        case DB_NOTFOUND:
+            Py_RETURN_FALSE;
+        default:
+            PyErr_Format (terane_Exc_Error, "Failed to lookup field %s in schema: %s",
+                PyString_AsString (fieldname), db_strerror (dbret));
+            break;
+    }
     return NULL;
 }
 
