@@ -53,7 +53,7 @@ _Segment_make_word_key (PyObject *word, PyObject *id)
     }
     /* convert document id to a string */
     did_num = PyLong_AsUnsignedLongLong (id);
-    DID_num_to_string (did_num, did_string);
+    terane_DID_num_to_string (did_num, did_string);
 
     /* allocate a DBT to store the key */
     key = PyMem_Malloc (sizeof (DBT));
@@ -240,8 +240,7 @@ terane_Segment_get_word (terane_Segment *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    /* if the field doesn't exist set KeyError and return */
-    field = Segment_get_field_DB (self, txn, fieldname);
+    field = terane_Segment_get_field_DB (self, txn, fieldname);
     if (field == NULL)
         return NULL;
 
@@ -309,8 +308,7 @@ terane_Segment_set_word (terane_Segment *self, PyObject *args)
         &metadata))
         return NULL;
 
-    /* if the field doesn't exist set KeyError and return */
-    field = Segment_get_field_DB (self, txn, fieldname);
+    field = terane_Segment_get_field_DB (self, txn, fieldname);
     if (field == NULL)
         return NULL;
 
@@ -369,8 +367,7 @@ terane_Segment_contains_word (terane_Segment *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    /* if the field doesn't exist set KeyError and return */
-    field = Segment_get_field_DB (self, txn, fieldname);
+    field = terane_Segment_get_field_DB (self, txn, fieldname);
     if (field == NULL)
         return NULL;
 
@@ -416,7 +413,7 @@ _Segment_next_word (terane_Iter *iter, DBT *key, DBT *data)
     if (c != '>')
         return NULL;
     /* get the document id */
-    DID_string_to_num (&((char *)key->data)[key->size - 17], &did_num);
+    terane_DID_string_to_num (&((char *)key->data)[key->size - 17], &did_num);
     id = PyLong_FromUnsignedLongLong (did_num);
     /* get the metadata */
     metadata = PyString_FromString ((char *) data->data);
@@ -440,7 +437,7 @@ _Segment_skip_word (terane_Iter *iter, PyObject *args)
     if (!PyArg_ParseTuple (args, "K", (unsigned PY_LONG_LONG *) &did_num))
         return NULL;
     /* convert document id to a string */
-    DID_num_to_string (did_num, did_string);
+    terane_DID_num_to_string (did_num, did_string);
 
     /* allocate a DBT to store the key */
     key = PyMem_Malloc (sizeof (DBT));
@@ -499,8 +496,7 @@ terane_Segment_iter_words (terane_Segment *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    /* if the field doesn't exist set KeyError and return */
-    field = Segment_get_field_DB (self, txn, fieldname);
+    field = terane_Segment_get_field_DB (self, txn, fieldname);
     if (field == NULL)
         return NULL;
 
@@ -515,7 +511,7 @@ terane_Segment_iter_words (terane_Segment *self, PyObject *args)
     if (dbret != 0)
         return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
-    iter = Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size);
+    iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size);
     _Segment_free_key (key);
     if (iter == NULL)
         cursor->close (cursor);
@@ -556,8 +552,7 @@ terane_Segment_get_word_meta (terane_Segment *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    /* if the field doesn't exist set KeyError and return */
-    field = Segment_get_field_DB (self, txn, fieldname);
+    field = terane_Segment_get_field_DB (self, txn, fieldname);
     if (field == NULL)
         return NULL;
 
@@ -623,8 +618,7 @@ terane_Segment_set_word_meta (terane_Segment *self, PyObject *args)
         &PyString_Type, &fieldname, &PyUnicode_Type, &word, &metadata))
         return NULL;
 
-    /* if the field doesn't exist set KeyError and return */
-    field = Segment_get_field_DB (self, txn, fieldname);
+    field = terane_Segment_get_field_DB (self, txn, fieldname);
     if (field == NULL)
         return NULL;
 
@@ -712,8 +706,7 @@ terane_Segment_iter_words_meta (terane_Segment *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    /* if the field doesn't exist set KeyError and return */
-    field = Segment_get_field_DB (self, txn, fieldname);
+    field = terane_Segment_get_field_DB (self, txn, fieldname);
     if (field == NULL)
         return NULL;
 
@@ -723,7 +716,7 @@ terane_Segment_iter_words_meta (terane_Segment *self, PyObject *args)
     if (dbret != 0)
         return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
-    iter = Iter_new_range ((PyObject *) self, cursor, &ops, (void *)"!", 1);
+    iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, (void *)"!", 1);
     if (iter == NULL)
         cursor->close (cursor);
     return iter;
@@ -766,8 +759,7 @@ terane_Segment_iter_words_meta_from (terane_Segment *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    /* if the field doesn't exist set KeyError and return */
-    field = Segment_get_field_DB (self, txn, fieldname);
+    field = terane_Segment_get_field_DB (self, txn, fieldname);
     if (field == NULL)
         return NULL;
 
@@ -784,7 +776,7 @@ terane_Segment_iter_words_meta_from (terane_Segment *self, PyObject *args)
         return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
     }
-    iter = Iter_new_from ((PyObject *) self, cursor, &ops, key->data, key->size);
+    iter = terane_Iter_new_from ((PyObject *) self, cursor, &ops, key->data, key->size);
     _Segment_free_key (key);
     if (iter == NULL)
         cursor->close (cursor);
@@ -828,8 +820,7 @@ terane_Segment_iter_words_meta_range (terane_Segment *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    /* if the field doesn't exist set KeyError and return */
-    field = Segment_get_field_DB (self, txn, fieldname);
+    field = terane_Segment_get_field_DB (self, txn, fieldname);
     if (field == NULL)
         return NULL;
 
@@ -846,7 +837,7 @@ terane_Segment_iter_words_meta_range (terane_Segment *self, PyObject *args)
         return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
     }
-    iter = Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size - 1);
+    iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size - 1);
     if (iter == NULL)
         cursor->close (cursor);
     _Segment_free_key (key);
