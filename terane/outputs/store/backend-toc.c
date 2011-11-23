@@ -20,64 +20,12 @@
 #include "backend.h"
 
 /*
- * _TOC_close: close the underlying DB handles.
- */
-static void
-_TOC_close (terane_TOC *toc)
-{
-    int dbret;
-
-    /* close the metadata db */
-    if (toc->metadata != NULL) {
-        dbret = toc->metadata->close (toc->metadata, 0);
-        if (dbret != 0)
-            PyErr_Format (terane_Exc_Error, "Failed to close _metadata: %s",
-                db_strerror (dbret));
-    }
-    toc->metadata = NULL;
-
-    /* close the schema db */
-    if (toc->schema != NULL) {
-        dbret = toc->schema->close (toc->schema, 0);
-        if (dbret != 0)
-            PyErr_Format (terane_Exc_Error, "Failed to close _schema: %s",
-                db_strerror (dbret));
-    }
-    toc->schema = NULL;
-
-    /* close the segments db */
-    if (toc->segments != NULL) {
-        dbret = toc->segments->close (toc->segments, 0);
-        if (dbret != 0)
-            PyErr_Format (terane_Exc_Error, "Failed to close _segments: %s",
-                db_strerror (dbret));
-    }
-    toc->segments = NULL;
-}
-
-/*
- * terane_TOC_close: close the underlying DB handles.
- *
- * callspec: TOC.close()
- * parameters: None
- * returns: None
- * exceptions:
- *  terane.outputs.store.backend.Error: failed to close a db in the TOC
- */
-PyObject *
-terane_TOC_close (terane_TOC *self)
-{
-    _TOC_close (self);
-    Py_RETURN_NONE;
-}
-
-/*
  * terane_TOC_dealloc: free resources for the TOC object.
  */
 static void
 _TOC_dealloc (terane_TOC *self)
 {
-    _TOC_close (self);
+    terane_TOC_close (self);
     if (self->env != NULL)
         Py_DECREF (self->env);
     self->env = NULL;
@@ -248,6 +196,64 @@ error:
     return NULL;
 }
 
+/*
+ * terane_TOC_new_txn: create a new top-level Txn object.
+ *
+ * callspec: TOC.new_txn()
+ * parameters: None
+ * returns: A new Txn object.
+ * exceptions:
+ *  terane.outputs.store.backend:Error: failed to create a DB_TXN handle.
+ */
+PyObject *
+terane_TOC_new_txn (terane_TOC *self)
+{
+    return terane_Txn_new (self->env, NULL);
+}
+
+/*
+ * terane_TOC_close: close the underlying DB handles.
+ *
+ * callspec: TOC.close()
+ * parameters: None
+ * returns: None
+ * exceptions:
+ *  terane.outputs.store.backend.Error: failed to close a db in the TOC
+ */
+PyObject *
+terane_TOC_close (terane_TOC *self)
+{
+    int dbret;
+
+    /* close the metadata db */
+    if (self->metadata != NULL) {
+        dbret = self->metadata->close (self->metadata, 0);
+        if (dbret != 0)
+            PyErr_Format (terane_Exc_Error, "Failed to close _metadata: %s",
+                db_strerror (dbret));
+    }
+    self->metadata = NULL;
+
+    /* close the schema db */
+    if (self->schema != NULL) {
+        dbret = self->schema->close (self->schema, 0);
+        if (dbret != 0)
+            PyErr_Format (terane_Exc_Error, "Failed to close _schema: %s",
+                db_strerror (dbret));
+    }
+    self->schema = NULL;
+
+    /* close the segments db */
+    if (self->segments != NULL) {
+        dbret = self->segments->close (self->segments, 0);
+        if (dbret != 0)
+            PyErr_Format (terane_Exc_Error, "Failed to close _segments: %s",
+                db_strerror (dbret));
+    }
+    self->segments = NULL;
+    Py_RETURN_NONE;
+}
+
 /* TOC methods declaration */
 PyMethodDef _TOC_methods[] =
 {
@@ -275,6 +281,8 @@ PyMethodDef _TOC_methods[] =
         "Return the count of segments in the TOC." },
     { "delete_segment", (PyCFunction) terane_TOC_delete_segment, METH_VARARGS,
         "Delete the segment from the TOC." },
+    { "new_txn", (PyCFunction) terane_TOC_new_txn, METH_NOARGS,
+        "Create a top-level Txn." },
     { "close", (PyCFunction) terane_TOC_close, METH_NOARGS,
         "Close the TOC." },
     { NULL, NULL, 0, NULL }
