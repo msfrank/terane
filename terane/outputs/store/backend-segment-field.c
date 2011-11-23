@@ -32,7 +32,7 @@ _Segment_cmp_fields (const void *v1, const void *v2)
  * return the field specified by name, or NULL if it doesn't exist in the schema
  */
 DB *
-Segment_get_field_DB (terane_Segment *segment, terane_Txn *txn, PyObject *fieldname)
+terane_Segment_get_field_DB (terane_Segment *self, terane_Txn *txn, PyObject *fieldname)
 {
     terane_Field compar = {fieldname, NULL}, *compar_ptr = &compar;
     terane_Field **result = NULL;
@@ -41,7 +41,7 @@ Segment_get_field_DB (terane_Segment *segment, terane_Txn *txn, PyObject *fieldn
     int dbret;
 
     /* search the field handle cache */
-    result = (terane_Field **) bsearch (&compar_ptr, segment->fields, segment->nfields,
+    result = (terane_Field **) bsearch (&compar_ptr, self->fields, self->nfields,
         sizeof(terane_Field *), _Segment_cmp_fields);
     /* we have the field handle cached, so return it */
     /* TODO: check whether the handle is stale (i.e. someone deleted the DB) */
@@ -49,28 +49,12 @@ Segment_get_field_DB (terane_Segment *segment, terane_Txn *txn, PyObject *fieldn
         return (*result)->field;
 
     /* if txn is specified, create a child transaction, otherwise create a new txn */
-    dbret = segment->env->env->txn_begin (segment->env->env,
+    dbret = self->env->env->txn_begin (self->env->env,
         txn? txn->txn : NULL, &field_txn, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create DB_TXN handle: %s",
             db_strerror (dbret));
         goto error;
-    }
-
-    /* if the field doesn't exist in the schema, then set KeyError and return NULL */
-    dbret = TOC_contains_field (segment->toc, field_txn, fieldname);
-    switch (dbret) {
-        case 1:
-            break;
-        case 0:
-            /* field doesn't exist, raise KeyError */
-            PyErr_Format (PyExc_KeyError, "Field %s doesn't exist in schema",
-                PyString_AsString (fieldname));
-            goto error;
-        default:
-            PyErr_Format (terane_Exc_Error, "Failed to lookup field %s in schema: %s",
-                PyString_AsString (fieldname), db_strerror (dbret));
-            goto error;
     }
 
     /* allocate a new terane_Field record */
@@ -90,15 +74,15 @@ Segment_get_field_DB (terane_Segment *segment, terane_Txn *txn, PyObject *fieldn
      * its easier to recover in a transactionally-safe way if this operation
      * fails.
      */
-    fields = PyMem_Malloc (sizeof (terane_Field *) * (segment->nfields + 1));
+    fields = PyMem_Malloc (sizeof (terane_Field *) * (self->nfields + 1));
     if (fields == NULL) {
         PyErr_NoMemory ();
         goto error;
     }
-    memcpy (fields, segment->fields, sizeof (terane_Field *) * segment->nfields);
+    memcpy (fields, self->fields, sizeof (terane_Field *) * self->nfields);
 
     /* create the DB handle for the field */
-    dbret = db_create (&new->field, segment->env->env, 0);
+    dbret = db_create (&new->field, self->env->env, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create handle for %s: %s",
             PyString_AsString (fieldname), db_strerror (dbret));
@@ -106,7 +90,7 @@ Segment_get_field_DB (terane_Segment *segment, terane_Txn *txn, PyObject *fieldn
     }
 
     /* open the field segment.  if the field doesn't exist its an error */
-    dbret = new->field->open (new->field, field_txn, segment->name,
+    dbret = new->field->open (new->field, field_txn, self->name,
         PyString_AsString (fieldname), DB_BTREE, DB_CREATE | DB_THREAD, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open segment for %s: %s",
@@ -123,13 +107,13 @@ Segment_get_field_DB (terane_Segment *segment, terane_Txn *txn, PyObject *fieldn
     }
 
     /* swap the old fields array with the new array */
-    PyMem_Free (segment->fields);
-    segment->fields = fields;
+    PyMem_Free (self->fields);
+    self->fields = fields;
 
     /* sort the new fields array in alphabetical order */
-    segment->fields[segment->nfields] = new;
-    segment->nfields++;
-    qsort (segment->fields, segment->nfields, sizeof(terane_Field *), _Segment_cmp_fields);
+    self->fields[self->nfields] = new;
+    self->nfields++;
+    qsort (self->fields, self->nfields, sizeof(terane_Field *), _Segment_cmp_fields);
 
     return new->field;
 
@@ -177,8 +161,7 @@ terane_Segment_get_field_meta (terane_Segment *self, PyObject *args)
     if ((PyObject *) txn == Py_None)
         txn = NULL;
 
-    /* get the field DB.  if the field doesn't exist, then KeyError is set */
-    field = Segment_get_field_DB (self, txn, fieldname);
+    field = terane_Segment_get_field_DB (self, txn, fieldname);
     if (field == NULL)
         return NULL;
 
@@ -241,8 +224,7 @@ terane_Segment_set_field_meta (terane_Segment *self, PyObject *args)
         &PyString_Type, &fieldname, &metadata))
         return NULL;
 
-    /* get the field DB.  if the field doesn't exist, then KeyError is set */
-    field = Segment_get_field_DB (self, txn, fieldname);
+    field = terane_Segment_get_field_DB (self, txn, fieldname);
     if (field == NULL)
         return NULL;
 
