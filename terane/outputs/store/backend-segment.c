@@ -20,94 +20,7 @@
 #include "backend.h"
 
 /*
- * _Segment_close: close the underlying DB handles.
- */
-static void
-_Segment_close (terane_Segment *segment)
-{
-    int i, dbret;
-    terane_Field *field;
-
-    /* close the metadata db */
-    if (segment->metadata != NULL) {
-        dbret = segment->metadata->close (segment->metadata, 0);
-        if (dbret != 0)
-            PyErr_Format (terane_Exc_Error, "Failed to close _metadata DB: %s",
-                db_strerror (dbret));
-    }
-    segment->metadata = NULL;
-
-    /* close the documents db */
-    if (segment->documents != NULL) {
-        dbret = segment->documents->close (segment->documents, 0);
-        if (dbret != 0)
-            PyErr_Format (terane_Exc_Error, "Failed to close _documents DB: %s",
-                db_strerror (dbret));
-    }
-    segment->documents = NULL;
-
-    /* close each field db */
-    if (segment->fields != NULL) {
-        for (i = 0; i < segment->nfields; i++) {
-            field = segment->fields[i];
-            if (field != NULL) {
-                if (field->field != NULL) {
-                    dbret = field->field->close (field->field, 0);
-                    if (dbret != 0)
-                        PyErr_Format (terane_Exc_Error, "Failed to close segment field '%s': %s",
-                            PyString_AsString (field->name), db_strerror (dbret));
-                }
-                field->field = NULL;
-                if (field->name != NULL)
-                    Py_DECREF (field->name);
-                field->name = NULL;
-                PyMem_Free (field);
-            }
-        }
-        PyMem_Free (segment->fields);
-    }
-    segment->fields = NULL;
-    segment->nfields = 0;
-
-    /* if this segment is marked to be deleted */
-    if (segment->deleted) {
-        dbret = segment->env->env->dbremove (segment->env->env, NULL,
-            segment->name, NULL, DB_AUTO_COMMIT);
-        if (dbret != 0)
-            PyErr_Format (terane_Exc_Error, "Failed to delete segment: %s",
-                db_strerror (dbret));
-    }
-}
-
-/*
- * terane_Segment_delete: Mark the Segment for deletion.
- */
-PyObject *
-terane_Segment_delete (terane_Segment *self)
-{
-    self->deleted = 1;
-    Py_RETURN_NONE;
-}
-
-
-/*
- * terane_Segment_close: close the underlying DB handles.
- *
- * callspec: Segment.close()
- * parameters: None
- * returns: None
- * exceptions:
- *  terane.outputs.store.backend.Error: failed to close a db in the Segment
- */
-PyObject *
-terane_Segment_close (terane_Segment *self)
-{
-    _Segment_close (self);
-    Py_RETURN_NONE;
-}
-
-/*
- * terane_Segment_dealloc: free resources for the Segment object.
+ * _Segment_dealloc: free resources for the Segment object.
  */
 static void
 _Segment_dealloc (terane_Segment *self)
@@ -126,18 +39,18 @@ _Segment_dealloc (terane_Segment *self)
 }
 
 /*
- * terane_Segment_new: allocate a new Segment object.
+ * _Segment_new: allocate a new Segment object.
  *
- * callspec: Segment(toc)
+ * callspec: Segment(toc, sid)
  * parameters:
  *  toc (TOC): A TOC object to use for bookkeeping
- *  id (long): The segment id
+ *  sid (long): The segment id
  * returns: A new Segment object
  * exceptions:
  *  terane.outputs.store.backend.Error: failed to create/open the Segment
  */
-PyObject *
-terane_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
+static PyObject *
+_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     terane_Segment *self;
     DB_TXN *txn = NULL;
@@ -165,7 +78,7 @@ terane_Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     Py_INCREF (self->toc);
 
     /* verify the segment exists in the TOC */
-    exists = TOC_contains_segment (self->toc, NULL, segment_id);
+    exists = terane_TOC_contains_segment (self->toc, NULL, segment_id);
     if (exists < 0)
         goto error;
     if (exists == 0) {
@@ -246,6 +159,84 @@ error:
     if (self)
         _Segment_dealloc ((terane_Segment *) self);
     return NULL;
+}
+
+/*
+ * terane_Segment_delete: Mark the Segment for deletion.
+ */
+PyObject *
+terane_Segment_delete (terane_Segment *self)
+{
+    self->deleted = 1;
+    Py_RETURN_NONE;
+}
+
+/*
+ * terane_Segment_close: close the underlying DB handles.
+ *
+ * callspec: Segment.close()
+ * parameters: None
+ * returns: None
+ * exceptions:
+ *  terane.outputs.store.backend.Error: failed to close a db in the Segment
+ */
+PyObject *
+terane_Segment_close (terane_Segment *self)
+{
+    int i, dbret;
+    terane_Field *field;
+
+    /* close the metadata db */
+    if (self->metadata != NULL) {
+        dbret = self->metadata->close (self->metadata, 0);
+        if (dbret != 0)
+            PyErr_Format (terane_Exc_Error, "Failed to close _metadata DB: %s",
+                db_strerror (dbret));
+    }
+    self->metadata = NULL;
+
+    /* close the documents db */
+    if (self->documents != NULL) {
+        dbret = self->documents->close (self->documents, 0);
+        if (dbret != 0)
+            PyErr_Format (terane_Exc_Error, "Failed to close _documents DB: %s",
+                db_strerror (dbret));
+    }
+    self->documents = NULL;
+
+    /* close each field db */
+    if (self->fields != NULL) {
+        for (i = 0; i < self->nfields; i++) {
+            field = self->fields[i];
+            if (field != NULL) {
+                if (field->field != NULL) {
+                    dbret = field->field->close (field->field, 0);
+                    if (dbret != 0)
+                        PyErr_Format (terane_Exc_Error, "Failed to close segment field '%s': %s",
+                            PyString_AsString (field->name), db_strerror (dbret));
+                }
+                field->field = NULL;
+                if (field->name != NULL)
+                    Py_DECREF (field->name);
+                field->name = NULL;
+                PyMem_Free (field);
+            }
+        }
+        PyMem_Free (self->fields);
+    }
+    self->fields = NULL;
+    self->nfields = 0;
+
+    /* if this segment is marked to be deleted */
+    if (self->deleted) {
+        dbret = self->env->env->dbremove (self->env->env, NULL,
+            self->name, NULL, DB_AUTO_COMMIT);
+        if (dbret != 0)
+            PyErr_Format (terane_Exc_Error, "Failed to delete segment: %s",
+                db_strerror (dbret));
+    }
+
+    Py_RETURN_NONE;
 }
 
 /* Segment methods declaration */
@@ -340,5 +331,5 @@ PyTypeObject terane_SegmentType = {
     0,                         /* tp_dictoffset */
     0,                         /* tp_init */
     0,                         /* tp_alloc */
-    terane_Segment_new
+    _Segment_new               /* tp_new */
 };
