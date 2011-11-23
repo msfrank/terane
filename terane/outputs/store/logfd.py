@@ -17,12 +17,12 @@
 
 import os
 from twisted.internet.abstract import FileDescriptor
-from terane.outputs.store.backend import get_logfd
+from terane.outputs.store import backend
 from terane.loggers import getLogger
 
 class LogFD(FileDescriptor):
     def __init__(self):
-        self._fd = get_logfd()
+        self._fd = backend.log_fd()
         self._buffer = []
         FileDescriptor.__init__(self)
 

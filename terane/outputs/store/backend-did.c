@@ -20,10 +20,10 @@
 #include "backend.h"
 
 /*
- * DID_num_to_string: convert a document id integer into a string.
+ * terane_DID_num_to_string: convert a document id integer into a string.
  */
 int
-DID_num_to_string (terane_DID_num did_num, terane_DID_string did_string)
+terane_DID_num_to_string (terane_DID_num did_num, terane_DID_string did_string)
 {
     assert (did_string != NULL);
     if (snprintf (did_string, TERANE_DID_STRING_LEN, "%016llx", did_num) < 16)
@@ -32,10 +32,10 @@ DID_num_to_string (terane_DID_num did_num, terane_DID_string did_string)
 }
 
 /*
- * DocID_string_to_num: convert a document id string into an integer.
+ * terane_DID_string_to_num: convert a document id string into an integer.
  */
 int
-DID_string_to_num (terane_DID_string did_string, terane_DID_num *did_num)
+terane_DID_string_to_num (terane_DID_string did_string, terane_DID_num *did_num)
 {
     char *endptr = NULL;
 
