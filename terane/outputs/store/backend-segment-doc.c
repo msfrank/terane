@@ -43,7 +43,7 @@ terane_Segment_new_doc (terane_Segment *self, PyObject *args)
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "O!K", &terane_TxnType, &txn, &did_num))
         return NULL;
-    DID_num_to_string (did_num, did_string);
+    terane_DID_num_to_string (did_num, did_string);
     /* put the record.  the record number is set in the key */
     memset (&key, 0, sizeof (DBT));
     memset (&data, 0, sizeof (DBT));
@@ -91,7 +91,7 @@ terane_Segment_get_doc (terane_Segment *self, PyObject *args)
     if ((PyObject *) txn == Py_None)
         txn = NULL;
     /* use the document id as the record number */
-    DID_num_to_string (did_num, did_string);
+    terane_DID_num_to_string (did_num, did_string);
     memset (&key, 0, sizeof (DBT));
     key.data = did_string;
     key.size = TERANE_DID_STRING_LEN;
@@ -149,7 +149,7 @@ terane_Segment_set_doc (terane_Segment *self, PyObject *args)
         return NULL;
     /* use the document id as the record number */
     memset (&key, 0, sizeof (DBT));
-    DID_num_to_string (did_num, did_string);
+    terane_DID_num_to_string (did_num, did_string);
     key.data = did_string;
     key.size = TERANE_DID_STRING_LEN;
     /* set the document from the data parameter */
@@ -195,7 +195,7 @@ terane_Segment_delete_doc (terane_Segment *self, PyObject *args)
     if (!PyArg_ParseTuple (args, "O!K", &terane_TxnType, &txn, &did_num))
         return NULL;
     /* get the document id */
-    DID_num_to_string (did_num, did_string);
+    terane_DID_num_to_string (did_num, did_string);
     memset (&key, 0, sizeof (DBT));
     key.data = did_string;
     key.size = TERANE_DID_STRING_LEN;
@@ -243,7 +243,7 @@ terane_Segment_contains_doc (terane_Segment *self, PyObject *args)
     if ((PyObject *) txn == Py_None)
         txn = NULL;
     /* get the document id */
-    DID_num_to_string (did_num, did_string);
+    terane_DID_num_to_string (did_num, did_string);
     memset (&key, 0, sizeof (DBT));
     key.data = did_string;
     key.size = TERANE_DID_STRING_LEN;
@@ -274,7 +274,7 @@ _Segment_next_doc (terane_Iter *iter, DBT *key, DBT *data)
     terane_DID_num did_num;
     PyObject *id, *document, *tuple;
 
-    DID_string_to_num ((char *) key->data, &did_num);
+    terane_DID_string_to_num ((char *) key->data, &did_num);
     /* get the document id */
     id = PyLong_FromUnsignedLongLong (did_num);
     /* get the document */
@@ -322,7 +322,7 @@ terane_Segment_iter_docs (terane_Segment *self, PyObject *args)
             db_strerror (dbret));
         return NULL;
     }
-    iter = Iter_new ((PyObject *) self, cursor, &ops);
+    iter = terane_Iter_new ((PyObject *) self, cursor, &ops);
     if (iter == NULL)
         cursor->close (cursor);
     return iter;
