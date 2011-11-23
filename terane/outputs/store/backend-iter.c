@@ -25,32 +25,25 @@
 static void
 _Iter_dealloc (terane_Iter *self)
 {
-    terane_Iter_close (self, NULL);
+    terane_Iter_close (self);
     self->ob_type->tp_free ((PyObject *) self);
 }
 
 /*
- * Iter_new: allocate a new Iter object using the supplied DB cursor.
+ * terane_Iter_new: allocate a new Iter object using the supplied DB cursor.
  * 
  * returns: A new Iter object
- * exceptions:
- *  Exception: cursor was invalid
  */
 PyObject *
-Iter_new (PyObject *parent, DBC *cursor, terane_Iter_ops *ops)
+terane_Iter_new (PyObject *parent, DBC *cursor, terane_Iter_ops *ops)
 {
     terane_Iter *iter;
 
-    if (cursor == NULL) {
-        PyErr_Format (terane_Exc_Error, "Failed to allocate Iter: cursor is invalid");
-        return NULL;
-    }
-    if (ops == NULL) {
-        PyErr_Format (terane_Exc_Error, "Failed to allocate Iter: ops is invalid");
-        return NULL;
-    }
+    assert (parent != NULL);
+    assert (cursor != NULL);
+    assert (ops != NULL);
+
     iter = PyObject_New (terane_Iter, &terane_IterType);
-    /* iter = (terane_Iter *) _Iter_new (&terane_IterType, NULL, NULL); */
     if (iter == NULL)
         return NULL;
     Py_INCREF (parent);
@@ -66,19 +59,17 @@ Iter_new (PyObject *parent, DBC *cursor, terane_Iter_ops *ops)
 }
 
 /*
- * Iter_new_range: allocate a new Iter object using the supplied DB
+ * terane_Iter_new_range: allocate a new Iter object using the supplied DB
  *  cursor.
  * 
  * returns: A new Iter object
- * exceptions:
- *  Exception: cursor was invalid
  */
 PyObject *
-Iter_new_range (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void *key, size_t len)
+terane_Iter_new_range (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void *key, size_t len)
 {
     terane_Iter *iter;
 
-    iter = (terane_Iter *) Iter_new (parent, cursor, ops);
+    iter = (terane_Iter *) terane_Iter_new (parent, cursor, ops);
     if (iter == NULL)
         return NULL;
     iter->itype = TERANE_ITER_RANGE;
@@ -94,18 +85,16 @@ Iter_new_range (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void *key, 
 }
 
 /*
- * Iter_new_from: allocate a new Iter object using the supplied DB cursor.
+ * terane_Iter_new_from: allocate a new Iter object using the supplied DB cursor.
  * 
  * returns: A new Iter object
- * exceptions:
- *  Exception: cursor was invalid
  */
 PyObject *
-Iter_new_from (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void *key, size_t len)
+terane_Iter_new_from (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void *key, size_t len)
 {
     terane_Iter *iter;
 
-    iter = (terane_Iter *) Iter_new (parent, cursor, ops);
+    iter = (terane_Iter *) terane_Iter_new (parent, cursor, ops);
     if (iter == NULL)
         return NULL;
     iter->itype = TERANE_ITER_FROM;
@@ -154,7 +143,7 @@ _Iter_get (terane_Iter *iter, DBT *key, int itype, int flags)
             break;
         case DB_NOTFOUND:
             /* if no item is found, then return NULL to stop iterating */
-            terane_Iter_close (iter, NULL);
+            terane_Iter_close (iter);
             return NULL;
         /* for any other error, set exception and return NULL */
         case DB_LOCK_DEADLOCK:
@@ -188,7 +177,7 @@ _Iter_get (terane_Iter *iter, DBT *key, int itype, int flags)
         PyMem_Free (data.data);
     /* if the callback returned NULL, then close the cursor */
     if (item == NULL)
-        terane_Iter_close (iter, NULL);
+        terane_Iter_close (iter);
 
     return item;
 }
@@ -281,7 +270,7 @@ terane_Iter_skip (terane_Iter *self, PyObject *args)
  *  terane.outputs.store.backend.Error: Iterator is closed
  */
 PyObject *
-terane_Iter_reset (terane_Iter *self, PyObject *args)
+terane_Iter_reset (terane_Iter *self)
 {
     if (self->cursor == NULL)
         return PyErr_Format (terane_Exc_Error, "iterator is closed");
@@ -301,7 +290,7 @@ terane_Iter_reset (terane_Iter *self, PyObject *args)
  *  terane.outputs.store.backend.Error: failed to close the DBC cursor
  */
 PyObject *
-terane_Iter_close (terane_Iter *self, PyObject *args)
+terane_Iter_close (terane_Iter *self)
 {
     if (self->cursor != NULL) {
         int dbret = self->cursor->close (self->cursor);
