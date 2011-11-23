@@ -25,7 +25,7 @@
 static void
 _Env_dealloc (terane_Env *self)
 {
-    terane_Env_close (self, NULL);
+    terane_Env_close (self);
     self->ob_type->tp_free ((PyObject *) self);
 }
 
@@ -47,17 +47,17 @@ _Env_checkpoint_thread (void *ptr)
         /* run the deadlock detector */
         dbret = env->env->lock_detect (env->env, 0, DB_LOCK_MINLOCKS, &rejected);
         if (dbret != 0)
-            log_msg (TERANE_LOG_ERROR, "terane.outputs.store.backend",
+            terane_log_msg (TERANE_LOG_ERROR, "terane.outputs.store.backend",
                 "lock_detect failed: %s", db_strerror (dbret));
         else if (rejected > 0)
-            log_msg (TERANE_LOG_DEBUG, "terane.outputs.store.backend",
+            terane_log_msg (TERANE_LOG_DEBUG, "terane.outputs.store.backend",
                 "lock_detect rejected %i requests", rejected);
         /* sleep for a minute */
         sleep (60);
         /* perform a checkpoint */
         dbret = env->env->txn_checkpoint (env->env, 0, 0, 0);
         if (dbret != 0)
-            log_msg (TERANE_LOG_ERROR, "terane.outputs.store.backend", "txn_checkpoint failed: %s",
+            terane_log_msg (TERANE_LOG_ERROR, "terane.outputs.store.backend", "txn_checkpoint failed: %s",
                 db_strerror (dbret));
         pthread_testcancel ();
     }
@@ -70,7 +70,7 @@ _Env_checkpoint_thread (void *ptr)
 static void
 _Env_log_err (const DB_ENV *env, const char *prefix, const char *msg)
 {
-    log_msg (TERANE_LOG_ERROR, "terane.outputs.store.backend", "BDB: %s", msg);
+    terane_log_msg (TERANE_LOG_ERROR, "terane.outputs.store.backend", "BDB: %s", msg);
 }
 
 /*
@@ -79,11 +79,11 @@ _Env_log_err (const DB_ENV *env, const char *prefix, const char *msg)
 static void
 _Env_log_msg (const DB_ENV *env, const char *msg)
 {
-    log_msg (TERANE_LOG_INFO, "terane.outputs.store.backend", "BDB: %s", msg);
+    terane_log_msg (TERANE_LOG_INFO, "terane.outputs.store.backend", "BDB: %s", msg);
 }
 
 /*
- * terane_Env_new: allocate a new Env object.
+ * _Env_new: allocate a new Env object.
  *
  * callspec: Env(envdir, datadir, tmpdir, options)
  * parameters:
@@ -95,8 +95,8 @@ _Env_log_msg (const DB_ENV *env, const char *msg)
  * exceptions:
  *  Exception: failed to create the DB_ENV handle
  */
-PyObject *
-terane_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
+static PyObject *
+_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     terane_Env *self;
     char *envdir = NULL, *datadir = NULL, *tmpdir = NULL;
@@ -208,7 +208,7 @@ error:
  *  Exception: failed to close the DB_ENV handle
  */
 PyObject *
-terane_Env_close (terane_Env *self, PyObject *args)
+terane_Env_close (terane_Env *self)
 {
     int dbret;
 
@@ -276,5 +276,5 @@ PyTypeObject terane_EnvType = {
     0,                         /* tp_dictoffset */
     0,                         /* tp_init */
     0,                         /* tp_alloc */
-    terane_Env_new
+    _Env_new                   /* tp_new */
 };
