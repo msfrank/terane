@@ -23,10 +23,10 @@ static int logfd[2] = { -1, -1 };
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 /*
- * terane__get_logfd:
+ * terane_log_fd: return the fd where log messages are written to.
  */
 PyObject *
-terane__get_logfd(PyObject *self, PyObject *args)
+terane_Module_log_fd (PyObject *self)
 {
     int fd;
 
@@ -40,10 +40,10 @@ terane__get_logfd(PyObject *self, PyObject *args)
 }
 
 /*
- * log:
+ * terane_log_msg: write a message to the log fd.
  */
 void
-log_msg (int level, const char *logger, const char *fmt, ...)
+terane_log_msg (int level, const char *logger, const char *fmt, ...)
 {
     va_list ap;
     char buffer[8192];
