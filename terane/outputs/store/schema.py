@@ -42,48 +42,48 @@ class FieldDict(MutableMapping):
     """
     FieldDict is a proxy object to interface with the schema table in the index.
     """
-    def __init__(self, toc):
-        self._toc = toc
+    def __init__(self, index):
+        self._index = index
 
     def __getitem__(self, fieldname):
         fieldname = str(fieldname)
-        with self._toc.new_txn() as txn:
-            return pickle.loads(self._toc.get_field(txn, fieldname))
+        with self._index.new_txn() as txn:
+            return pickle.loads(self._index.get_field(txn, fieldname))
 
     def __setitem__(self, fieldname, fieldspec):
         fieldname = str(fieldname)
-        with self._toc.new_txn() as txn:
-            self._toc.add_field(txn, fieldname, pickle.dumps(fieldspec))
+        with self._index.new_txn() as txn:
+            self._index.add_field(txn, fieldname, pickle.dumps(fieldspec))
 
     def __delitem__(self, fieldname):
         fieldname = str(fieldname)
-        with self._toc.new_txn() as txn:
-            self._toc.remove_field(txn, fieldname)
+        with self._index.new_txn() as txn:
+            self._index.remove_field(txn, fieldname)
 
     def __contains__(self, fieldname):
         fieldname = str(fieldname)
-        with self._toc.new_txn() as txn:
-            return self._toc.contains_field(txn, fieldname)
+        with self._index.new_txn() as txn:
+            return self._index.contains_field(txn, fieldname)
 
     def __len__(self):
-        return self._toc.count_fields()
+        return self._index.count_fields()
 
     def __iter__(self):
-        with self._toc.new_txn() as txn:
-            return iter([k for k,v in self._toc.list_fields(txn)])
+        with self._index.new_txn() as txn:
+            return iter([k for k,v in self._index.list_fields(txn)])
 
     def __eq__(self, other):
-        with self._toc.new_txn() as txn:
-            fd1 = sorted(self._toc.list_fields(txn))
-            fd2 = sorted(other._toc.list_fields(txn))
+        with self._index.new_txn() as txn:
+            fd1 = sorted(self._index.list_fields(txn))
+            fd2 = sorted(other._index.list_fields(txn))
             return cmp(fd1, fd2)
 
 class Schema(WhooshSchema):
     """
     A thin wrapper over whoosh.fields.Schema to use the schema from the index.
     """
-    def __init__(self, toc):
-        self._fields = FieldDict(toc)
+    def __init__(self, index):
+        self._fields = FieldDict(index)
         self._dyn_fields = {}
 
     def add(self, name, fieldtype, glob=False):

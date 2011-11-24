@@ -33,12 +33,11 @@
 
 import pickle, time
 import datetime, dateutil.parser, dateutil.tz
-from whoosh.index import Index as WhooshIndex
 from whoosh.fields import FieldType, TEXT, DATETIME, NUMERIC
 from whoosh.analysis import SimpleAnalyzer
 from whoosh.searching import Searcher as WhooshSearcher
 from whoosh.qparser import QueryParser
-from terane.outputs.store.backend import TOC, Segment
+from terane.outputs.store import backend
 from terane.outputs.store.schema import Schema
 from terane.outputs.store.reading import MultiReader
 from terane.outputs.store.writing import IndexWriter
@@ -47,7 +46,7 @@ from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.index')
 
-class Index(WhooshIndex):
+class Index(backend.Index):
     """
     Stores events, which are a collection of fields.  Internally, an Index is
     made up of multiple Segments.  Instantiation opens the Index, creating it
@@ -63,23 +62,22 @@ class Index(WhooshIndex):
     """
 
     def __init__(self, env, name, ids):
+        backend.Index.__init__(self, env, name)
         try:
-            self._env = env
             self.name = name
             self._ids = ids
             # load the table of contents
-            self._toc = TOC(self._env, self.name)
             # load schema
-            self.schema = Schema(self._toc)
+            self.schema = Schema(self)
             self._segments = []
             self._indexsize = 0
             self._currsize = 0
             self._lastmodified = 0
             self._lastid = 0
             # load data segments
-            with self._toc.new_txn() as txn:
-                for segmentid in self._toc.iter_segments(txn):
-                    segment = Segment(txn, self._toc, segmentid)
+            with self.new_txn() as txn:
+                for segmentid in self.iter_segments(txn):
+                    segment = backend.Segment(txn, self, segmentid)
                     last_update = json_decode(segment.get_meta(txn, 'last-update'))
                     self._currsize = last_update['size']
                     self._indexsize += last_update['size']
@@ -89,9 +87,9 @@ class Index(WhooshIndex):
                         self._lastmodified = last_update['last-modified']
                     self._segments.append((segment, segmentid))
             if self._segments == []:
-                with self._toc.new_txn() as txn:
-                    segmentid = self._toc.new_segment(txn)
-                    segment = Segment(txn, self._toc, segmentid)
+                with self.new_txn() as txn:
+                    segmentid = self.new_segment(txn)
+                    segment = backend.Segment(txn, self, segmentid)
                     segment.set_meta(txn, 'created-on', json_encode(int(time.time())))
                     last_update = {'size': 0, 'last-id': 0, 'last-modified': 0}
                     segment.set_meta(txn, 'last-update', json_encode(last_update))
@@ -99,7 +97,7 @@ class Index(WhooshIndex):
                 logger.info("created first segment for new index '%s'" % name)
             else:
                 logger.info("found %i documents in %i segments for index '%s'" % (
-                    self._indexsize, self._toc.count_segments(), name))
+                    self._indexsize, self.count_segments(), name))
             logger.debug("last document id is %s" % self._lastid)
             # get a reference to the current segment
             self._current = self._segments[-1]
@@ -123,82 +121,6 @@ class Index(WhooshIndex):
         except:
             self.close()
             raise
-
-    def last_id(self):
-        """
-        Return the document ID of the last document added to the index.
-
-        :returns: The last document ID.
-        :rtype: long.
-        """
-        return self._lastid
-
-    def last_modified(self):
-        """
-        Return the date when the index was last modified, in seconds since
-        the epoch (as returned by time.time().
-
-        This method overrides WhooshIndex.last_modified().
-
-        :returns: The last-modified date in seconds since the epoch.
-        :rtype: int.
-        """
-        return self._lastmodified
-
-    def doc_count_all(self):
-        """
-        Return the total number of documents in the index.
-
-        This method overrides WhooshIndex.doc_count_all().
-
-        :returns: The total number of documents in the index.
-        :rtype: long.
-        """
-        return self._indexsize
-    
-    def doc_count(self):
-        """
-        Return the total number of documents in the index.  This returns the
-        same value as doc_count_all().  the difference is that doc_count()
-        returns the number of undeleted documents, while doc_count_all()
-        returns the total number of documents.  since we don't keep track of
-        deleted documents (we just delete em :) these two values are always the
-        same.
-
-        This method overrides WhooshIndex.doc_count().
-
-        :returns: The total number of documents in the index.
-        :rtype: long.
-        """
-        return self._indexsize
-
-    def is_empty(self):
-        """
-        Return True if no documents are in the index.
-
-        This method overrides WhooshIndex.is_empty().
-        """
-        if self._indexsize == 0:
-            return True
-        return False
-       
-    def reader(self):
-        """
-        Return a new Reader object instance, which is protected by a new
-        transaction.
-
-        This method overrides WhooshIndex.reader().
-        """
-        return MultiReader(self)
-    
-    def writer(self):
-        """
-        Return a new Writer object instance, which is protected by a new
-        transaction.
-
-        This method overrides WhooshIndex.writer().
-        """
-        return IndexWriter(self)
 
     def add(self, fields):
         """
@@ -247,7 +169,7 @@ class Index(WhooshIndex):
         """
         Search the index using the specified whoosh.Query.
         """
-        searcher = self.searcher()
+        searcher = WhooshSearcher(self.reader(), fromindex=self)
         return searcher.search(query, limit, sortedby, reverse)
 
     def segments(self):
@@ -260,9 +182,9 @@ class Index(WhooshIndex):
         """
         Allocate a new Segment, making it the new current segment.
         """
-        with self._toc.new_txn() as txn:
-            segmentid = self._toc.new_segment(txn)
-            segment = Segment(self._toc, segmentid)
+        with self.new_txn() as txn:
+            segmentid = self.new_segment(txn)
+            segment = backend.Segment(txn, self, segmentid)
             segment.set_meta(txn, 'created-on', json_encode(int(time.time())))
             last_update = {'size': 0, 'last-id': 0, 'last-modified': 0}
             segment.set_meta(txn, 'last-update', json_encode(last_update))
@@ -274,8 +196,6 @@ class Index(WhooshIndex):
     def optimize(self, segment):
         """
         Optimize the specified Segment on-disk.
-
-        This method overrides WhooshIndex.optimize().
         """
         raise NotImplemented("Index.optimize() not implemented")
 
@@ -287,8 +207,8 @@ class Index(WhooshIndex):
         self._segments.remove((segment,segmentid))
         # remove the segment from the TOC.  this also marks the segment
         # for eventual physical deletion, when the Segment is deallocated.
-        with self._toc.new_txn() as txn:
-            self._toc.delete_segment(txn, segmentid)
+        with self.new_txn() as txn:
+            self.delete_segment(txn, segmentid)
         segment.delete()
         logger.debug("deleted segment %s.%i" % (self.name, segmentid))
 
@@ -301,11 +221,119 @@ class Index(WhooshIndex):
         for segment,segmentid in self._segments:
             segment.close()
         self._segments = list()
-        # close the TOC
-        self._toc.close()
-        self._toc = None
-        # unref the environment
-        self._env = None
         # unref the schema
         self.schema = None
+        # close the index
+        backend.Index.close(self)
         logger.debug("closed event index '%s'" % self.name)
+ 
+    def reader(self):
+        """
+        Return a new Reader object instance, which is protected by a new
+        transaction.
+        """
+        return MultiReader(self)
+    
+    def writer(self):
+        """
+        Return a new Writer object instance, which is protected by a new
+        transaction.
+        """
+        return IndexWriter(self)
+
+    def last_id(self):
+        """
+        Return the document ID of the last document added to the index.
+
+        :returns: The last document ID.
+        :rtype: long.
+        """
+        return self._lastid
+
+    def last_modified(self):
+        """
+        Return the date when the index was last modified, in seconds since
+        the epoch (as returned by time.time().
+
+        :returns: The last-modified date in seconds since the epoch.
+        :rtype: int.
+        """
+        return self._lastmodified
+
+    def latest_generation(self):
+        """
+        Always returns -1, since the backend doesn't support versioning.
+
+        :rtype: bool.
+        """
+        return -1
+
+    def update_to_date(self):
+        """
+        Always returns True since the backend doesn't support versioning.
+
+        :rtype: bool
+        """
+        return True
+
+    def refresh(self):
+        """
+        Always returns the current Index object, since the backend doesn't
+        support versioning.
+        
+        :returns: :class:`Index`
+        """
+        return self
+
+    def doc_count_all(self):
+        """
+        Return the total number of documents in the index.
+
+        :returns: The total number of documents in the index.
+        :rtype: long.
+        """
+        return self._indexsize
+    
+    def doc_count(self):
+        """
+        Return the total number of documents in the index.  This returns the
+        same value as doc_count_all().  the difference is that doc_count()
+        returns the number of undeleted documents, while doc_count_all()
+        returns the total number of documents.  since we don't keep track of
+        deleted documents (we just delete em :) these two values are always the
+        same.
+
+        :returns: The total number of documents in the index.
+        :rtype: long.
+        """
+        return self._indexsize
+
+    def is_empty(self):
+        """
+        Return True if no documents are in the index.
+
+        :rtype: bool.
+        """
+        if self._indexsize == 0:
+            return True
+        return False
+ 
+    def field_length(self, fieldname):
+        """
+        Returns the total length of the field across all documents.
+        """
+        r = self.reader()
+        try:
+            return r.field_length(fieldname)
+        finally:
+            r.close()
+    
+    def max_field_length(self, fieldname):
+        """
+        Returns the maximum length of the field across all documents.
+        """
+        r = self.reader()
+        try:
+            return r.max_field_length(fieldname)
+        finally:
+            r.close()

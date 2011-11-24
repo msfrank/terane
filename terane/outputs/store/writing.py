@@ -35,7 +35,6 @@ import pickle, time
 from whoosh.fields import UnknownFieldError
 from whoosh.writing import IndexWriter as WhooshIndexWriter
 from terane.outputs.store.encoding import json_encode, json_decode
-from terane.outputs.store.backend import DocExists, Txn
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.writing')
@@ -47,7 +46,7 @@ class IndexWriter(WhooshIndexWriter):
     def __init__(self, ix):
         self._ix = ix
         self._segment = ix._current[0]
-        self._txn = ix._toc.new_txn()
+        self._txn = ix.new_txn()
 
     def add_field(self, fieldname, fieldspec):
         raise Exception("IndexWriter.add_field() not implemented")
