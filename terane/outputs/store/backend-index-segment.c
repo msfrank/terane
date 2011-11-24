@@ -54,8 +54,6 @@ terane_Index_new_segment (terane_Index *self, PyObject *args)
                 db_strerror (dbret));
             return NULL;
     }
-    /* increment the internal segment count */
-    self->nsegments += 1;
     /* return the segment record number */
     sid = *((db_recno_t *) key.data);
     /* free allocated memory */
@@ -145,20 +143,6 @@ terane_Index_iter_segments (terane_Index *self, PyObject *args)
 }
 
 /*
- * terane_Index_count_segments: return the number of segments in the Index.
- *
- * callspec: Index.count_segments()
- * parameters: None
- * returns: The number of segments in the Index.
- * exceptions: None
- */
-PyObject *
-terane_Index_count_segments (terane_Index *self)
-{
-    return PyLong_FromUnsignedLong (self->nsegments);
-}
-
-/*
  * terane_Index_delete_segment: remove the segment from the Index.
  *
  * callspec: Index.delete_segment(txn, segment)
@@ -194,7 +178,5 @@ terane_Index_delete_segment (terane_Index *self, PyObject *args)
                 db_strerror (dbret));
             break;
     }
-    /* decrement the internal segment count */
-    self->nsegments -= 1;
     Py_RETURN_NONE;
 }

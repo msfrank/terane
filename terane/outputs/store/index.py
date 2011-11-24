@@ -97,7 +97,7 @@ class Index(backend.Index):
                 logger.info("created first segment for new index '%s'" % name)
             else:
                 logger.info("found %i documents in %i segments for index '%s'" % (
-                    self._indexsize, self.count_segments(), name))
+                    self._indexsize, len(self._segments), name))
             logger.debug("last document id is %s" % self._lastid)
             # get a reference to the current segment
             self._current = self._segments[-1]

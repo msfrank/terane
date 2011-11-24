@@ -42,7 +42,6 @@ typedef struct _terane_Index {
     DB *metadata;
     DB *schema;
     DB *segments;
-    unsigned long nsegments;
     unsigned long nfields;
 } terane_Index;
 

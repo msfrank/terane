@@ -47,6 +47,7 @@ terane_Iter_new (PyObject *parent, DBC *cursor, terane_Iter_ops *ops)
     if (iter == NULL)
         return NULL;
     Py_INCREF (parent);
+    /* PyObject_New doesn't set fields to 0, so make sure we initialize all fields */
     iter->parent = parent;
     iter->cursor = cursor;
     iter->initialized = 0;

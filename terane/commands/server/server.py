@@ -27,7 +27,7 @@ from terane.stats import stats
 from terane.loggers import getLogger, startLogging, StdoutHandler, FileHandler
 from terane.loggers import ERROR, WARNING, INFO, DEBUG
 
-logger = getLogger('terane.server')
+logger = getLogger('terane.commands.server.server')
 
 class ServerError(Exception):
     pass
@@ -113,7 +113,7 @@ class Server(MultiService):
         # start all services
         self.startService()
         # Quaid, start the reactor!
-        logger.debug("starting terane server")
+        logger.debug("-------- starting terane server --------")
         reactor.run()
         # ignore SIGINT and SIGTERM, since we are shutting down
         signal.signal(signal.SIGINT, signal.SIG_IGN)

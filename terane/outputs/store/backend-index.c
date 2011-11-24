@@ -51,7 +51,7 @@ _Index_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 /*
  * _Index_init: initialize a new Index object.
  *
- * callspec: Index(env, name)
+ * callspec: Index.__init__(env, name)
  * parameters:
  *  env (Env): A Env object to use as the environment
  *  name (string): The name of the Index
@@ -125,10 +125,7 @@ _Index_init (terane_Index *self, PyObject *args, PyObject *kwds)
         goto error;
     }
 
-    /* get an initial count of fields.  we don't wrap this call in
-     * a transaction because we aren't making any modifications, and there
-     * is no possibility of external modification during this call.
-     */
+    /* get an initial count of fields */
     dbret = self->schema->stat (self->schema, txn, &stats, 0);
     if (dbret != 0) {
         if (stats)
@@ -158,23 +155,6 @@ _Index_init (terane_Index *self, PyObject *args, PyObject *kwds)
         goto error;
     }
 
-    /* get an initial count of segments.  we don't wrap this call in
-     * a transaction because we aren't making any modifications, and there
-     * is no possibility of external modification during this call.
-     */
-    dbret = self->segments->stat (self->segments, txn, &stats, 0);
-    if (dbret != 0) {
-        if (stats)
-            PyMem_Free (stats);
-        PyErr_Format (terane_Exc_Error, "Failed to get segment count: %s",
-            db_strerror (dbret));
-        goto error;
-    }
-    self->nsegments = (unsigned long) stats->bt_nkeys;
-    if (stats)
-        PyMem_Free (stats);
-    stats = NULL;
-  
     /* commit new databases */
     dbret = txn->commit (txn, 0);
     if (dbret != 0) {
@@ -279,8 +259,6 @@ PyMethodDef _Index_methods[] =
         "Allocate a new segment ID." },
     { "iter_segments", (PyCFunction) terane_Index_iter_segments, METH_VARARGS,
         "Iterate all segment IDs in the Index." },
-    { "count_segments", (PyCFunction) terane_Index_count_segments, METH_NOARGS,
-        "Return the count of segments in the Index." },
     { "delete_segment", (PyCFunction) terane_Index_delete_segment, METH_VARARGS,
         "Delete the segment from the Index." },
     { "new_txn", (PyCFunction) terane_Index_new_txn, METH_NOARGS,
