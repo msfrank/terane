@@ -35,7 +35,7 @@ typedef struct _terane_Env {
     pthread_t checkpoint_thread;
 } terane_Env;
 
-typedef struct _terane_TOC {
+typedef struct _terane_Index {
     PyObject_HEAD
     terane_Env *env;
     PyObject *name;
@@ -44,7 +44,7 @@ typedef struct _terane_TOC {
     DB *segments;
     unsigned long nsegments;
     unsigned long nfields;
-} terane_TOC;
+} terane_Index;
 
 typedef struct _terane_Iter {
     PyObject_HEAD
@@ -80,7 +80,7 @@ typedef struct _terane_Field {
 
 typedef struct _terane_Segment {
     PyObject_HEAD
-    terane_TOC *toc;                /* reference to the table of contents */
+    terane_Index *index;            /* reference to the table of contents */
     char *name;                     /* name of the segment file */
     DB *metadata;                   /* DB handle to the segment metadata */
     DB *documents;                  /* DB handle to the segment documents */
@@ -98,21 +98,21 @@ typedef char terane_DID_string[17];
  */
 PyObject *terane_Env_close (terane_Env *self);
 
-PyObject * terane_TOC_get_meta (terane_TOC *self, PyObject *args);
-PyObject * terane_TOC_set_meta (terane_TOC *self, PyObject *args);
-PyObject * terane_TOC_get_field (terane_TOC *self, PyObject *args);
-PyObject * terane_TOC_add_field (terane_TOC *self, PyObject *args);
-PyObject * terane_TOC_remove_field (terane_TOC *self, PyObject *args);
-PyObject * terane_TOC_contains_field (terane_TOC *self, PyObject *args);
-PyObject * terane_TOC_list_fields (terane_TOC *self, PyObject *args);
-PyObject * terane_TOC_count_fields (terane_TOC *self);
-PyObject * terane_TOC_new_segment (terane_TOC *self, PyObject *args);
-int        terane_TOC_contains_segment (terane_TOC *self, terane_Txn *txn, db_recno_t sid);
-PyObject * terane_TOC_iter_segments (terane_TOC *self, PyObject *args);
-PyObject * terane_TOC_count_segments (terane_TOC *self);
-PyObject * terane_TOC_delete_segment (terane_TOC *self, PyObject *args);
-PyObject * terane_TOC_new_txn (terane_TOC *self);
-PyObject * terane_TOC_close (terane_TOC *self);
+PyObject * terane_Index_get_meta (terane_Index *self, PyObject *args);
+PyObject * terane_Index_set_meta (terane_Index *self, PyObject *args);
+PyObject * terane_Index_get_field (terane_Index *self, PyObject *args);
+PyObject * terane_Index_add_field (terane_Index *self, PyObject *args);
+PyObject * terane_Index_remove_field (terane_Index *self, PyObject *args);
+PyObject * terane_Index_contains_field (terane_Index *self, PyObject *args);
+PyObject * terane_Index_list_fields (terane_Index *self, PyObject *args);
+PyObject * terane_Index_count_fields (terane_Index *self);
+PyObject * terane_Index_new_segment (terane_Index *self, PyObject *args);
+int        terane_Index_contains_segment (terane_Index *self, terane_Txn *txn, db_recno_t sid);
+PyObject * terane_Index_iter_segments (terane_Index *self, PyObject *args);
+PyObject * terane_Index_count_segments (terane_Index *self);
+PyObject * terane_Index_delete_segment (terane_Index *self, PyObject *args);
+PyObject * terane_Index_new_txn (terane_Index *self);
+PyObject * terane_Index_close (terane_Index *self);
 
 PyObject * terane_Segment_get_meta (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_set_meta (terane_Segment *self, PyObject *args);
@@ -170,7 +170,7 @@ extern PyTypeObject terane_IterType;
 extern PyTypeObject terane_EnvType;
 extern PyTypeObject terane_TxnType;
 extern PyTypeObject terane_SegmentType;
-extern PyTypeObject terane_TOCType;
+extern PyTypeObject terane_IndexType;
 
 /* 
  * exception type declarations

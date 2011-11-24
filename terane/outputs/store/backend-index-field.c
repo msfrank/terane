@@ -20,9 +20,9 @@
 #include "backend.h"
 
 /*
- * terane_TOC_get_field: get the pickled fieldspec for the field.
+ * terane_Index_get_field: get the pickled fieldspec for the field.
  *
- * callspec: TOC.get_field(txn, fieldname)
+ * callspec: Index.get_field(txn, fieldname)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   fieldname (string): The field name
@@ -31,7 +31,7 @@
  *   terane.outputs.store.backend.Error: A db error occurred when trying to get the field
  */
 PyObject *
-terane_TOC_get_field (terane_TOC *self, PyObject *args)
+terane_Index_get_field (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     const char *fieldname = NULL;
@@ -81,9 +81,9 @@ terane_TOC_get_field (terane_TOC *self, PyObject *args)
 }
 
 /*
- * terane_TOC_add_field: add the field to the Store.
+ * terane_Index_add_field: add the field to the Store.
  *
- * callspec: TOC.add_field(txn, fieldname, fieldspec)
+ * callspec: Index.add_field(txn, fieldname, fieldspec)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  *   fieldname (string): The field name
@@ -93,7 +93,7 @@ terane_TOC_get_field (terane_TOC *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to add the field
  */
 PyObject *
-terane_TOC_add_field (terane_TOC *self, PyObject *args)
+terane_Index_add_field (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     char *fieldname = NULL;
@@ -131,9 +131,9 @@ terane_TOC_add_field (terane_TOC *self, PyObject *args)
 }
 
 /*
- * terane_TOC_remove_field: remove a field from the index
+ * terane_Index_remove_field: remove a field from the index
  *
- * callspec: TOC.remove_field(txn, fieldname)
+ * callspec: Index.remove_field(txn, fieldname)
  * parameters:
  *   txn (Txn):
  *   fieldname (string): The field name
@@ -142,15 +142,15 @@ terane_TOC_add_field (terane_TOC *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to remove the field
  */
 PyObject *
-terane_TOC_remove_field (terane_TOC *self, PyObject *args)
+terane_Index_remove_field (terane_Index *self, PyObject *args)
 {
-    return PyErr_Format (PyExc_NotImplementedError, "TOC.remove_field() not implemented");
+    return PyErr_Format (PyExc_NotImplementedError, "Index.remove_field() not implemented");
 }
 
 /*
- * terane_TOC_contains_field: return True if field exists in the schema
+ * terane_Index_contains_field: return True if field exists in the schema
  *
- * callspec: TOC.contains_field(txn, fieldname)
+ * callspec: Index.contains_field(txn, fieldname)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   fieldname (string): The field name
@@ -159,7 +159,7 @@ terane_TOC_remove_field (terane_TOC *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to get the fields
  */
 PyObject *
-terane_TOC_contains_field (terane_TOC *self, PyObject *args)
+terane_Index_contains_field (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
@@ -193,9 +193,9 @@ terane_TOC_contains_field (terane_TOC *self, PyObject *args)
 }
 
 /*
- * terane_TOC_list_fields: return a list of the fields in the schema
+ * terane_Index_list_fields: return a list of the fields in the schema
  *
- * callspec: TOC.list_fields(txn)
+ * callspec: Index.list_fields(txn)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  * returns: a list of (fieldname,pickledfield) tuples.
@@ -203,7 +203,7 @@ terane_TOC_contains_field (terane_TOC *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to get the fields
  */
 PyObject *
-terane_TOC_list_fields (terane_TOC *self, PyObject *args)
+terane_Index_list_fields (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     DBC *cursor = NULL;
@@ -297,15 +297,15 @@ error:
 }
 
 /*
- * terane_TOC_count_fields: Return the number of fields in the schema.
+ * terane_Index_count_fields: Return the number of fields in the schema.
  *
- * callspec: TOC.count_fields()
+ * callspec: Index.count_fields()
  * parameters: None
  * returns: The number of fields in the schema. 
  * exceptions: None
  */
 PyObject *
-terane_TOC_count_fields (terane_TOC *self)
+terane_Index_count_fields (terane_Index *self)
 {
     return PyLong_FromUnsignedLong (self->nfields);
 }

@@ -20,12 +20,12 @@
 #include "backend.h"
 
 /*
- * terane_TOC_dealloc: free resources for the TOC object.
+ * terane_Index_dealloc: free resources for the Index object.
  */
 static void
-_TOC_dealloc (terane_TOC *self)
+_Index_dealloc (terane_Index *self)
 {
-    terane_TOC_close (self);
+    terane_Index_close (self);
     if (self->env != NULL)
         Py_DECREF (self->env);
     self->env = NULL;
@@ -36,39 +36,42 @@ _TOC_dealloc (terane_TOC *self)
 }
 
 /*
- * terane_TOC_new: allocate a new TOC object.
+ * _Index_new: allocate a new Index object.
  *
- * callspec: TOC(env, name)
+ * callspec: Index.__new__()
+ * returns: A new Index object
+ * exceptions: None
+ */
+static PyObject *
+_Index_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    return type->tp_alloc (type, 0);
+}
+
+/*
+ * _Index_init: initialize a new Index object.
+ *
+ * callspec: Index(env, name)
  * parameters:
  *  env (Env): A Env object to use as the environment
  *  name (string): The name of the Index
- * returns: A new TOC object
+ * returns: 0 if initialization succeeded, otherwise -1
  * exceptions:
- *  terane.outputs.store.backend.Error: failed to create/open the TOC
+ *  terane.outputs.store.backend.Error: failed to create/open the Index
  */
-PyObject *
-terane_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
+static int
+_Index_init (terane_Index *self, PyObject *args, PyObject *kwds)
 {
-    terane_TOC *self;
-    char *kwlist[] = {"env", "name", NULL};
     char *tocname = NULL;
     DB_TXN *txn = NULL;
     DB_BTREE_STAT *stats = NULL;
     int dbret;
-
-    /* allocate the TOC object */
-    self = (terane_TOC *) type->tp_alloc (type, 0);
-    if (self == NULL) {
-        PyErr_SetString (terane_Exc_Error, "Failed to allocate TOC");
-        return NULL;
-    }
-    self->name = NULL;
-    self->metadata = NULL;
-    self->schema = NULL;
-    self->segments = NULL;
-
+    
+    /* __init__ has already been called, don't repeat initialization */
+    if (self->env != NULL)
+        return 0;
     /* parse constructor parameters */
-    if (!PyArg_ParseTupleAndKeywords (args, kwds, "O!O!", kwlist,
+    if (!PyArg_ParseTuple (args, "O!O!", 
         &terane_EnvType, &self->env, &PyString_Type, &self->name))
         goto error;
     Py_INCREF (self->env);
@@ -182,8 +185,7 @@ terane_TOC_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     PyMem_Free (tocname);
 
-    /* return the initialized TOC object on success */
-    return (PyObject *) self;
+    return 0;
 
 /* if there is an error, then free any locally allocated memory and references */
 error:
@@ -192,36 +194,36 @@ error:
     if (tocname != NULL)
         PyMem_Free (tocname);
     if (self)
-        _TOC_dealloc ((terane_TOC *) self);
-    return NULL;
+        _Index_dealloc ((terane_Index *) self);
+    return -1;
 }
 
 /*
- * terane_TOC_new_txn: create a new top-level Txn object.
+ * terane_Index_new_txn: create a new top-level Txn object.
  *
- * callspec: TOC.new_txn()
+ * callspec: Index.new_txn()
  * parameters: None
  * returns: A new Txn object.
  * exceptions:
  *  terane.outputs.store.backend:Error: failed to create a DB_TXN handle.
  */
 PyObject *
-terane_TOC_new_txn (terane_TOC *self)
+terane_Index_new_txn (terane_Index *self)
 {
     return terane_Txn_new (self->env, NULL);
 }
 
 /*
- * terane_TOC_close: close the underlying DB handles.
+ * terane_Index_close: close the underlying DB handles.
  *
- * callspec: TOC.close()
+ * callspec: Index.close()
  * parameters: None
  * returns: None
  * exceptions:
- *  terane.outputs.store.backend.Error: failed to close a db in the TOC
+ *  terane.outputs.store.backend.Error: failed to close a db in the Index
  */
 PyObject *
-terane_TOC_close (terane_TOC *self)
+terane_Index_close (terane_Index *self)
 {
     int dbret;
 
@@ -254,48 +256,48 @@ terane_TOC_close (terane_TOC *self)
     Py_RETURN_NONE;
 }
 
-/* TOC methods declaration */
-PyMethodDef _TOC_methods[] =
+/* Index methods declaration */
+PyMethodDef _Index_methods[] =
 {
-    { "get_meta", (PyCFunction) terane_TOC_get_meta, METH_VARARGS,
-        "Get a TOC metadata value." },
-    { "set_meta", (PyCFunction) terane_TOC_set_meta, METH_VARARGS,
-        "Set a TOC metadata value." },
-    { "get_field", (PyCFunction) terane_TOC_get_field, METH_VARARGS,
-        "Get a field in the TOC." },
-    { "add_field", (PyCFunction) terane_TOC_add_field, METH_VARARGS,
-        "Add a field to the TOC." },
-    { "remove_field", (PyCFunction) terane_TOC_remove_field, METH_VARARGS,
-        "Remove a field from the TOC." },
-    { "contains_field", (PyCFunction) terane_TOC_contains_field, METH_VARARGS,
-        "Return True if the field exists in the TOC." },
-    { "list_fields", (PyCFunction) terane_TOC_list_fields, METH_VARARGS,
-        "Return a list of all fields in the TOC." },
-    { "count_fields", (PyCFunction) terane_TOC_count_fields, METH_NOARGS,
-        "Return the count of fields in the TOC." },
-    { "new_segment", (PyCFunction) terane_TOC_new_segment, METH_VARARGS,
+    { "get_meta", (PyCFunction) terane_Index_get_meta, METH_VARARGS,
+        "Get a Index metadata value." },
+    { "set_meta", (PyCFunction) terane_Index_set_meta, METH_VARARGS,
+        "Set a Index metadata value." },
+    { "get_field", (PyCFunction) terane_Index_get_field, METH_VARARGS,
+        "Get a field in the Index." },
+    { "add_field", (PyCFunction) terane_Index_add_field, METH_VARARGS,
+        "Add a field to the Index." },
+    { "remove_field", (PyCFunction) terane_Index_remove_field, METH_VARARGS,
+        "Remove a field from the Index." },
+    { "contains_field", (PyCFunction) terane_Index_contains_field, METH_VARARGS,
+        "Return True if the field exists in the Index." },
+    { "list_fields", (PyCFunction) terane_Index_list_fields, METH_VARARGS,
+        "Return a list of all fields in the Index." },
+    { "count_fields", (PyCFunction) terane_Index_count_fields, METH_NOARGS,
+        "Return the count of fields in the Index." },
+    { "new_segment", (PyCFunction) terane_Index_new_segment, METH_VARARGS,
         "Allocate a new segment ID." },
-    { "iter_segments", (PyCFunction) terane_TOC_iter_segments, METH_VARARGS,
-        "Iterate all segment IDs in the TOC." },
-    { "count_segments", (PyCFunction) terane_TOC_count_segments, METH_NOARGS,
-        "Return the count of segments in the TOC." },
-    { "delete_segment", (PyCFunction) terane_TOC_delete_segment, METH_VARARGS,
-        "Delete the segment from the TOC." },
-    { "new_txn", (PyCFunction) terane_TOC_new_txn, METH_NOARGS,
+    { "iter_segments", (PyCFunction) terane_Index_iter_segments, METH_VARARGS,
+        "Iterate all segment IDs in the Index." },
+    { "count_segments", (PyCFunction) terane_Index_count_segments, METH_NOARGS,
+        "Return the count of segments in the Index." },
+    { "delete_segment", (PyCFunction) terane_Index_delete_segment, METH_VARARGS,
+        "Delete the segment from the Index." },
+    { "new_txn", (PyCFunction) terane_Index_new_txn, METH_NOARGS,
         "Create a top-level Txn." },
-    { "close", (PyCFunction) terane_TOC_close, METH_NOARGS,
-        "Close the TOC." },
+    { "close", (PyCFunction) terane_Index_close, METH_NOARGS,
+        "Close the Index." },
     { NULL, NULL, 0, NULL }
 };
 
-/* TOC type declaration */
-PyTypeObject terane_TOCType = {
+/* Index type declaration */
+PyTypeObject terane_IndexType = {
     PyObject_HEAD_INIT(NULL)
     0,
-    "backend.TOC",
-    sizeof (terane_TOC),
+    "backend.Index",
+    sizeof (terane_Index),
     0,                         /*tp_itemsize*/
-    (destructor) _TOC_dealloc,
+    (destructor) _Index_dealloc,
     0,                         /*tp_print*/
     0,                         /*tp_getattr*/
     0,                         /*tp_setattr*/
@@ -310,15 +312,15 @@ PyTypeObject terane_TOCType = {
     0,                         /*tp_getattro*/
     0,                         /*tp_setattro*/
     0,                         /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT,        /*tp_flags*/
-    "DB TOC",                  /* tp_doc */
+    Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
+    "DB Index",                /* tp_doc */
     0,                         /* tp_traverse */
     0,                         /* tp_clear */
     0,                         /* tp_richcompare */
     0,                         /* tp_weaklistoffset */
     0,                         /* tp_iter */
     0,                         /* tp_iternext */
-    _TOC_methods,
+    _Index_methods,
     0,                         /* tp_members */
     0,                         /* tp_getset */
     0,                         /* tp_base */
@@ -326,7 +328,7 @@ PyTypeObject terane_TOCType = {
     0,                         /* tp_descr_get */
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
-    0,                         /* tp_init */
+    _Index_init,
     0,                         /* tp_alloc */
-    terane_TOC_new
+    _Index_new
 };

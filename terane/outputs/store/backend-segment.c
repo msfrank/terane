@@ -26,9 +26,9 @@ static void
 _Segment_dealloc (terane_Segment *self)
 {
     terane_Segment_close (self);
-    if (self->toc != NULL)
-        Py_DECREF (self->toc);
-    self->toc = NULL;
+    if (self->index != NULL)
+        Py_DECREF (self->index);
+    self->index = NULL;
     if (self->name != NULL)
         PyMem_Free (self->name);
     self->name = NULL;
@@ -51,10 +51,10 @@ _Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 /*
  * _Segment_init: initialize a Segment object.
  *
- * callspec: Segment.__init__(txn, toc, sid)
+ * callspec: Segment.__init__(txn, index, sid)
  * parameters:
  *  txn (Txn): A Txn object to wrap the operation in
- *  toc (TOC): A TOC object to use for bookkeeping
+ *  index (Index): An Index object to use for bookkeeping
  *  sid (long): The segment id
  * returns: 0 on success, otherwise -1
  * exceptions:
@@ -69,16 +69,16 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
     int exists, dbret;
 
     /* __init__ has already been called, don't repeat initialization */
-    if (self->toc != NULL)
+    if (self->index != NULL)
         return 0;
     /* parse constructor parameters */
     if (!PyArg_ParseTuple (args, "O!O!k",
-        &terane_TxnType, &txn, &terane_TOCType, &self->toc, &segment_id))
+        &terane_TxnType, &txn, &terane_IndexType, &self->index, &segment_id))
         goto error;
-    Py_INCREF (self->toc);
+    Py_INCREF (self->index);
 
     /* verify the segment exists in the TOC */
-    exists = terane_TOC_contains_segment (self->toc, txn, segment_id);
+    exists = terane_Index_contains_segment (self->index, txn, segment_id);
     if (exists < 0)
         goto error;
     if (exists == 0) {
@@ -87,16 +87,16 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
         goto error;
     }
     /* allocate a buffer large enough to hold the longest segment name */
-    self->name = PyMem_Malloc (PyString_Size (self->toc->name) + 12);
+    self->name = PyMem_Malloc (PyString_Size (self->index->name) + 12);
     if (self->name == NULL) {
         PyErr_NoMemory ();
         goto error;
     }
-    sprintf (self->name, "%s.%lu", PyString_AsString (self->toc->name),
+    sprintf (self->name, "%s.%lu", PyString_AsString (self->index->name),
         (unsigned long int) segment_id);
 
     /* wrap db creation in a transaction */
-    dbret = self->toc->env->env->txn_begin (self->toc->env->env, txn->txn, &segment_txn, 0);
+    dbret = self->index->env->env->txn_begin (self->index->env->env, txn->txn, &segment_txn, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create transaction: %s",
             db_strerror (dbret));
@@ -104,7 +104,7 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
     }
 
     /* create the DB handle for metadata */
-    dbret = db_create (&self->metadata, self->toc->env->env, 0);
+    dbret = db_create (&self->metadata, self->index->env->env, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create handle for _metadata: %s",
             db_strerror (dbret));
@@ -120,7 +120,7 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
     }
 
     /* create the DB handle for documents */
-    dbret = db_create (&self->documents, self->toc->env->env, 0);
+    dbret = db_create (&self->documents, self->index->env->env, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create handle for _documents: %s",
             db_strerror (dbret));
@@ -224,7 +224,7 @@ terane_Segment_close (terane_Segment *self)
 
     /* if this segment is marked to be deleted */
     if (self->deleted) {
-        dbret = self->toc->env->env->dbremove (self->toc->env->env, NULL,
+        dbret = self->index->env->env->dbremove (self->index->env->env, NULL,
             self->name, NULL, DB_AUTO_COMMIT);
         if (dbret != 0)
             PyErr_Format (terane_Exc_Error, "Failed to delete segment: %s",

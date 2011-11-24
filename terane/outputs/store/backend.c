@@ -37,7 +37,7 @@ initbackend (void)
     /* verify the object types are ready to load */
     if (PyType_Ready (&terane_EnvType) < 0)
         return;
-    if (PyType_Ready (&terane_TOCType) < 0)
+    if (PyType_Ready (&terane_IndexType) < 0)
         return;
     if (PyType_Ready (&terane_SegmentType) < 0)
         return;
@@ -52,8 +52,8 @@ initbackend (void)
     /* load the types into the module */
     Py_INCREF (&terane_EnvType);
     PyModule_AddObject (m, "Env", (PyObject *) &terane_EnvType);
-    Py_INCREF (&terane_TOCType);
-    PyModule_AddObject (m, "TOC", (PyObject *) &terane_TOCType);
+    Py_INCREF (&terane_IndexType);
+    PyModule_AddObject (m, "Index", (PyObject *) &terane_IndexType);
     Py_INCREF (&terane_SegmentType);
     PyModule_AddObject (m, "Segment", (PyObject *) &terane_SegmentType);
     Py_INCREF (&terane_TxnType);

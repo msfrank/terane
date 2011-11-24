@@ -20,9 +20,9 @@
 #include "backend.h"
 
 /*
- * terane_TOC_get_meta: get a TOC metadata value
+ * terane_Index_get_meta: get a Index metadata value
  *
- * callspec: TOC.get_meta(txn, id)
+ * callspec: Index.get_meta(txn, id)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   id (string): The metadata id
@@ -32,7 +32,7 @@
  *   terane.outputs.store.backend.Error: A db error occurred when trying to retrieve the record
  */
 PyObject *
-terane_TOC_get_meta (terane_TOC *self, PyObject *args)
+terane_Index_get_meta (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     const char *id = NULL;
@@ -82,9 +82,9 @@ terane_TOC_get_meta (terane_TOC *self, PyObject *args)
 }
 
 /*
- * terane_TOC_set_meta: set a TOC metadata value
+ * terane_Index_set_meta: set a Index metadata value
  *
- * callspec: TOC.set_meta(txn, id, value)
+ * callspec: Index.set_meta(txn, id, value)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  *   id (string): The metadata id
@@ -94,7 +94,7 @@ terane_TOC_get_meta (terane_TOC *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
  */
 PyObject *
-terane_TOC_set_meta (terane_TOC *self, PyObject *args)
+terane_Index_set_meta (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     const char *id = NULL;

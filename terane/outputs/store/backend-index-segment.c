@@ -20,9 +20,9 @@
 #include "backend.h"
 
 /*
- * terane_TOC_new_segment: allocate a new Segment id.
+ * terane_Index_new_segment: allocate a new Segment id.
  *
- * callspec: TOC.new_segment(txn)
+ * callspec: Index.new_segment(txn)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  * returns: A long representing the segment id.
@@ -30,7 +30,7 @@
  *   terane.outputs.store.backend.Error: A db error occurred when trying to allocate the segment.
  */
 PyObject *
-terane_TOC_new_segment (terane_TOC *self, PyObject *args)
+terane_Index_new_segment (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     db_recno_t sid = 0;
@@ -65,10 +65,10 @@ terane_TOC_new_segment (terane_TOC *self, PyObject *args)
 }
 
 /*
- * TOC_contains_segment: return true if segment exists in the TOC
+ * Index_contains_segment: return true if segment exists in the Index
  */
 int
-terane_TOC_contains_segment (terane_TOC *self, terane_Txn *txn, db_recno_t sid)
+terane_Index_contains_segment (terane_Index *self, terane_Txn *txn, db_recno_t sid)
 {
     DBT key;
     int dbret;
@@ -91,10 +91,10 @@ terane_TOC_contains_segment (terane_TOC *self, terane_Txn *txn, db_recno_t sid)
 }
 
 /*
- * _TOC_next_segment: return the segment id from the current cursor item
+ * _Index_next_segment: return the segment id from the current cursor item
  */
 static PyObject *
-_TOC_next_segment (terane_Iter *iter, DBT *key, DBT *data)
+_Index_next_segment (terane_Iter *iter, DBT *key, DBT *data)
 {
     db_recno_t sid = 0;
 
@@ -103,9 +103,9 @@ _TOC_next_segment (terane_Iter *iter, DBT *key, DBT *data)
 }
 
 /*
- * terane_TOC_iter_segments: iterate through all segments.
+ * terane_Index_iter_segments: iterate through all segments.
  *
- * callspec: TOC.iter_segments(txn)
+ * callspec: Index.iter_segments(txn)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  * returns: a new Iter object.  Each iteration returns a long representing the
@@ -114,12 +114,12 @@ _TOC_next_segment (terane_Iter *iter, DBT *key, DBT *data)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to create the iterator
  */
 PyObject *
-terane_TOC_iter_segments (terane_TOC *self, PyObject *args)
+terane_Index_iter_segments (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     DBC *cursor = NULL;
     PyObject *iter = NULL;
-    terane_Iter_ops ops = { .next = _TOC_next_segment };
+    terane_Iter_ops ops = { .next = _Index_next_segment };
     int dbret;
 
     /* parse parameters */
@@ -145,23 +145,23 @@ terane_TOC_iter_segments (terane_TOC *self, PyObject *args)
 }
 
 /*
- * terane_TOC_count_segments: return the number of segments in the TOC.
+ * terane_Index_count_segments: return the number of segments in the Index.
  *
- * callspec: TOC.count_segments()
+ * callspec: Index.count_segments()
  * parameters: None
- * returns: The number of segments in the TOC.
+ * returns: The number of segments in the Index.
  * exceptions: None
  */
 PyObject *
-terane_TOC_count_segments (terane_TOC *self)
+terane_Index_count_segments (terane_Index *self)
 {
     return PyLong_FromUnsignedLong (self->nsegments);
 }
 
 /*
- * terane_TOC_delete_segment: remove the segment from the TOC.
+ * terane_Index_delete_segment: remove the segment from the Index.
  *
- * callspec: TOC.delete_segment(txn, segment)
+ * callspec: Index.delete_segment(txn, segment)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   id (long): The identifier of the Segment to delete
@@ -170,7 +170,7 @@ terane_TOC_count_segments (terane_TOC *self)
  *   terane.outputs.store.backend.Error: A db error occurred when trying count the segments
  */
 PyObject *
-terane_TOC_delete_segment (terane_TOC *self, PyObject *args)
+terane_Index_delete_segment (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     unsigned long sid= 0;
@@ -181,7 +181,7 @@ terane_TOC_delete_segment (terane_TOC *self, PyObject *args)
     if (!PyArg_ParseTuple (args, "O!k", &terane_TxnType, &txn, &sid))
         return NULL;
 
-    /* delete segment id from the TOC */
+    /* delete segment id from the Index */
     memset (&key, 0, sizeof (DBT));
     key.data = &sid;
     key.size = sizeof (unsigned long);
