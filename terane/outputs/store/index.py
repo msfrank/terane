@@ -38,7 +38,7 @@ from whoosh.fields import FieldType, TEXT, DATETIME, NUMERIC
 from whoosh.analysis import SimpleAnalyzer
 from whoosh.searching import Searcher as WhooshSearcher
 from whoosh.qparser import QueryParser
-from terane.outputs.store.backend import TOC, Segment, Txn
+from terane.outputs.store.backend import TOC, Segment
 from terane.outputs.store.schema import Schema
 from terane.outputs.store.reading import MultiReader
 from terane.outputs.store.writing import IndexWriter
@@ -70,28 +70,28 @@ class Index(WhooshIndex):
             # load the table of contents
             self._toc = TOC(self._env, self.name)
             # load schema
-            self.schema = Schema(self._env, self._toc)
+            self.schema = Schema(self._toc)
             self._segments = []
             self._indexsize = 0
             self._currsize = 0
             self._lastmodified = 0
             self._lastid = 0
             # load data segments
-            for segmentid in self._toc.iter_segments(None):
-                segment = Segment(self._toc, segmentid)
-                last_update = json_decode(segment.get_meta(None, 'last-update'))
-                self._currsize = last_update['size']
-                self._indexsize += last_update['size']
-                if last_update['last-id'] > self._lastid:
-                    self._lastid = last_update['last-id']
-                if last_update['last-modified'] > self._lastmodified:
-                    self._lastmodified = last_update['last-modified']
-                self._segments.append((segment, segmentid))
+            with self._toc.new_txn() as txn:
+                for segmentid in self._toc.iter_segments(txn):
+                    segment = Segment(txn, self._toc, segmentid)
+                    last_update = json_decode(segment.get_meta(txn, 'last-update'))
+                    self._currsize = last_update['size']
+                    self._indexsize += last_update['size']
+                    if last_update['last-id'] > self._lastid:
+                        self._lastid = last_update['last-id']
+                    if last_update['last-modified'] > self._lastmodified:
+                        self._lastmodified = last_update['last-modified']
+                    self._segments.append((segment, segmentid))
             if self._segments == []:
-                with Txn(self._env) as txn:
+                with self._toc.new_txn() as txn:
                     segmentid = self._toc.new_segment(txn)
-                segment = Segment(self._toc, segmentid)
-                with Txn(self._env) as txn:
+                    segment = Segment(txn, self._toc, segmentid)
                     segment.set_meta(txn, 'created-on', json_encode(int(time.time())))
                     last_update = {'size': 0, 'last-id': 0, 'last-modified': 0}
                     segment.set_meta(txn, 'last-update', json_encode(last_update))
@@ -260,10 +260,9 @@ class Index(WhooshIndex):
         """
         Allocate a new Segment, making it the new current segment.
         """
-        with Txn(self._env) as txn:
+        with self._toc.new_txn() as txn:
             segmentid = self._toc.new_segment(txn)
-        segment = Segment(self._toc, segmentid)
-        with Txn(self._env) as txn:
+            segment = Segment(self._toc, segmentid)
             segment.set_meta(txn, 'created-on', json_encode(int(time.time())))
             last_update = {'size': 0, 'last-id': 0, 'last-modified': 0}
             segment.set_meta(txn, 'last-update', json_encode(last_update))
@@ -288,7 +287,7 @@ class Index(WhooshIndex):
         self._segments.remove((segment,segmentid))
         # remove the segment from the TOC.  this also marks the segment
         # for eventual physical deletion, when the Segment is deallocated.
-        with Txn(self._env) as txn:
+        with self._toc.new_txn() as txn:
             self._toc.delete_segment(txn, segmentid)
         segment.delete()
         logger.debug("deleted segment %s.%i" % (self.name, segmentid))

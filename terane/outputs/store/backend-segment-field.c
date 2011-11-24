@@ -49,7 +49,7 @@ terane_Segment_get_field_DB (terane_Segment *self, terane_Txn *txn, PyObject *fi
         return (*result)->field;
 
     /* if txn is specified, create a child transaction, otherwise create a new txn */
-    dbret = self->env->env->txn_begin (self->env->env,
+    dbret = self->toc->env->env->txn_begin (self->toc->env->env,
         txn? txn->txn : NULL, &field_txn, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create DB_TXN handle: %s",
@@ -82,7 +82,7 @@ terane_Segment_get_field_DB (terane_Segment *self, terane_Txn *txn, PyObject *fi
     memcpy (fields, self->fields, sizeof (terane_Field *) * self->nfields);
 
     /* create the DB handle for the field */
-    dbret = db_create (&new->field, self->env->env, 0);
+    dbret = db_create (&new->field, self->toc->env->env, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create handle for %s: %s",
             PyString_AsString (fieldname), db_strerror (dbret));

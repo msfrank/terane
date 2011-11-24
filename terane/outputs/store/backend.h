@@ -81,7 +81,6 @@ typedef struct _terane_Field {
 typedef struct _terane_Segment {
     PyObject_HEAD
     terane_TOC *toc;                /* reference to the table of contents */
-    terane_Env *env;                /* reference to the object holding the DB_ENV handle */
     char *name;                     /* name of the segment file */
     DB *metadata;                   /* DB handle to the segment metadata */
     DB *documents;                  /* DB handle to the segment documents */

@@ -26,9 +26,6 @@ static void
 _Segment_dealloc (terane_Segment *self)
 {
     terane_Segment_close (self);
-    if (self->env != NULL)
-        Py_DECREF (self->env);
-    self->env = NULL;
     if (self->toc != NULL)
         Py_DECREF (self->toc);
     self->toc = NULL;
@@ -41,44 +38,47 @@ _Segment_dealloc (terane_Segment *self)
 /*
  * _Segment_new: allocate a new Segment object.
  *
- * callspec: Segment(toc, sid)
- * parameters:
- *  toc (TOC): A TOC object to use for bookkeeping
- *  sid (long): The segment id
+ * callspec: Segment.__new__()
  * returns: A new Segment object
- * exceptions:
- *  terane.outputs.store.backend.Error: failed to create/open the Segment
+ * exceptions: None
  */
 static PyObject *
 _Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-    terane_Segment *self;
-    DB_TXN *txn = NULL;
+    return type->tp_alloc (type, 0);
+}
+
+/*
+ * _Segment_init: initialize a Segment object.
+ *
+ * callspec: Segment.__init__(txn, toc, sid)
+ * parameters:
+ *  txn (Txn): A Txn object to wrap the operation in
+ *  toc (TOC): A TOC object to use for bookkeeping
+ *  sid (long): The segment id
+ * returns: 0 on success, otherwise -1
+ * exceptions:
+ *  terane.outputs.store.backend.Error: failed to create/open the Segment
+ */
+static int
+_Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
+{
+    terane_Txn *txn = NULL;
     db_recno_t segment_id = 0;
+    DB_TXN *segment_txn = NULL;
     int exists, dbret;
 
-    /* allocate the Segment object */
-    self = (terane_Segment *) type->tp_alloc (type, 0);
-    if (self == NULL) {
-        PyErr_SetString (terane_Exc_Error, "Failed to allocate Segment");
-        return NULL;
-    }
-    self->toc = NULL;
-    self->env = NULL;
-    self->name = NULL;
-    self->metadata = NULL;
-    self->documents = NULL;
-    self->fields = NULL;
-    self->nfields = 0;
-    self->deleted = 0;
-
+    /* __init__ has already been called, don't repeat initialization */
+    if (self->toc != NULL)
+        return 0;
     /* parse constructor parameters */
-    if (!PyArg_ParseTuple (args, "O!k", &terane_TOCType, &self->toc, &segment_id))
+    if (!PyArg_ParseTuple (args, "O!O!k",
+        &terane_TxnType, &txn, &terane_TOCType, &self->toc, &segment_id))
         goto error;
     Py_INCREF (self->toc);
 
     /* verify the segment exists in the TOC */
-    exists = terane_TOC_contains_segment (self->toc, NULL, segment_id);
+    exists = terane_TOC_contains_segment (self->toc, txn, segment_id);
     if (exists < 0)
         goto error;
     if (exists == 0) {
@@ -86,7 +86,6 @@ _Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
             (unsigned long int) segment_id);
         goto error;
     }
-
     /* allocate a buffer large enough to hold the longest segment name */
     self->name = PyMem_Malloc (PyString_Size (self->toc->name) + 12);
     if (self->name == NULL) {
@@ -97,9 +96,7 @@ _Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
         (unsigned long int) segment_id);
 
     /* wrap db creation in a transaction */
-    self->env = self->toc->env;
-    Py_INCREF (self->env);
-    dbret = self->env->env->txn_begin (self->env->env, NULL, &txn, 0);
+    dbret = self->toc->env->env->txn_begin (self->toc->env->env, txn->txn, &segment_txn, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create transaction: %s",
             db_strerror (dbret));
@@ -107,15 +104,14 @@ _Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
 
     /* create the DB handle for metadata */
-    dbret = db_create (&self->metadata, self->env->env, 0);
+    dbret = db_create (&self->metadata, self->toc->env->env, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create handle for _metadata: %s",
             db_strerror (dbret));
         goto error;
     }
-
     /* open the metadata DB */
-    dbret = self->metadata->open (self->metadata, txn, self->name,
+    dbret = self->metadata->open (self->metadata, segment_txn, self->name,
         "_metadata", DB_BTREE, DB_CREATE | DB_THREAD, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open _metadata: %s",
@@ -124,7 +120,7 @@ _Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
 
     /* create the DB handle for documents */
-    dbret = db_create (&self->documents, self->env->env, 0);
+    dbret = db_create (&self->documents, self->toc->env->env, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create handle for _documents: %s",
             db_strerror (dbret));
@@ -132,16 +128,15 @@ _Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
 
     /* open the documents DB */
-    dbret = self->documents->open (self->documents, txn, self->name,
+    dbret = self->documents->open (self->documents, segment_txn, self->name,
         "_documents", DB_BTREE, DB_CREATE | DB_THREAD, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open _documents: %s",
             db_strerror (dbret));
         goto error;
     }
-
     /* commit new databases */
-    dbret = txn->commit (txn, 0);
+    dbret = segment_txn->commit (segment_txn, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to commit transaction: %s",
             db_strerror (dbret));
@@ -150,15 +145,15 @@ _Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
 
     /* return the initialized Segment object on success */
-    return (PyObject *) self;
+    return 0;
 
 /* if there is an error, then free any locally allocated memory and references */
 error:
-    if (txn != NULL)
-        txn->abort (txn);
+    if (segment_txn != NULL)
+        segment_txn->abort (segment_txn);
     if (self)
         _Segment_dealloc ((terane_Segment *) self);
-    return NULL;
+    return -1;
 }
 
 /*
@@ -229,7 +224,7 @@ terane_Segment_close (terane_Segment *self)
 
     /* if this segment is marked to be deleted */
     if (self->deleted) {
-        dbret = self->env->env->dbremove (self->env->env, NULL,
+        dbret = self->toc->env->env->dbremove (self->toc->env->env, NULL,
             self->name, NULL, DB_AUTO_COMMIT);
         if (dbret != 0)
             PyErr_Format (terane_Exc_Error, "Failed to delete segment: %s",
@@ -313,7 +308,7 @@ PyTypeObject terane_SegmentType = {
     0,                         /*tp_getattro*/
     0,                         /*tp_setattro*/
     0,                         /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT,        /*tp_flags*/
+    Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE, /*tp_flags*/
     "DB Segment",                /* tp_doc */
     0,                         /* tp_traverse */
     0,                         /* tp_clear */
@@ -329,7 +324,7 @@ PyTypeObject terane_SegmentType = {
     0,                         /* tp_descr_get */
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
-    0,                         /* tp_init */
+    _Segment_init,             /* tp_init */
     0,                         /* tp_alloc */
     _Segment_new               /* tp_new */
 };
