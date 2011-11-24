@@ -58,12 +58,15 @@ terane_Txn_new (terane_Env *env, terane_Txn *parent)
     Py_INCREF (env);
     txn->env = env;
     /* create the DB_TXN handle */
+    txn->txn = NULL;
     dbret = env->env->txn_begin (env->env, parent ? parent->txn : NULL, &txn->txn, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create DB_TXN: %s", db_strerror (dbret));
         goto error;
     }
     /* if there is a parent Txn, then add self to parent's list of children */
+    txn->children = NULL;
+    txn->next = NULL;
     if (parent != NULL) {
         Py_INCREF (txn);
         if (parent->children == NULL)
