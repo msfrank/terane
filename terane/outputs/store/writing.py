@@ -47,7 +47,7 @@ class IndexWriter(WhooshIndexWriter):
     def __init__(self, ix):
         self._ix = ix
         self._segment = ix._current[0]
-        self._txn = Txn(ix._env)
+        self._txn = ix._toc.new_txn()
 
     def add_field(self, fieldname, fieldspec):
         raise Exception("IndexWriter.add_field() not implemented")
@@ -58,7 +58,7 @@ class IndexWriter(WhooshIndexWriter):
     def add_document(self, **fields):
         if not self._txn:
             raise WriterExpired("IndexWriter transaction was already commited")
-        with Txn(self._ix._env, self._txn) as doc_txn:
+        with self._txn.new_txn() as doc_txn:
             return self._add(doc_txn, fields)
 
     def _add(self, doc_txn, fields):
@@ -87,7 +87,7 @@ class IndexWriter(WhooshIndexWriter):
             doc_field = {}
 
             # create a transaction for each field in the document
-            field_txn = Txn(self._ix._env, doc_txn)
+            field_txn = doc_txn.new_txn()
 
             # if the field exists in the document, get its value
             value = fields.get(fieldname)

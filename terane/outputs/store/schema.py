@@ -34,7 +34,6 @@
 import pickle
 from collections import MutableMapping
 from whoosh.fields import Schema as WhooshSchema, FieldConfigurationError
-from terane.outputs.store.backend import Txn
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.schema')
@@ -43,39 +42,38 @@ class FieldDict(MutableMapping):
     """
     FieldDict is a proxy object to interface with the schema table in the index.
     """
-    def __init__(self, env, toc):
-        self._env = env
+    def __init__(self, toc):
         self._toc = toc
 
     def __getitem__(self, fieldname):
         fieldname = str(fieldname)
-        with Txn(self._env) as txn:
+        with self._toc.new_txn() as txn:
             return pickle.loads(self._toc.get_field(txn, fieldname))
 
     def __setitem__(self, fieldname, fieldspec):
         fieldname = str(fieldname)
-        with Txn(self._env) as txn:
+        with self._toc.new_txn() as txn:
             self._toc.add_field(txn, fieldname, pickle.dumps(fieldspec))
 
     def __delitem__(self, fieldname):
         fieldname = str(fieldname)
-        with Txn(self._env) as txn:
+        with self._toc.new_txn() as txn:
             self._toc.remove_field(txn, fieldname)
 
     def __contains__(self, fieldname):
         fieldname = str(fieldname)
-        with Txn(self._env) as txn:
+        with self._toc.new_txn() as txn:
             return self._toc.contains_field(txn, fieldname)
 
     def __len__(self):
         return self._toc.count_fields()
 
     def __iter__(self):
-        with Txn(self._env) as txn:
+        with self._toc.new_txn() as txn:
             return iter([k for k,v in self._toc.list_fields(txn)])
 
     def __eq__(self, other):
-        with Txn(self._env) as txn:
+        with self._toc.new_txn() as txn:
             fd1 = sorted(self._toc.list_fields(txn))
             fd2 = sorted(other._toc.list_fields(txn))
             return cmp(fd1, fd2)
@@ -84,8 +82,8 @@ class Schema(WhooshSchema):
     """
     A thin wrapper over whoosh.fields.Schema to use the schema from the index.
     """
-    def __init__(self, env, toc):
-        self._fields = FieldDict(env, toc)
+    def __init__(self, toc):
+        self._fields = FieldDict(toc)
         self._dyn_fields = {}
 
     def add(self, name, fieldtype, glob=False):
