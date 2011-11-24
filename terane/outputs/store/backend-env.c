@@ -85,32 +85,46 @@ _Env_log_msg (const DB_ENV *env, const char *msg)
 /*
  * _Env_new: allocate a new Env object.
  *
- * callspec: Env(envdir, datadir, tmpdir, options)
+ * callspec: Env.__new__()
+ * returns: A new Env object
+ * exceptions: None
+ */
+static PyObject *
+_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    return type->tp_alloc (type, 0);
+}
+
+/*
+ * _Env_init: initialize an Env object.
+ *
+ * callspec: Env.__init__(envdir, datadir, tmpdir, options)
  * parameters:
  *  envdir (string): A path to the DB environment
  *  datadir (string): A path to where the database data is stored
  *  tmpdir (string): A path to a directory used for temporary data
  *  options (dict): A dict mapping string keys to option values
- * returns: A new Env object
+ * returns: 0 on success, otherwise -1
  * exceptions:
  *  Exception: failed to create the DB_ENV handle
  */
-static PyObject *
-_Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
+static int
+_Env_init (terane_Env *self, PyObject *args, PyObject *kwds)
 {
-    terane_Env *self;
     char *envdir = NULL, *datadir = NULL, *tmpdir = NULL;
     PyObject *options = NULL, *value = NULL;
     int dbret;
 
-    /* allocate the Env object */
-    self = (terane_Env *) type->tp_alloc (type, 0);
-    if (self == NULL)
-        return NULL;
+    /* __init__ has already been called, don't repeat initialization */
+    if (self->env != NULL)
+        return 0;
+    /* parse constructor parameters */
+    if (!PyArg_ParseTuple (args, "sssO!", &envdir, &datadir, &tmpdir, &PyDict_Type, &options))
+        goto error;
     /* create the DB_ENV handle */
     dbret = db_env_create (&self->env, 0);
     if (dbret != 0) {
-        PyErr_Format (PyExc_Exception, "Failed to create DB_ENV: %s", db_strerror (dbret));
+        PyErr_Format (terane_Exc_Error, "Failed to create DB_ENV: %s", db_strerror (dbret));
         goto error;
     }
     /* set db error and message logging */
@@ -119,26 +133,23 @@ _Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     self->env->set_verbose (self->env, DB_VERB_DEADLOCK, 1);
     self->env->set_verbose (self->env, DB_VERB_RECOVERY, 1);
     self->env->set_verbose (self->env, DB_VERB_REGISTER, 1);
-    /* parse constructor parameters */
-    if (!PyArg_ParseTuple (args, "sssO!", &envdir, &datadir, &tmpdir, &PyDict_Type, &options))
-        goto error;
     /* set the data_dir.  datadir string should not be freed. */
     dbret = self->env->set_data_dir (self->env, datadir);
     if (dbret != 0) {
-        PyErr_Format (PyExc_Exception, "Failed to set datadir: %s", db_strerror (dbret));
+        PyErr_Format (terane_Exc_Error, "Failed to set datadir: %s", db_strerror (dbret));
         goto error;
     }
     /* set the tmp dir.  the tmpdir string should not be freed. */
     dbret = self->env->set_tmp_dir (self->env, tmpdir);
     if (dbret != 0) {
-        PyErr_Format (PyExc_Exception, "Failed to set tmpdir: %s", db_strerror (dbret));
+        PyErr_Format (terane_Exc_Error, "Failed to set tmpdir: %s", db_strerror (dbret));
         goto error;
     }
     /* set the cache size */
     if ((value = PyDict_GetItemString (options, "cache size")) && PyLong_Check (value)) {
         dbret = self->env->set_cachesize (self->env, 0, (u_int32_t) PyLong_AsLong (value), 0);
         if (dbret != 0) {
-            PyErr_Format (PyExc_Exception, "Failed to set cache size: %s", db_strerror (dbret));
+            PyErr_Format (terane_Exc_Error, "Failed to set cache size: %s", db_strerror (dbret));
             goto error;
         }
     }
@@ -146,7 +157,7 @@ _Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     if ((value = PyDict_GetItemString (options, "max lockers")) && PyLong_Check (value)) {
         dbret = self->env->set_lk_max_lockers (self->env, (u_int32_t) PyLong_AsLong (value));
         if (dbret != 0) {
-            PyErr_Format (PyExc_Exception, "Failed to set max lockers: %s", db_strerror (dbret));
+            PyErr_Format (terane_Exc_Error, "Failed to set max lockers: %s", db_strerror (dbret));
             goto error;
         }
     }
@@ -154,7 +165,7 @@ _Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     if ((value = PyDict_GetItemString (options, "max locks")) && PyLong_Check (value)) {
         dbret = self->env->set_lk_max_locks (self->env, (u_int32_t) PyLong_AsLong (value));
         if (dbret != 0) {
-            PyErr_Format (PyExc_Exception, "Failed to set max locks: %s", db_strerror (dbret));
+            PyErr_Format (terane_Exc_Error, "Failed to set max locks: %s", db_strerror (dbret));
             goto error;
         }
     }
@@ -162,14 +173,14 @@ _Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
     if ((value = PyDict_GetItemString (options, "max objects")) && PyLong_Check (value)) {
         dbret = self->env->set_lk_max_objects (self->env, (u_int32_t) PyLong_AsLong (value));
         if (dbret != 0) {
-            PyErr_Format (PyExc_Exception, "Failed to set max objects: %s", db_strerror (dbret));
+            PyErr_Format (terane_Exc_Error, "Failed to set max objects: %s", db_strerror (dbret));
             goto error;
         }
     }
     /* set db log management parameters */
     dbret = self->env->log_set_config (self->env, DB_LOG_AUTO_REMOVE, 1);
     if (dbret != 0) {
-        PyErr_Format (PyExc_Exception, "Failed to enable log auto-removal: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to enable log auto-removal: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -178,24 +189,24 @@ _Env_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
         DB_INIT_TXN | DB_INIT_MPOOL | DB_INIT_LOCK | DB_INIT_LOG |
         DB_THREAD | DB_RECOVER, 0);
     if (dbret != 0) {
-        PyErr_Format (PyExc_Exception, "Failed to open environment: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to open environment: %s",
             db_strerror (dbret));
         goto error;
     }
     /* start the checkpoint thread */
     dbret = pthread_create (&self->checkpoint_thread, NULL, _Env_checkpoint_thread, self);
     if (dbret != 0) {
-        PyErr_Format (PyExc_Exception, "Failed to start checkpoint thread: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to start checkpoint thread: %s",
             strerror (dbret));
     }
 
-    return (PyObject *) self;
+    return 0;
 
 /* if there was an error, clean up and bail out */
 error:
     if (self)
         _Env_dealloc ((terane_Env *) self);
-    return NULL;
+    return -1;
 }
 
 /*
@@ -223,7 +234,7 @@ terane_Env_close (terane_Env *self)
         /* close the DB environment */
         dbret = self->env->close (self->env, 0);
         if (dbret != 0)
-            PyErr_Format (PyExc_Exception, "Failed to close environment: %s", db_strerror (dbret));
+            PyErr_Format (terane_Exc_Error, "Failed to close environment: %s", db_strerror (dbret));
         self->env = NULL;
     }
     Py_RETURN_NONE;
@@ -258,7 +269,7 @@ PyTypeObject terane_EnvType = {
     0,                         /*tp_getattro*/
     0,                         /*tp_setattro*/
     0,                         /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT,        /*tp_flags*/
+    Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE, /*tp_flags*/
     "DB Environment",          /* tp_doc */
     0,                         /* tp_traverse */
     0,                         /* tp_clear */
@@ -274,7 +285,7 @@ PyTypeObject terane_EnvType = {
     0,                         /* tp_descr_get */
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
-    0,                         /* tp_init */
+    _Env_init,                 /* tp_init */
     0,                         /* tp_alloc */
     _Env_new                   /* tp_new */
 };

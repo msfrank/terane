@@ -22,7 +22,7 @@ from zope.interface import implements
 from whoosh.query import Query
 from terane.plugins import Plugin, IPlugin
 from terane.outputs import Output, ISearchableOutput
-from terane.outputs.store.backend import Env
+from terane.outputs.store.env import Env
 from terane.outputs.store.index import Index
 from terane.outputs.store.idgen import IDGenerator
 from terane.outputs.store.logfd import LogFD
@@ -134,31 +134,8 @@ class StoreOutputPlugin(Plugin):
         # start processing logfd messages
         self._logfd = LogFD()
         self._logfd.startReading()
-        # create berkeleydb-specific directories under the dbdir root
-        datadir = os.path.join(self._dbdir, "data")
-        envdir = os.path.join(self._dbdir, "env")
-        tmpdir = os.path.join(self._dbdir, "tmp")
-        if not os.path.exists(self._dbdir):
-            os.mkdir(self._dbdir)
-        if not os.path.exists(datadir):
-            os.mkdir(datadir)
-        if not os.path.exists(envdir):
-            os.mkdir(envdir)
-        if not os.path.exists(tmpdir):
-            os.mkdir(tmpdir)
-        # lock the database directory
-        try:
-            try:
-                self._lock = os.open(os.path.join(self._dbdir, 'lock'), os.O_WRONLY | os.O_CREAT, 0600)
-                fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except IOError, e:
-                from errno import EACCES, EAGAIN
-                if e.errno in (EACCES, EAGAIN):
-                    raise Exception("database is already locked")
-        except Exception, e:
-            raise Exception("[%s] failed to lock the database directory: %s" % (self.name,e))
         # open the db environment
-        self._env = Env(envdir, datadir, tmpdir, self._options)
+        self._env = Env(self._dbdir, self._options)
         logger.debug("[%s] opened database environment in %s" % (self.name,self._dbdir))
         # start the id generator
         self._ids.startService()
@@ -178,11 +155,4 @@ class StoreOutputPlugin(Plugin):
         self._ids.stopService()
         # close the DB environment
         self._env.close()
-        # unlock the database directory
-        try:
-            if self._lock != None:
-                fcntl.flock(self._lock, fcntl.LOCK_UN | fcntl.LOCK_NB)
-        except Exception, e:
-            logger.warning("[%s] failed to unlock the database directory: %s" % (self.name,e))
-        self._lock = None
         logger.debug("[%s] closed database environment" % self.name)
