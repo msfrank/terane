@@ -53,7 +53,7 @@ class QueryManager(Service):
 
     def search(self, query, indices=None, limit=100, restrictions=None, sorting=None, reverse=False, fields=None):
         query = parseSearchQuery(query)
-        logger.trace("parsed query: %s" % str(query))
+        logger.trace("parsed search query: %s" % str(query))
         # look up the named indices
         if indices == None:
             indices = self._searchables.values()
@@ -68,19 +68,16 @@ class QueryManager(Service):
         # FIXME: check that restrictions is a Restrictions object
         # FIXME: check each fields item to make sure its in at least 1 schema
         # query each index, and aggregate the results
-        try:
-            results = Results(sorting, fields, reverse)
-            rlist = []
-            runtime = 0.0
-            for index in indices:
-                result = index.search(query, limit, sorting, reverse)
-                rlist.append(result)
-                runtime += result.runtime
-            results.extend(*rlist, runtime=runtime)
-            # FIXME: check whether results satisfies all restrictions
-            return results
-        except Exception, e:
-            raise QueryExecutionError(str(e))
+        results = Results(sorting, fields, reverse)
+        rlist = []
+        runtime = 0.0
+        for index in indices:
+            result = index.search(query, limit, sorting, reverse)
+            rlist.append(result)
+            runtime += result.runtime
+        results.extend(*rlist, runtime=runtime)
+        # FIXME: check whether results satisfies all restrictions
+        return results
 
     def tail(self, query, last, indices=None, limit=100, fields=None):
         # look up the named indices
@@ -95,44 +92,45 @@ class QueryManager(Service):
         if limit < 1:
             raise QueryExecutionError("limit must be greater than 0")
         # FIXME: check each fields item to make sure its in at least 1 schema
-        try:
-            results = Results(("ts"), fields, False)
-            # determine the id of the last document
-            lastId = 0
-            for index in indices:
-                l = index.lastId()
-                if l > lastId: lastId = l
-            # if last is 0, then return the id of the latest document
-            if last == 0:
-                results.extend(last=lastId, runtime=0.0)
-                return results
-            # if the latest document id is smaller or equal to supplied last id value,
-            # then return the id of the latest document
-            if lastId <= last:
-                results.extend(last=lastId, runtime=0.0)
-                return results
+        results = Results(("ts"), fields, False)
+        # determine the id of the last document
+        lastId = 0
+        for index in indices:
+            l = index.lastId()
+            if l > lastId: lastId = l
+        # if last is 0, then return the id of the latest document
+        if last == 0:
+            results.extend(last=lastId, runtime=0.0)
+            return results
+        # if the latest document id is smaller or equal to supplied last id value,
+        # then return the id of the latest document
+        if lastId <= last:
+            results.extend(last=lastId, runtime=0.0)
+            return results
+        if query.strip() == '':
+            query = NumericRange('id', last, 2**64, True)
+        else:
             query = parseTailQuery(query)
             # add the additional restriction that the id must be newer than 'last'.
             query = And([NumericRange('id', last, 2**64, True), query]).normalize()
-            # query each index, and aggregate the results
-            rlist = []
-            runtime = 0.0
-            lastId = 0
-            # query each index, and aggregate the results
-            for index in indices:
-                result = index.search(query, limit, ("ts"), False)
-                rlist.append(result)
-                runtime += result.runtime
-                try:
-                    l = result.docnum(-1)
-                    if l > lastId: lastId = l
-                except IndexError:
-                    # if there are no results, result.docnum() raises IndexError
-                    pass
-            results.extend(*rlist, last=lastId, runtime=runtime)
-            return results
-        except Exception, e:
-            raise QueryExecutionError(str(e))
+        logger.trace("parsed tail query: %s" % str(query))
+        # query each index, and aggregate the results
+        rlist = []
+        runtime = 0.0
+        lastId = 0
+        # query each index, and aggregate the results
+        for index in indices:
+            result = index.search(query, limit, ("ts"), False)
+            rlist.append(result)
+            runtime += result.runtime
+            try:
+                l = result.docnum(-1)
+                if l > lastId: lastId = l
+            except IndexError:
+                # if there are no results, result.docnum() raises IndexError
+                pass
+        results.extend(*rlist, last=lastId, runtime=runtime)
+        return results
 
     def showIndex(self, name):
         try:
