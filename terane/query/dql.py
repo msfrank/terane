@@ -62,6 +62,12 @@ Query Grammar
 <searchOrGroup>   ::= <SearchAndGroup> [ 'OR' <SearchAndGroup> ]*
 <searchQuery>     ::= <SearchOrGroup>
 
+<IterSubject>     ::= <subjectTerm>
+<IterNotGroup>    ::= [ 'NOT' ] <IterSubject> | '(' <IterOrGroup> ')'
+<IterAndGroup>    ::= <IterSubject>  [ 'AND' <IterNotGroup> ]*
+<IterOrGroup>     ::= <IterAndGroup> [ 'OR' <IterAndGroup> ]*
+<IterQuery>       ::= <IterOrGroup> [ 'WHERE' <subjectDate> ]
+
 <TailSubject>     ::= <subjectTerm>
 <TailNotGroup>    ::= [ 'NOT' ] <TailSubject> | '(' <TailOrGroup> ')'
 <TailAndGroup>    ::= <TailSubject>  [ 'AND' <TailNotGroup> ]*
@@ -88,16 +94,25 @@ class QuerySyntaxError(BaseException):
 
 def parseSearchQuery(string):
     """
-    Parse the query specified by qstring.  Returns a Query object.
+    Parse the search query specified by qstring.  Returns a Query object.
     """
     try:
         return searchQuery.parseString(string, parseAll=True).asList()[0]
     except pp.ParseBaseException, e:
         raise QuerySyntaxError(e, string)
 
+def parseIterQuery(string):
+    """
+    Parse the iter query specified by qstring.  Returns a Query object.
+    """
+    try:
+        return iterQuery.parseString(string, parseAll=True).asList()[0]
+    except pp.ParseBaseException, e:
+        raise QuerySyntaxError(e, string)
+
 def parseTailQuery(string):
     """
-    Parse the query specified by qstring.  Returns a Query object.
+    Parse the tail query specified by qstring.  Returns a Query object.
     """
     try:
         return tailQuery.parseString(string, parseAll=True).asList()[0]
@@ -274,6 +289,24 @@ searchQuery = pp.operatorPrecedence(subjectDate | subjectId | subjectTerm, [
     (pp.Suppress('AND'), 2, pp.opAssoc.LEFT, parseAndGroup),
     (pp.Suppress('OR'), 2, pp.opAssoc.LEFT, parseOrGroup),
     ])
+
+# iterQuery
+whereClause = pp.Suppress('WHERE') + subjectDate
+whereClause.setParseAction(lambda tokens: tokens[0])
+iterQuery = pp.operatorPrecedence(subjectTerm, [
+    (pp.Suppress('NOT'), 1, pp.opAssoc.RIGHT, parseNotGroup),
+    (pp.Suppress('AND'), 2, pp.opAssoc.LEFT, parseAndGroup),
+    (pp.Suppress('OR'), 2, pp.opAssoc.LEFT, parseOrGroup),
+    ]) + pp.Optional(whereClause)
+def _parseIterQuery(tokens):
+    if len(tokens > 1):
+        daterange = tokens[1]
+    else:
+        utcnow = datetime.datetime.utcnow()
+        onehourago = utcnow - datetime.timedelta(hours=1)
+        daterange = DateRange('ts', onehourago, utcnow, True)
+    return And([tokens[0], daterange]).normalize()
+iterQuery.setParseAction(_parseIterQuery)
 
 # tailQuery
 tailQuery = pp.operatorPrecedence(subjectTerm, [
