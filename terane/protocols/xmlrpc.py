@@ -29,9 +29,11 @@ from terane.loggers import getLogger
 
 logger = getLogger('terane.protocols.xmlrpc')
 
-searches = stats.get('terane.protocols.xmlrpc.searches', 0, int)
-tails = stats.get('terane.protocols.xmlrpc.tails', 0, int)
+searches = stats.get('terane.protocols.xmlrpc.search.count', 0, int)
+iters = stats.get('terane.protocols.xmlrpc.iter.count', 0, int)
+tails = stats.get('terane.protocols.xmlrpc.tail.count', 0, int)
 totalsearchtime = stats.get('terane.protocols.xmlrpc.search.totaltime', 0.0, float)
+totalitertime = stats.get('terane.protocols.xmlrpc.iter.totaltime', 0.0, float)
 totaltailtime = stats.get('terane.protocols.xmlrpc.tail.totaltime', 0.0, float)
 
 class FaultInternalError(xmlrpclib.Fault):
@@ -60,8 +62,21 @@ class XMLRPCDispatcher(XMLRPC):
     def xmlrpc_search(self, query, indices=None, limit=100, reverse=False, fields=None):
         try:
             searches.value += 1
-            results = queries.search(unicode(query), indices, limit, None, ("ts",), reverse, fields)
+            results = queries.search(unicode(query), indices, limit, ("ts",), reverse, fields)
             totalsearchtime.value += float(results[0]['runtime'])
+            return list(results)
+        except (QuerySyntaxError, QueryExecutionError), e:
+            raise FaultBadRequest(e)
+        except BaseException, e:
+            logger.exception(e)
+            raise FaultInternalError()
+
+    @useThread
+    def xmlrpc_iter(self, query, last, indices=None, limit=100, reverse=False, fields=None):
+        try:
+            iters.value += 1
+            results = queries.iter(unicode(query), last, indices, limit, reverse, fields)
+            totalitertime.value += float(results[0]['runtime'])
             return list(results)
         except (QuerySyntaxError, QueryExecutionError), e:
             raise FaultBadRequest(e)
