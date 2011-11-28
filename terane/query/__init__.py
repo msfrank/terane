@@ -16,7 +16,7 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 from twisted.application.service import Service
-from whoosh.query import NumericRange, And
+from whoosh.query import NumericRange, DateRange, And
 from terane.plugins import plugins
 from terane.outputs import ISearchableOutput
 from terane.query.dql import parseSearchQuery, parseTailQuery
@@ -51,7 +51,25 @@ class QueryManager(Service):
         self._searchables = None
         return Service.stopService(self)
 
-    def search(self, query, indices=None, limit=100, restrictions=None, sorting=None, reverse=False, fields=None):
+    def search(self, query, indices=None, limit=100, sorting=None, reverse=False, fields=None):
+        """
+        Search the database for events.
+
+        :param query: The query string.
+        :type query: unicode
+        :param indices: A list of indices to search, or None to search all indices.
+        :type indices: list, or None
+        :param limit: The maximum number of events to return.
+        :type limit: int
+        :param sorting: A tuple of field names to sort by, or None to sort by timestamp.
+        :type sorting: tuple
+        :param reverse: Whether to return last results first, as determined by the sorting.
+        :type reverse: bool
+        :param fields: A list of fields to return in the results, or None to return all fields.
+        :type fields: list
+        :returns: A Results object containing the search results.
+        :rtype: :class:`terane.query.results.Results`
+        """
         query = parseSearchQuery(query)
         logger.trace("parsed search query: %s" % str(query))
         # look up the named indices
@@ -65,7 +83,6 @@ class QueryManager(Service):
         # check that limit is > 0
         if limit < 1:
             raise QueryExecutionError("limit must be greater than 0")
-        # FIXME: check that restrictions is a Restrictions object
         # FIXME: check each fields item to make sure its in at least 1 schema
         # query each index, and aggregate the results
         results = Results(sorting, fields, reverse)
@@ -79,7 +96,91 @@ class QueryManager(Service):
         # FIXME: check whether results satisfies all restrictions
         return results
 
+    def iter(self, query, last, indices=None, limit=100, reverse=False, fields=None):
+        """
+        Iterate through the database for events matching the specified query.
+
+        :param query: The query string.
+        :type query: unicode
+        :param last: The ID of the last document from the previous iteration.
+        :type last: int
+        :param indices: A list of indices to search, or None to search all indices.
+        :type indices: list, or None
+        :param limit: The maximum number of events to return.
+        :type limit: int
+        :param reverse: Whether to return last results first.
+        :type reverse: bool
+        :param fields: A list of fields to return in the results, or None to return all fields.
+        :type fields: list
+        :returns: A Results object containing the search results.
+        :rtype: :class:`terane.query.results.Results`
+        """
+        # look up the named indices
+        if indices == None:
+            indices = self._searchables.values()
+        else:
+            try:
+                indices = tuple(self._searchables[name] for name in indices)
+            except KeyError, e:
+                raise QueryExecutionError("unknown index '%s'" % e)
+        # check that last is >= 0
+        if last < 0:
+            raise QueryExecutionError("last must be greater than or equal to 0")
+        # check that limit is > 0
+        if limit < 1:
+            raise QueryExecutionError("limit must be greater than 0")
+        # FIXME: check each fields item to make sure its in at least 1 schema
+        # if the query string is empty, then the default is to search for all
+        # events within the last hour.
+        if query.strip() == '':
+            utcnow = datetime.datetime.utcnow()
+            onehourago = utcnow - datetime.timedelta(hours=1)
+            query = DateRange('ts', onehourago, utcnow, True)
+        else:
+            query = parseIterQuery(query)
+        # add the additional restriction that the id must be newer than 'last'.
+        if last > 0 and reverse == False:
+            query = And([NumericRange('id', last, 2**64, True), query]).normalize()
+        if last > 0 and reverse == True:
+            query = And([NumericRange('id', 0, last, True), query]).normalize()
+        logger.trace("parsed iter query: %s" % str(query))
+        # query each index, and aggregate the results
+        results = Results(("ts"), fields, False)
+        rlist = []
+        runtime = 0.0
+        lastId = 0
+        # query each index, and aggregate the results
+        for index in indices:
+            result = index.search(query, limit, ("ts"), False)
+            rlist.append(result)
+            runtime += result.runtime
+            try:
+                l = result.docnum(-1)
+                if l > lastId: lastId = l
+            except IndexError:
+                # if there are no results, result.docnum() raises IndexError
+                pass
+        results.extend(*rlist, last=lastId, runtime=runtime)
+        return results
+
     def tail(self, query, last, indices=None, limit=100, fields=None):
+        """
+        Return events newer than the specified 'last' docuemtn ID matching the
+        specified query.
+
+        :param query: The query string.
+        :type query: unicode
+        :param last: The ID of the last document from the previous iteration.
+        :type last: int
+        :param indices: A list of indices to search, or None to search all indices.
+        :type indices: list, or None
+        :param limit: The maximum number of events to return.
+        :type limit: int
+        :param fields: A list of fields to return in the results, or None to return all fields.
+        :type fields: list
+        :returns: A Results object containing the search results.
+        :rtype: :class:`terane.query.results.Results`
+        """
         # look up the named indices
         if indices == None:
             indices = self._searchables.values()
@@ -133,6 +234,16 @@ class QueryManager(Service):
         return results
 
     def showIndex(self, name):
+        """
+        Return metadata about the specified index.  Currently the only information
+        returned is the number of events in the index, the last-modified time (as a
+        unix timestamp), and the document ID of the latest event.
+
+        :param name: The name of the index.
+        :type name: unicode
+        :returns: A Results object containing the index metadata.
+        :rtype: :class:`terane.query.results.Results`
+        """
         try:
             index = self._searchables[name]
         except KeyError, e:
@@ -147,6 +258,12 @@ class QueryManager(Service):
         return results
 
     def listIndices(self):
+        """
+        Return a list of names of the indices present.
+
+        :returns: A Results object containing a list of index names.
+        :rtype: :class:`terane.query.results.Results`
+        """
         indices = tuple(self._searchables.keys())
         results = Results(None, None, False)
         results.extend([{'index':{'value':v}} for v in indices])
@@ -154,3 +271,8 @@ class QueryManager(Service):
 
 
 queries = QueryManager()
+"""
+`queries` is a singleton instance of a :class:`QueryManager`.  All interaction
+with the query infrastructure must occur through this instance; do *not* instantiate
+new :class:`QueryManager` instances!
+"""
