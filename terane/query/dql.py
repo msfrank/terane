@@ -77,7 +77,7 @@ Query Grammar
 
 import datetime, dateutil.tz
 import pyparsing as pp
-from whoosh.query import Prefix, DateRange, NumericRange, And, Or, Not
+from whoosh.query import Prefix, DateRange, NumericRange, And, Or, Not, Every
 from whoosh.analysis import SimpleAnalyzer
 
 class QuerySyntaxError(BaseException):
@@ -291,22 +291,24 @@ searchQuery = pp.operatorPrecedence(subjectDate | subjectId | subjectTerm, [
     ])
 
 # iterQuery
-whereClause = pp.Suppress('WHERE') + subjectDate
-whereClause.setParseAction(lambda tokens: tokens[0])
-iterQuery = pp.operatorPrecedence(subjectTerm, [
+iterTermsClause = pp.operatorPrecedence(subjectTerm, [
     (pp.Suppress('NOT'), 1, pp.opAssoc.RIGHT, parseNotGroup),
     (pp.Suppress('AND'), 2, pp.opAssoc.LEFT, parseAndGroup),
     (pp.Suppress('OR'), 2, pp.opAssoc.LEFT, parseOrGroup),
-    ]) + pp.Optional(whereClause)
-def _parseIterQuery(tokens):
-    if len(tokens > 1):
-        daterange = tokens[1]
-    else:
-        utcnow = datetime.datetime.utcnow()
-        onehourago = utcnow - datetime.timedelta(hours=1)
-        daterange = DateRange('ts', onehourago, utcnow, True)
-    return And([tokens[0], daterange]).normalize()
-iterQuery.setParseAction(_parseIterQuery)
+    ])
+iterWhereClause = pp.Suppress('WHERE') + subjectDate
+iterWhereClause.setParseAction(lambda tokens: tokens[0])
+iterTermsAndWhere = iterTermsClause + pp.Optional(iterWhereClause)
+def parseIterTermsAndWhere(tokens):
+    if len(tokens) > 1:
+        return tokens[0], tokens[1]
+    utcnow = datetime.datetime.utcnow()
+    onehourago = utcnow - datetime.timedelta(hours=1)
+    return tokens[0], DateRange('ts', onehourago, utcnow, True)
+iterTermsAndWhere.setParseAction(parseIterTermsAndWhere)
+iterWhereOnly = pp.Suppress('WHERE') + subjectDate
+iterWhereOnly.setParseAction(lambda tokens: (Every(), tokens[0]))
+iterQuery = iterWhereOnly | iterTermsAndWhere
 
 # tailQuery
 tailQuery = pp.operatorPrecedence(subjectTerm, [
