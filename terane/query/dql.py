@@ -86,27 +86,33 @@ class QuerySyntaxError(BaseException):
     """
     def __init__(self, exc, qstring):
         self._exc = exc
-        tokens = qstring[exc.col-1:].splitlines()[0]
-        self._message = "Syntax error starting at '%s': %s (line %i, col %i)" % (
-            tokens, exc.msg, exc.lineno, exc.col)
+        try:
+            tokens = qstring[exc.col-1:].splitlines()[0]
+        except:
+            tokens = ''
+        if exc.msg != '':
+            self._message = "Syntax error starting at '%s' (line %i, col %i): %s" % (
+                tokens, exc.lineno, exc.col, exc.msg)
+        else:
+            self._message = "Syntax error starting at '%s' (line %i, col %i)" % (
+                tokens, exc.lineno, exc.col)
     def __str__(self):
         return self._message
-
-def parseSearchQuery(string):
-    """
-    Parse the search query specified by qstring.  Returns a Query object.
-    """
-    try:
-        return searchQuery.parseString(string, parseAll=True).asList()[0]
-    except pp.ParseBaseException, e:
-        raise QuerySyntaxError(e, string)
 
 def parseIterQuery(string):
     """
     Parse the iter query specified by qstring.  Returns a Query object.
     """
     try:
-        return iterQuery.parseString(string, parseAll=True).asList()[0]
+        if string.strip() == '':
+            query,where = Every(), None
+        else:
+            query,where = iterQuery.parseString(string, parseAll=True).asList()[0]
+        if where == None:
+            utcnow = datetime.datetime.utcnow()
+            onehourago = utcnow - datetime.timedelta(hours=1)
+            where = {'dateFrom': onehourago, 'dateTo': utcnow, 'fromExcl': False, 'toExcl': False}
+        return query, where['dateFrom'], where['dateTo'], where['fromExcl'], where['toExcl']
     except pp.ParseBaseException, e:
         raise QuerySyntaxError(e, string)
 
@@ -191,7 +197,7 @@ optionalExclusive = pp.Optional(pp.Literal('EXCLUSIVE'))
 dateFrom = pp.Suppress('FROM') + dateSpec + optionalExclusive
 def parseDateFrom(tokens):
     "Parse DATE lower bound."
-    date = {'from': tokens[0]}
+    date = {'dateFrom': tokens[0]}
     if len(tokens) > 1:
         date['fromExcl'] = True
     return date
@@ -199,7 +205,7 @@ dateFrom.setParseAction(parseDateFrom)
 dateTo = pp.Suppress('TO') + dateSpec + optionalExclusive
 def parseDateTo(tokens):
     "Parse DATE upper bound."
-    date = {'to': tokens[0]}
+    date = {'dateTo': tokens[0]}
     if len(tokens) > 1:
         date['toExcl'] = True
     return date
@@ -207,47 +213,17 @@ dateTo.setParseAction(parseDateTo)
 subjectDate = pp.Suppress('DATE') + dateFrom + pp.Optional(dateTo) | pp.Suppress('DATE') + dateTo + pp.Optional(dateFrom) 
 def parseSubjectDate(tokens):
     "Parse DATE range."
-    date = {'from': datetime.datetime.min, 'to': makeUTC(datetime.datetime.now()), 'fromExcl': False, 'toExcl': False}
+    date = {
+        'dateFrom': datetime.datetime.min,
+        'dateTo': makeUTC(datetime.datetime.now()),
+        'fromExcl': False,
+        'toExcl': False
+        }
     date.update(tokens[0])
     if len(tokens) > 1:
         date.update(tokens[1])
-    return DateRange('ts', date['from'], date['to'], startexcl=date['fromExcl'], endexcl=date['toExcl'])
+    return date
 subjectDate.setParseAction(parseSubjectDate)
-
-# subjectId
-naturalNumber = '0' | pp.Word(pp.srange('[1-9]'), pp.nums)
-optionalExclusive = pp.Optional(pp.Literal('EXCLUSIVE'))
-idFrom = pp.Suppress('FROM') + naturalNumber + optionalExclusive
-def parseIDFrom(pstr, loc, tokens):
-    "Parse ID lower bound."
-    try:
-        docid = {'from': long(tokens[0])}
-    except ValueError:
-        raise ParseFatalException(pstr, loc, "Invalid document ID")
-    if len(tokens) > 1:
-        docid['fromExcl'] = True
-    return docid
-idFrom.setParseAction(parseIDFrom)
-idTo = pp.Suppress('TO') + naturalNumber + optionalExclusive
-def parseIDTo(pstr, loc, tokens):
-    "Parse ID upper bound."
-    try:
-        docid = {'to': long(tokens[0])}
-    except ValueError:
-        raise ParseFatalException(pstr, loc, "Invalid document ID")
-    if len(tokens) > 1:
-        docid['toExcl'] = True
-    return docid
-idTo.setParseAction(parseIDTo)
-subjectId = pp.Suppress('ID') + idFrom + pp.Optional(idTo) | pp.Suppress('ID') + idTo + pp.Optional(idFrom) 
-def parseSubjectId(tokens):
-    "Parse ID range."
-    docid = {'from': 0, 'to': 2**64, 'fromExcl': False, 'toExcl': False}
-    docid.update(tokens[0])
-    if len(tokens) > 1:
-        docid.update(tokens[1])
-    return NumericRange('id', docid['from'], docid['to'], startexcl=docid['fromExcl'], endexcl=docid['toExcl'])
-subjectId.setParseAction(parseSubjectId)
 
 # groupings
 def parseNotGroup(tokens):
@@ -282,32 +258,20 @@ def parseOrGroup(tokens):
             i += 1
     return q
 
-# searchQuery
-searchSubject = subjectDate | subjectId | subjectTerm
-searchQuery = pp.operatorPrecedence(subjectDate | subjectId | subjectTerm, [
-    (pp.Suppress('NOT'), 1, pp.opAssoc.RIGHT, parseNotGroup),
-    (pp.Suppress('AND'), 2, pp.opAssoc.LEFT, parseAndGroup),
-    (pp.Suppress('OR'), 2, pp.opAssoc.LEFT, parseOrGroup),
-    ])
-
 # iterQuery
-iterTermsClause = pp.operatorPrecedence(subjectTerm, [
+iterTerms = pp.operatorPrecedence(subjectTerm, [
     (pp.Suppress('NOT'), 1, pp.opAssoc.RIGHT, parseNotGroup),
     (pp.Suppress('AND'), 2, pp.opAssoc.LEFT, parseAndGroup),
     (pp.Suppress('OR'), 2, pp.opAssoc.LEFT, parseOrGroup),
     ])
-iterWhereClause = pp.Suppress('WHERE') + subjectDate
-iterWhereClause.setParseAction(lambda tokens: tokens[0])
-iterTermsAndWhere = iterTermsClause + pp.Optional(iterWhereClause)
+iterTermsAndWhere = iterTerms + pp.Optional((pp.Suppress('WHERE') + subjectDate))
 def parseIterTermsAndWhere(tokens):
     if len(tokens) > 1:
         return tokens[0], tokens[1]
-    utcnow = datetime.datetime.utcnow()
-    onehourago = utcnow - datetime.timedelta(hours=1)
-    return tokens[0], DateRange('ts', onehourago, utcnow, True)
+    return tokens[0], None
 iterTermsAndWhere.setParseAction(parseIterTermsAndWhere)
 iterWhereOnly = pp.Suppress('WHERE') + subjectDate
-iterWhereOnly.setParseAction(lambda tokens: (Every(), tokens[0]))
+iterWhereOnly.setParseAction(lambda t: (Every(), t[0]))
 iterQuery = iterWhereOnly | iterTermsAndWhere
 
 # tailQuery

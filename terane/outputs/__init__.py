@@ -37,6 +37,10 @@ class ISearchableOutput(IOutput):
         "Return the document ID of the last event stored."
     def schema():
         "Return the schema of the Output."
+    def reader():
+        "Return a reader."
+    def searcher():
+        "Return a searcher."
 
 class Output(Service):
     """

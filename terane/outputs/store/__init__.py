@@ -102,6 +102,12 @@ class StoreOutput(Output):
     def schema(self):
         return self._index.schema
 
+    def reader(self):
+        return self._index.reader()
+
+    def searcher(self):
+        return self._index.searcher()
+
 class StoreOutputPlugin(Plugin):
 
     implements(IPlugin)

@@ -59,20 +59,7 @@ class XMLRPCDispatcher(XMLRPC):
         XMLRPC.__init__(self)
 
     @useThread
-    def xmlrpc_search(self, query, indices=None, limit=100, reverse=False, fields=None):
-        try:
-            searches.value += 1
-            results = queries.search(unicode(query), indices, limit, ("ts",), reverse, fields)
-            totalsearchtime.value += float(results[0]['runtime'])
-            return list(results)
-        except (QuerySyntaxError, QueryExecutionError), e:
-            raise FaultBadRequest(e)
-        except BaseException, e:
-            logger.exception(e)
-            raise FaultInternalError()
-
-    @useThread
-    def xmlrpc_iter(self, query, last, indices=None, limit=100, reverse=False, fields=None):
+    def xmlrpc_iter(self, query, last=None, indices=None, limit=100, reverse=False, fields=None):
         try:
             iters.value += 1
             results = queries.iter(unicode(query), last, indices, limit, reverse, fields)
@@ -85,7 +72,7 @@ class XMLRPCDispatcher(XMLRPC):
             raise FaultInternalError()
 
     @useThread
-    def xmlrpc_tail(self, query, last, indices=None, limit=100, fields=None):
+    def xmlrpc_tail(self, query, last=None, indices=None, limit=100, fields=None):
         try:
             tails.value += 1
             results = queries.tail(unicode(query), last, indices, limit, fields)

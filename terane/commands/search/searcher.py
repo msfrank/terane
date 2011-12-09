@@ -49,7 +49,7 @@ class Searcher(object):
 
     def run(self):
         proxy = Proxy("http://%s/XMLRPC" % self.host, allowNone=True)
-        deferred = proxy.callRemote('search', self.query, self.indices,
+        deferred = proxy.callRemote('iter', self.query, 0, self.indices,
             self.limit, self.reverse, self.fields)
         deferred.addCallback(self.printResult)
         deferred.addErrback(self.printError)

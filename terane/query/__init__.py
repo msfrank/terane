@@ -19,7 +19,7 @@ from twisted.application.service import Service
 from whoosh.query import NumericRange, DateRange, And
 from terane.plugins import plugins
 from terane.outputs import ISearchableOutput
-from terane.query.dql import parseSearchQuery, parseTailQuery
+from terane.query.dql import parseIterQuery, parseTailQuery
 from terane.query.results import Results
 from terane.loggers import getLogger
 
@@ -34,6 +34,8 @@ class QueryExecutionError(Exception):
 class QueryManager(Service):
     def __init__(self):
         self._searchables = {}
+        self.maxResultSize = 10
+        self.maxIterations = 5
 
     def configure(self, settings):
         pass
@@ -51,58 +53,43 @@ class QueryManager(Service):
         self._searchables = None
         return Service.stopService(self)
 
-    def search(self, query, indices=None, limit=100, sorting=None, reverse=False, fields=None):
-        """
-        Search the database for events.
+    def _optimizeTimeframe(self, indices, query, dateFrom, dateTo, lastId):
+        if lastId > 0:
+            query = And([NumericRange('id', 0, last, endexcl=True), query]).normalize()
+        tdelta = (dateTo - dateFrom) // self.maxIterations
+        for i in range(self.maxIterations):
+            _query = And([query, DateRange('ts', dateFrom, dateTo)]).normalize()
+            estimate = None
+            for index in indices:
+                reader = index.reader()
+                _size = _query.estimate_size(reader)
+                if estimate == None or _size > estimate: estimate = _size
+            logger.trace("_optimizeTimeframe: iteration %i %s to %s has %i events" % (
+                i, dateFrom.isoformat(), dateTo.isoformat(), estimate))
+            if estimate <= self.maxResultSize:
+                return _query
+            dateFrom += tdelta    
+        if lastId == None:
+            daterange = DateRange('ts', datetime.datetime.min, dateTo)
+            for index in indices:
+                reader = index.searcher()
+                try:
+                    _id = daterange.docs(searcher).next()
+                    if lastId == None or _id > lastId: lastId = _id
+                except:
+                    pass
+        firstId = lastId - self.maxResultSize
+        if firstId < 0: firstId = 0
+        logger.trace("_optimizeTimeframe: final iteration from ID %i to %i" % (firstId, lastId))
+        return And([NumericRange('id', firstId, lastId, endexcl=True), query]).normalize()
 
-        :param query: The query string.
-        :type query: unicode
-        :param indices: A list of indices to search, or None to search all indices.
-        :type indices: list, or None
-        :param limit: The maximum number of events to return.
-        :type limit: int
-        :param sorting: A tuple of field names to sort by, or None to sort by timestamp.
-        :type sorting: tuple
-        :param reverse: Whether to return last results first, as determined by the sorting.
-        :type reverse: bool
-        :param fields: A list of fields to return in the results, or None to return all fields.
-        :type fields: list
-        :returns: A Results object containing the search results.
-        :rtype: :class:`terane.query.results.Results`
-        """
-        query = parseSearchQuery(query)
-        logger.trace("parsed search query: %s" % str(query))
-        # look up the named indices
-        if indices == None:
-            indices = self._searchables.values()
-        else:
-            try:
-                indices = tuple(self._searchables[name] for name in indices)
-            except KeyError, e:
-                raise QueryExecutionError("unknown index '%s'" % e)
-        # check that limit is > 0
-        if limit < 1:
-            raise QueryExecutionError("limit must be greater than 0")
-        # FIXME: check each fields item to make sure its in at least 1 schema
-        # query each index, and aggregate the results
-        results = Results(sorting, fields, reverse)
-        rlist = []
-        runtime = 0.0
-        for index in indices:
-            result = index.search(query, limit, sorting, reverse)
-            rlist.append(result)
-            runtime += result.runtime
-        results.extend(*rlist, runtime=runtime)
-        # FIXME: check whether results satisfies all restrictions
-        return results
-
-    def iter(self, query, last, indices=None, limit=100, reverse=False, fields=None):
+    def iter(self, query, lastId=0, indices=None, limit=100, reverse=False, fields=None):
         """
         Iterate through the database for events matching the specified query.
 
         :param query: The query string.
         :type query: unicode
-        :param last: The ID of the last document from the previous iteration.
+        :param lastId: The ID of the last document from the previous iteration.
         :type last: int
         :param indices: A list of indices to search, or None to search all indices.
         :type indices: list, or None
@@ -124,46 +111,36 @@ class QueryManager(Service):
             except KeyError, e:
                 raise QueryExecutionError("unknown index '%s'" % e)
         # check that last is >= 0
-        if last < 0:
-            raise QueryExecutionError("last must be greater than or equal to 0")
+        if lastId < 0:
+            raise QueryExecutionError("lastId must be greater than or equal to 0")
         # check that limit is > 0
         if limit < 1:
             raise QueryExecutionError("limit must be greater than 0")
-        # FIXME: check each fields item to make sure its in at least 1 schema
-        # if the query string is empty, then the default is to search for all
-        # events within the last hour.
-        if query.strip() == '':
-            utcnow = datetime.datetime.utcnow()
-            onehourago = utcnow - datetime.timedelta(hours=1)
-            query = DateRange('ts', onehourago, utcnow, True)
-        else:
-            query = parseIterQuery(query)
-        # add the additional restriction that the id must be newer than 'last'.
-        if last > 0 and reverse == False:
-            query = And([NumericRange('id', last, 2**64, True), query]).normalize()
-        if last > 0 and reverse == True:
-            query = And([NumericRange('id', 0, last, True), query]).normalize()
-        logger.trace("parsed iter query: %s" % str(query))
+        query,dateFrom,dateTo,fromExcl,toExcl = parseIterQuery(query)
+        query = self._optimizeTimeframe(indices, query, dateFrom, dateTo, lastId)
+        logger.trace("optimized iter query: %s" % str(query))
         # query each index, and aggregate the results
         results = Results(("ts"), fields, False)
         rlist = []
         runtime = 0.0
         lastId = 0
+        iterDone = True
         # query each index, and aggregate the results
         for index in indices:
-            result = index.search(query, limit, ("ts"), False)
+            result = index.search(query, limit, ("ts"), reverse)
             rlist.append(result)
             runtime += result.runtime
             try:
                 l = result.docnum(-1)
-                if l > lastId: lastId = l
+                if reverse == False and l > lastId: lastId,iterDone = l,False
+                if reverse == True and l < lastId: lastId,iterDone = l,False
             except IndexError:
                 # if there are no results, result.docnum() raises IndexError
                 pass
-        results.extend(*rlist, last=lastId, runtime=runtime)
+        results.extend(*rlist, lastId=lastId, iterDone=iterDone, runtime=runtime)
         return results
 
-    def tail(self, query, last, indices=None, limit=100, fields=None):
+    def tail(self, query, last=0, indices=None, limit=100, fields=None):
         """
         Return events newer than the specified 'last' docuemtn ID matching the
         specified query.
