@@ -44,6 +44,7 @@ setup(
     # package contents
     packages=[
         'terane',
+        'terane.bier',
         'terane.commands',
         'terane.commands.console',
         'terane.commands.grok',
@@ -52,13 +53,6 @@ setup(
         'terane.commands.tail',
         'terane.filters',
         'terane.inputs',
-        'terane.lib',
-        'terane.lib.whoosh',
-        'terane.lib.whoosh',
-        'terane.lib.whoosh.filedb',
-        'terane.lib.whoosh.lang',
-        'terane.lib.whoosh.support',
-        'terane.lib.whoosh.qparser',
         'terane.outputs',
         'terane.outputs.store',
         'terane.protocols',
