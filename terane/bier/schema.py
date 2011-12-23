@@ -1,4 +1,8 @@
+import datetime, time, struct, base64
 from zope.interface import Interface
+from terane.loggers import getLogger
+
+logger = getLogger('terane.bier.schema')
 
 class ISchema(Interface):
     def has(name):
@@ -19,11 +23,11 @@ class IdentityField(BaseField):
     def terms(self, value):
         if not isinstance(value, list) and not isinstance(value, tuple):
             raise Exception("value '%s' is not of type list or tuple" % value)
-        return iter([(unicode(t.strip()),None) for t in value)])
+        return iter([(unicode(t.strip()),None) for t in value])
 
 class TextField(BaseField):
     def terms(self, value):
-        if not isinstance(value, unicode):
+        if not isinstance(value, unicode) and not isinstance(value, str):
             raise Exception("value '%s' is not of type unicode or str" % value)
         return iter([(unicode(t),None) for t in value.split() if len(t) > 0])
 
