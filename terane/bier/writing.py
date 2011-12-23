@@ -1,5 +1,9 @@
+import datetime, dateutil.tz
 from zope.interface import Interface
 from terane.bier.schema import fieldFactory
+from terane.loggers import getLogger
+
+logger = getLogger('terane.bier.writing')
 
 class IWriter(Interface):
     def __enter__():
@@ -16,12 +20,12 @@ class WriterError(Exception):
 
 def writeEventToIndex(event, index):
     # verify required fields are present
-    if not 'ts' in event:
-        raise WriterError("missing required field 'ts'")
     if not 'input' in event:
         raise WriterError("missing required field 'input'")
-    if not 'host' in event:
-        raise WriterError("missing required field 'host'")
+    if not 'hostname' in event:
+        raise WriterError("missing required field 'hostname'")
+    if not 'ts' in event:
+        raise WriterError("missing required field 'ts'")
 
     # make sure ts timezone is UTC
     ts = event['ts']
@@ -36,11 +40,11 @@ def writeEventToIndex(event, index):
         ts = ts.astimezone(dateutil.tz.tzutc())
     event['ts'] = ts
     # set the stored value of the 'ts' field to a pretty string
-    fields['&ts'] = ts.isoformat()
+    event['&ts'] = ts.isoformat()
 
     # create a list of valid field names from the passed in fields. a valid
     # field name is defined as any name that starts with an alphabetic character
-    fieldnames = [fieldname for fieldname in fields.keys() if fieldname[0].isalpha()]
+    fieldnames = [fieldname for fieldname in event.keys() if fieldname[0].isalpha()]
     # verify that each field name exists in the index schema
     schema = index.schema()
     for fieldname in fieldnames:
@@ -63,13 +67,13 @@ def writeEventToIndex(event, index):
             # update the field with the event value
             evalue = event.get(fieldname)
             for term,tvalue in field.terms(evalue):
-                writer.newPosting(self.name, term, docId, tvalue)
+                writer.newPosting(fieldname, term, docId, tvalue)
             # if the full field value should be stored alongside the document,
             # then fill in the storedvalues array with the actual field value.
             # if the key '&<fieldname>' exists, then use its value as the stored
             # value instead.
             storedname = "&" + fieldname
-            if storedname in fields:
+            if storedname in event:
                 document[fieldname] = event[storedname]
             else :
                 document[fieldname] = evalue
