@@ -1,4 +1,7 @@
 from zope.interface import Interface
+from terane.loggers import getLogger
+
+logger = getLogger('terane.bier.index')
 
 class IIndex(Interface):
     def schema():

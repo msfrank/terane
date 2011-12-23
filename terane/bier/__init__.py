@@ -1,4 +1,7 @@
 from twisted.application.service import MultiService
+from terane.loggers import getLogger
+
+logger = getLogger('terane.bier')
 
 class BIERManager(MultiService):
     """
