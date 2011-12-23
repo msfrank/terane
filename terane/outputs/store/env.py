@@ -25,7 +25,7 @@ class Env(backend.Env):
     """
     """
 
-    def __init__(self, dbdir, options):
+    def __init__(self, dbdir, options=dict()):
         # create berkeleydb-specific directories under the dbdir root
         self.dbdir = dbdir
         if not os.path.exists(self.dbdir):

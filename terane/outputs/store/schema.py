@@ -32,61 +32,33 @@
 # limitations under the License.
 
 import pickle
-from collections import MutableMapping
-from whoosh.fields import Schema as WhooshSchema, FieldConfigurationError
+from zope.interface import implements
+from terane.bier.schema import ISchema
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.schema')
 
-class FieldDict(MutableMapping):
-    """
-    FieldDict is a proxy object to interface with the schema table in the index.
-    """
+class Schema(object):
+
+    implements(ISchema)
+
     def __init__(self, index):
         self._index = index
-
-    def __getitem__(self, fieldname):
-        fieldname = str(fieldname)
+        self._fields = {}
         with self._index.new_txn() as txn:
-            return pickle.loads(self._index.get_field(txn, fieldname))
+            for fieldname,fieldspec in self._index.list_fields(txn):
+                self._fields[fieldname] = pickle.loads(fieldspec)
 
-    def __setitem__(self, fieldname, fieldspec):
-        fieldname = str(fieldname)
+    def add(self, name, field):
+        if name in self._fields:
+            raise IndexError("field named '%s' already exists in Schema" % name)
         with self._index.new_txn() as txn:
-            self._index.add_field(txn, fieldname, pickle.dumps(fieldspec))
+            self._index.add_field(txn, name, pickle.dumps(field))
 
-    def __delitem__(self, fieldname):
-        fieldname = str(fieldname)
-        with self._index.new_txn() as txn:
-            self._index.remove_field(txn, fieldname)
+    def get(self, name):
+        return self._fields[name]
 
-    def __contains__(self, fieldname):
-        fieldname = str(fieldname)
-        with self._index.new_txn() as txn:
-            return self._index.contains_field(txn, fieldname)
-
-    def __len__(self):
-        return self._index.count_fields()
-
-    def __iter__(self):
-        with self._index.new_txn() as txn:
-            return iter([k for k,v in self._index.list_fields(txn)])
-
-    def __eq__(self, other):
-        with self._index.new_txn() as txn:
-            fd1 = sorted(self._index.list_fields(txn))
-            fd2 = sorted(other._index.list_fields(txn))
-            return cmp(fd1, fd2)
-
-class Schema(WhooshSchema):
-    """
-    A thin wrapper over whoosh.fields.Schema to use the schema from the index.
-    """
-    def __init__(self, index):
-        self._fields = FieldDict(index)
-        self._dyn_fields = {}
-
-    def add(self, name, fieldtype, glob=False):
-        if glob != False:
-            raise FieldConfigurationError("dynamic fields are not supported")
-        WhooshSchema.add(self, name, fieldtype, False)
+    def has(self, name):
+        if name in self._fields:
+            return True
+        return False

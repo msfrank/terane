@@ -33,10 +33,8 @@
 
 import pickle, time
 import datetime, dateutil.parser, dateutil.tz
-from whoosh.fields import FieldType, TEXT, DATETIME, NUMERIC
-from whoosh.analysis import SimpleAnalyzer
-from whoosh.searching import Searcher as WhooshSearcher
-from whoosh.qparser import QueryParser
+from zope.interface import implements
+from terane.bier.index import IIndex
 from terane.outputs.store import backend
 from terane.outputs.store.schema import Schema
 from terane.outputs.store.reading import MultiReader
@@ -61,6 +59,8 @@ class Index(backend.Index):
     :type ids: :class:`terane.db.idgen.IDGenerator`
     """
 
+    implements(IIndex)
+
     def __init__(self, env, name, ids):
         backend.Index.__init__(self, env, name)
         try:
@@ -68,7 +68,7 @@ class Index(backend.Index):
             self._ids = ids
             # load the table of contents
             # load schema
-            self.schema = Schema(self)
+            self._schema = Schema(self)
             self._segments = []
             self._indexsize = 0
             self._currsize = 0
@@ -101,69 +101,30 @@ class Index(backend.Index):
             logger.debug("last document id is %s" % self._lastid)
             # get a reference to the current segment
             self._current = self._segments[-1]
-            # check for the ts field
-            if 'ts' in self.schema:
-                ts = self.schema['ts']
-                if not isinstance(ts, DATETIME):
-                    raise Exception("Index schema contains invalid 'ts' field")
-            # if the ts field doesn't exist, then add it
-            else:
-                self.schema.add('ts', DATETIME(stored=True))
-            # check for the id field
-            if 'id' in self.schema:
-                id = self.schema['id']
-                if not isinstance(ts, NUMERIC):
-                    raise Exception("Index schema contains invalid 'id' field")
-            # if the id field doesn't exist, then add it
-            else:
-                self.schema.add('id', NUMERIC(long, stored=True))
             logger.debug("opened event index '%s'" % self.name)
         except:
             self.close()
             raise
 
-    def add(self, fields):
+    def schema(self):
+        return self._schema
+ 
+    def reader(self):
         """
-        Add event to the current segment.
+        Return a new Reader object instance, which is protected by a new
+        transaction.
         """
-        _fields = {}
-        # if id field is specified, then toss it
-        if 'id' in fields:
-            del fields['id']
-        # if timestamp is specified, then convert it to a datetime object if needed
-        if 'ts' in fields:
-            ts = fields['ts']
-            del fields['ts']
-            # if the ts field is not a datetime, then parse its string representation
-            if not isinstance(ts, datetime.datetime):
-                ts = dateutil.parser.parse(str(ts))
-            # if no timezone is specified, then assume local tz
-            if ts.tzinfo == None:
-                ts = ts.replace(tzinfo=dateutil.tz.tzlocal())
-            # convert to UTC, if necessary
-            if not ts.tzinfo == dateutil.tz.tzutc():
-                ts = ts.astimezone(dateutil.tz.tzutc())
-            _fields['ts'] = ts
-        # otherwise if there is no timestamp, then generate one
-        else:
-            _fields['ts'] = datetime.datetime.now(dateutil.tz.tzutc())
-        # make the timestamp timezone-naive so Whoosh can handle it
-        _fields['ts'] = _fields['ts'].replace(tzinfo=None) - _fields['ts'].utcoffset()
-        # set the stored value of the 'ts' field to a pretty string
-        _fields['&ts'] = _fields['ts'].isoformat()
-        # make sure every other field exists in the schema, and is a unicode string
-        for key,value in fields.items():
-            _fields[key] = unicode(value)
-            # if the field doesn't exist in the schema, then add it
-            if not key in self.schema:
-                self.schema.add(key, TEXT(SimpleAnalyzer(), stored=True))
-        # write the fields to the index
-        with self.writer() as writer:
-            lastid, lastmodified = writer.add_document(**_fields)
-        self._lastid = lastid
-        self._lastmodified = lastmodified
-        self._currsize += 1
-        self._indexsize += 1
+        return MultiReader(self)
+    
+    def writer(self):
+        """
+        Return a new Writer object instance, which is protected by a new
+        transaction.
+        """
+        return IndexWriter(self)
+
+    def newDocumentId(self):
+        return self._ids.allocate()
 
     def search(self, query, limit=100, sortedby='ts', reverse=False):
         """
@@ -222,118 +183,8 @@ class Index(backend.Index):
             segment.close()
         self._segments = list()
         # unref the schema
-        self.schema = None
+        self._schema = None
         # close the index
         backend.Index.close(self)
         logger.debug("closed event index '%s'" % self.name)
- 
-    def reader(self):
-        """
-        Return a new Reader object instance, which is protected by a new
-        transaction.
-        """
-        return MultiReader(self)
-    
-    def writer(self):
-        """
-        Return a new Writer object instance, which is protected by a new
-        transaction.
-        """
-        return IndexWriter(self)
 
-    def last_id(self):
-        """
-        Return the document ID of the last document added to the index.
-
-        :returns: The last document ID.
-        :rtype: long.
-        """
-        return self._lastid
-
-    def last_modified(self):
-        """
-        Return the date when the index was last modified, in seconds since
-        the epoch (as returned by time.time().
-
-        :returns: The last-modified date in seconds since the epoch.
-        :rtype: int.
-        """
-        return self._lastmodified
-
-    def latest_generation(self):
-        """
-        Always returns -1, since the backend doesn't support versioning.
-
-        :rtype: bool.
-        """
-        return -1
-
-    def update_to_date(self):
-        """
-        Always returns True since the backend doesn't support versioning.
-
-        :rtype: bool
-        """
-        return True
-
-    def refresh(self):
-        """
-        Always returns the current Index object, since the backend doesn't
-        support versioning.
-        
-        :returns: :class:`Index`
-        """
-        return self
-
-    def doc_count_all(self):
-        """
-        Return the total number of documents in the index.
-
-        :returns: The total number of documents in the index.
-        :rtype: long.
-        """
-        return self._indexsize
-    
-    def doc_count(self):
-        """
-        Return the total number of documents in the index.  This returns the
-        same value as doc_count_all().  the difference is that doc_count()
-        returns the number of undeleted documents, while doc_count_all()
-        returns the total number of documents.  since we don't keep track of
-        deleted documents (we just delete em :) these two values are always the
-        same.
-
-        :returns: The total number of documents in the index.
-        :rtype: long.
-        """
-        return self._indexsize
-
-    def is_empty(self):
-        """
-        Return True if no documents are in the index.
-
-        :rtype: bool.
-        """
-        if self._indexsize == 0:
-            return True
-        return False
- 
-    def field_length(self, fieldname):
-        """
-        Returns the total length of the field across all documents.
-        """
-        r = self.reader()
-        try:
-            return r.field_length(fieldname)
-        finally:
-            r.close()
-    
-    def max_field_length(self, fieldname):
-        """
-        Returns the maximum length of the field across all documents.
-        """
-        r = self.reader()
-        try:
-            return r.max_field_length(fieldname)
-        finally:
-            r.close()

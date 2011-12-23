@@ -19,8 +19,8 @@ import os, fcntl
 from twisted.internet import reactor
 from twisted.application.service import MultiService
 from zope.interface import implements
-from whoosh.query import Query
 from terane.plugins import Plugin, IPlugin
+from terane.bier.writing import writeEventToIndex
 from terane.outputs import Output, ISearchableOutput
 from terane.outputs.store.env import Env
 from terane.outputs.store.index import Index
@@ -57,17 +57,13 @@ class StoreOutput(Output):
         self._index = None
         return Output.stopService(self)
 
-    def receiveEvent(self, fields):
+    def receiveEvent(self, event):
         # if the output is not running, discard any received events
         if not self.running:
             return
-        # remove any fields starting with '_'
-        remove = [k for k in fields.keys() if k.startswith('_')]
-        for key in remove:
-            del fields[key]
         # store the event in the index
-        logger.trace("[output:%s] storing event: %s" % (self.name,str(fields)))
-        self._index.add(fields)
+        writeEventToIndex(event, self._index)
+        logger.trace("[output:%s] stored event: %s" % (self.name,str(event)))
         # if the current segment contains more events than specified by
         # _segRotation, then rotate the index to generate a new segment.
         if self._segRotation > 0 and self._index._currsize >= self._segRotation:
@@ -80,33 +76,8 @@ class StoreOutput(Output):
                     for segment,segmentid in segments[0:len(segments)-self._segRetention]:
                         self._index.delete(segment, segmentid)
     
-    def search(self, query, limit, sorting, reverse):
-        # check that query is a Query object
-        if not isinstance(query, Query):
-            raise Exception("query must be of type whoosh.query.Query")
-        # check that limit is > 0
-        if limit < 1:
-            raise Exception("limit must be greater than 0")
-        # query the index
-        return self._index.search(query, limit, sorting, reverse)
-
-    def size(self):
-        return self._index.doc_count()
-
-    def lastModified(self):
-        return self._index.last_modified()
-
-    def lastId(self):
-        return self._index.last_id()
-
-    def schema(self):
-        return self._index.schema
-
-    def reader(self):
-        return self._index.reader()
-
-    def searcher(self):
-        return self._index.searcher()
+    def index(self):
+        return self._index
 
 class StoreOutputPlugin(Plugin):
 
