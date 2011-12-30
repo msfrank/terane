@@ -6,8 +6,8 @@ logger = getLogger('terane.bier.index')
 class IIndex(Interface):
     def schema():
         "Returns an object implementing ISchema."
-    def reader():
-        "Returns an object implementing IReader."
+    def searcher():
+        "Returns an object implementing ISearcher."
     def writer():
         "Returns an object implementing IWriter."
     def newDocumentId():

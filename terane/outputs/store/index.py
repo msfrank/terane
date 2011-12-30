@@ -37,7 +37,7 @@ from zope.interface import implements
 from terane.bier.index import IIndex
 from terane.outputs.store import backend
 from terane.outputs.store.schema import Schema
-from terane.outputs.store.reading import MultiReader
+from terane.outputs.store.searching import IndexSearcher
 from terane.outputs.store.writing import IndexWriter
 from terane.outputs.store.encoding import json_encode, json_decode
 from terane.loggers import getLogger
@@ -109,29 +109,22 @@ class Index(backend.Index):
     def schema(self):
         return self._schema
  
-    def reader(self):
+    def searcher(self):
         """
-        Return a new Reader object instance, which is protected by a new
+        Return a new object implementing ISearcher, which is protected by a new
         transaction.
         """
-        return MultiReader(self)
+        return IndexSearcher(self._current)
     
     def writer(self):
         """
-        Return a new Writer object instance, which is protected by a new
+        Return a new object implementing IWriter, which is protected by a new
         transaction.
         """
         return IndexWriter(self)
 
     def newDocumentId(self):
         return self._ids.allocate()
-
-    def search(self, query, limit=100, sortedby='ts', reverse=False):
-        """
-        Search the index using the specified whoosh.Query.
-        """
-        searcher = WhooshSearcher(self.reader(), fromindex=self)
-        return searcher.search(query, limit, sortedby, reverse)
 
     def segments(self):
         """
@@ -187,4 +180,3 @@ class Index(backend.Index):
         # close the index
         backend.Index.close(self)
         logger.debug("closed event index '%s'" % self.name)
-
