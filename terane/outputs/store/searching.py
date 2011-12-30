@@ -19,7 +19,7 @@ from terane.bier.searching import ISearcher, IPostingList
 from terane.outputs.store.encoding import json_encode, json_decode
 from terane.loggers import getLogger
 
-logger = getLogger('terane.outputs.store.reading')
+logger = getLogger('terane.outputs.store.searching')
 
 class IndexSearcher(object):
 
@@ -35,9 +35,9 @@ class IndexSearcher(object):
         logger.trace("SegmentSearcher.postingsLength(fieldname=%s, term=%s)" %
             (fieldname, term))
         fieldname = str(fieldname)
-        word = unicode(word)
+        term = unicode(term)
         try:
-            tmeta = json_decode(self._segment.get_word_meta(None, fieldname, term))
+            tmeta = json_decode(self._segment.get_term_meta(None, fieldname, term))
             return tmeta['num-docs']
         except KeyError:
             return 0
@@ -47,7 +47,7 @@ class IndexSearcher(object):
             (fieldname, term, reverse))
         fieldname = str(fieldname)
         term = unicode(term)
-        return PostingList(self._segment.iter_words(fieldname, term))
+        return PostingList(self._segment.iter_terms(fieldname, term))
 
     def __exit__(self, excType, excValue, traceback):
         pass
