@@ -127,9 +127,6 @@ PyObject * terane_Segment_set_doc (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_delete_doc (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_contains_doc (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_iter_docs (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_count_docs (terane_Segment *self);
-PyObject * terane_Segment_first_doc (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_last_doc (terane_Segment *self, PyObject *args);
 
 PyObject * terane_Segment_get_word (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_set_word (terane_Segment *self, PyObject *args);
@@ -152,9 +149,6 @@ PyObject * terane_Iter_new_from (PyObject *parent, DBC *cursor, terane_Iter_ops 
 PyObject * terane_Iter_skip (terane_Iter *self, PyObject *args);
 PyObject * terane_Iter_reset (terane_Iter *self);
 PyObject * terane_Iter_close (terane_Iter *self);
-
-int        terane_DID_num_to_string (terane_DID_num doc_num, terane_DID_string doc_str);
-int        terane_DID_string_to_num (terane_DID_string doc_str, terane_DID_num *doc_num);
 
 /*
  * logging function declarations

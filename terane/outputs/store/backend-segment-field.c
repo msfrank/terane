@@ -199,7 +199,7 @@ terane_Segment_get_field_meta (terane_Segment *self, PyObject *args)
  * terane_Segment_set_field_meta: Change the metadata associated with the
  *  specified field.
  *
- * callspec: Segment.set_word_meta(fieldname, metadata)
+ * callspec: Segment.set_field_meta(fieldname, metadata)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  *   fieldname (string): The field name

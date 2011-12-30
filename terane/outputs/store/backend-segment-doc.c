@@ -22,10 +22,10 @@
 /*
  * terane_Segment_new_doc: create a new document
  *
- * callspec: Segment.new_doc(txn, id)
+ * callspec: Segment.new_doc(txn, docId)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
- *   id (long): The document id
+ *   docId (str): The document ID string
  * returns: None
  * exceptions:
  *   terane.outputs.store.backend.DocExists: The specified document id already exists
@@ -35,27 +35,26 @@ PyObject *
 terane_Segment_new_doc (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    terane_DID_num did_num;
-    terane_DID_string did_string;
+    char *doc_id = NULL;
     DBT key, data;
-    int dbret;
+    int id_len = 0, dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!K", &terane_TxnType, &txn, &did_num))
+    if (!PyArg_ParseTuple (args, "O!s#", &terane_TxnType, &txn, &doc_id, &id_len))
         return NULL;
-    terane_DID_num_to_string (did_num, did_string);
-    /* put the record.  the record number is set in the key */
+    /* use the document id as the key */
     memset (&key, 0, sizeof (DBT));
     memset (&data, 0, sizeof (DBT));
-    key.data = &did_string;
-    key.size = TERANE_DID_STRING_LEN;
+    key.data = doc_id;
+    key.size = id_len + 1;
+    /* put a new document.  raise DocExists if the document ID already exists. */
     dbret = self->documents->put (self->documents, txn->txn, &key, &data, DB_NOOVERWRITE);
     switch (dbret) {
         case 0:
             break;
         case DB_KEYEXIST:
             return PyErr_Format (terane_Exc_DocExists,
-                "Failed to create document: document ID already exists");
+                "Document id %s already exists", doc_id);
         default:
             return PyErr_Format (terane_Exc_Error, "Failed to create document: %s",
                 db_strerror (dbret));
@@ -66,10 +65,10 @@ terane_Segment_new_doc (terane_Segment *self, PyObject *args)
 /*
  * terane_Segment_get_doc: retrieve a document
  *
- * callspec: Segment.get_doc(txn, id)
+ * callspec: Segment.get_doc(txn, docId)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
- *   id (long): The document id
+ *   docId (str): The document ID string
  * returns: A string representing the document contents 
  * exceptions:
  *   KeyError: The document with the specified id doesn't exist
@@ -79,23 +78,21 @@ PyObject *
 terane_Segment_get_doc (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    terane_DID_num did_num;
-    terane_DID_string did_string;
+    char *doc_id = NULL;
     DBT key, data;
     PyObject *document = NULL;
-    int dbret;
+    int id_len = 0, dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OK", &txn, &did_num))
+    if (!PyArg_ParseTuple (args, "Os#", &txn, &doc_id, &id_len))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
-    /* use the document id as the record number */
-    terane_DID_num_to_string (did_num, did_string);
+    /* use the document id as the key */
     memset (&key, 0, sizeof (DBT));
-    key.data = did_string;
-    key.size = TERANE_DID_STRING_LEN;
-    /* get the record */
+    key.data = doc_id;
+    key.size = id_len + 1;
+    /* get the document */
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
     dbret = self->documents->get (self->documents, txn? txn->txn : NULL, &key, &data, 0);
@@ -111,7 +108,7 @@ terane_Segment_get_doc (terane_Segment *self, PyObject *args)
                 (char *) key.data);
             break;
         default:
-            /* some other db error, raise Exception */
+            /* some other db error, raise Error */
             PyErr_Format (terane_Exc_Error, "Failed to get document %s: %s",
                 (char *) key.data, db_strerror (dbret));
             break;
@@ -125,11 +122,11 @@ terane_Segment_get_doc (terane_Segment *self, PyObject *args)
 /*
  * terane_Segment_set_doc: set the document contents
  *
- * callspec: Segment.set_doc(id, document)
+ * callspec: Segment.set_doc(txn, docId, document)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
- *   id (long): The document id
- *   document (string): Data to store in the document
+ *   docId (str): The document ID string
+ *   document (str): Data to store in the document
  * returns: None
  * exceptions:
  *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
@@ -138,24 +135,22 @@ PyObject *
 terane_Segment_set_doc (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    terane_DID_num did_num;
-    terane_DID_string did_string;
+    char *doc_id = NULL;
     const char *document = NULL;
     DBT key, data;
-    int dbret;
+    int id_len = 0, doc_len = 0, dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!Ks", &terane_TxnType, &txn, &did_num, &document))
+    if (!PyArg_ParseTuple (args, "O!s#s#", &terane_TxnType, &txn, &doc_id, &id_len, &document, &doc_len))
         return NULL;
     /* use the document id as the record number */
     memset (&key, 0, sizeof (DBT));
-    terane_DID_num_to_string (did_num, did_string);
-    key.data = did_string;
-    key.size = TERANE_DID_STRING_LEN;
+    key.data = doc_id;
+    key.size = id_len;
     /* set the document from the data parameter */
     memset (&data, 0, sizeof (DBT));
-    data.data = (char *) document;
-    data.size = strlen (document) + 1;
+    data.data = document;
+    data.size = doc_len + 1;
     /* set the record */
     dbret = self->documents->put (self->documents, txn->txn, &key, &data, 0);
     /* db error, raise Exception */
@@ -173,10 +168,10 @@ terane_Segment_set_doc (terane_Segment *self, PyObject *args)
 /*
  * terane_Segment_delete_doc: Delete a document record.
  *
- * callspec: Segment.delete_doc(txn, id)
+ * callspec: Segment.delete_doc(txn, docId)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
- *   id (long): The document id
+ *   docId (str): The document ID string
  * returns: None
  * exceptions:
  *   KeyError: The document with the specified id doesn't exist
@@ -186,19 +181,17 @@ PyObject *
 terane_Segment_delete_doc (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    terane_DID_num did_num;
-    terane_DID_string did_string;
+    char *doc_id = NULL;
     DBT key;
-    int dbret;
+    int id_len = 0, dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!K", &terane_TxnType, &txn, &did_num))
+    if (!PyArg_ParseTuple (args, "O!s#", &terane_TxnType, &txn, &doc_id, &id_len))
         return NULL;
     /* get the document id */
-    terane_DID_num_to_string (did_num, did_string);
     memset (&key, 0, sizeof (DBT));
-    key.data = did_string;
-    key.size = TERANE_DID_STRING_LEN;
+    key.data = doc_id;
+    key.size = id_len + 1;
     /* delete the record */
     dbret = self->documents->del (self->documents, txn->txn, &key, 0);
     switch (dbret) {
@@ -220,10 +213,10 @@ terane_Segment_delete_doc (terane_Segment *self, PyObject *args)
 /*
  * terane_Segment_contains_doc: Determine whether a document exists.
  *
- * callspec: Segment.contains_doc(id)
+ * callspec: Segment.contains_doc(txn, docId)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
- *   id (long): The document id
+ *   docId (str): The document ID string
  * returns: True if the document exists, otherwise False.
  * exceptions:
  *   Exception: A db error occurred when trying to get the record
@@ -232,21 +225,19 @@ PyObject *
 terane_Segment_contains_doc (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    terane_DID_num did_num;
-    terane_DID_string did_string;
+    char *doc_id = NULL;
     DBT key;
-    int dbret;
+    int id_len = 0, dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OK", &txn, &did_num))
+    if (!PyArg_ParseTuple (args, "Os#", &txn, &doc_id, &id_len))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
     /* get the document id */
-    terane_DID_num_to_string (did_num, did_string);
     memset (&key, 0, sizeof (DBT));
-    key.data = did_string;
-    key.size = TERANE_DID_STRING_LEN;
+    key.data = doc_id;
+    key.size = id_len + 1;
     /* check for the record */
     dbret = self->documents->exists (self->documents, txn? txn->txn : NULL, &key, 0);
     switch (dbret) {
@@ -266,17 +257,15 @@ terane_Segment_contains_doc (terane_Segment *self, PyObject *args)
 }
 
 /*
- * _Segment_next_doc: build a (doc_id,doc) tuple from the current cursor item
+ * _Segment_next_doc: build a (docId,document) tuple from the current cursor item
  */
 static PyObject *
 _Segment_next_doc (terane_Iter *iter, DBT *key, DBT *data)
 {
-    terane_DID_num did_num;
     PyObject *id, *document, *tuple;
 
-    terane_DID_string_to_num ((char *) key->data, &did_num);
     /* get the document id */
-    id = PyLong_FromUnsignedLongLong (did_num);
+    id = PyString_FromString ((char *) key->data);
     /* get the document */
     document = PyString_FromString ((char *) data->data);
     /* build the (docnum,document) tuple */
@@ -293,7 +282,7 @@ _Segment_next_doc (terane_Iter *iter, DBT *key, DBT *data)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  * returns: a new Iterator object.  Each iteration returns a tuple consisting
- *  of (docnum,document).
+ *  of (docId,document).
  * exceptions:
  *   Exception: A db error occurred when trying to get the record
  */
@@ -326,154 +315,4 @@ terane_Segment_iter_docs (terane_Segment *self, PyObject *args)
     if (iter == NULL)
         cursor->close (cursor);
     return iter;
-}
-
-/*
- * terane_Segment_first_doc: Return the first (lowest numbered) document.
- *
- * callspec: Segment.first_doc(txn)
- * parameters:
- *   txn (Txn): A Txn object to wrap the operation in, or None
- * returns: A tuple consisting of (docnum,document).
- * exceptions:
- *   IndexError: There are no documents in the Segment
- *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
- */
-PyObject *
-terane_Segment_first_doc (terane_Segment *self, PyObject *args)
-{
-    terane_Txn *txn = NULL;
-    DBC *cursor = NULL;
-    DBT key, data;
-    PyObject *tuple = NULL;
-    int dbret;
-
-    /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O", &txn))
-        return NULL;
-    if ((PyObject *) txn == Py_None)
-        txn = NULL;
-    if (txn && txn->ob_type != &terane_TxnType)
-        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-    
-    /* create a new cursor */
-    dbret = self->documents->cursor (self->documents, txn? txn->txn : NULL, &cursor, 0);
-    /* if cursor allocation failed, return Error */
-    if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to allocate document cursor: %s",
-            db_strerror (dbret));
-        return NULL;
-    }
-
-    /* retrieve the first item */
-    memset (&key, 0, sizeof (DBT));
-    key.flags = DB_DBT_MALLOC;
-    memset (&data, 0, sizeof (DBT));
-    data.flags = DB_DBT_MALLOC;
-    dbret = cursor->get (cursor, &key, &data, DB_FIRST);
-    switch (dbret) {
-        case 0:
-            tuple = _Segment_next_doc ((terane_Iter *)NULL, &key, &data);
-            break;
-        case DB_NOTFOUND:
-            PyErr_Format (PyExc_IndexError, "Segment is empty");
-            break;
-        /* for any other error, set exception and return NULL */
-        case DB_LOCK_DEADLOCK:
-            PyErr_Format (terane_Exc_Deadlock, "Failed to get item: %s",
-                db_strerror (dbret));
-            break;
-        case DB_LOCK_NOTGRANTED:
-            PyErr_Format (terane_Exc_LockTimeout, "Failed to get item: %s",
-                db_strerror (dbret));
-            break;
-        default:
-            PyErr_Format (terane_Exc_Error, "Failed to get item: %s",
-                db_strerror (dbret));
-            break;
-    }
-
-    /* free allocated memory */
-    if (key.data)
-        PyMem_Free (key.data);
-    if (data.data)
-        PyMem_Free (data.data);
-    if (cursor != NULL)
-        cursor->close (cursor);
-    return tuple;
-}
-
-/*
- * terane_Segment_last_doc: Return the last (highest numbered) document.
- *
- * callspec: Segment.last_doc(txn)
- * parameters:
- *   txn (Txn): A Txn object to wrap the operation in, or None
- * returns: A tuple consisting of (docnum,document).
- * exceptions:
- *   IndexError: There are no documents in the Segment
- *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
- */
-PyObject *
-terane_Segment_last_doc (terane_Segment *self, PyObject *args)
-{
-    terane_Txn *txn = NULL;
-    DBC *cursor = NULL;
-    DBT key, data;
-    PyObject *tuple = NULL;
-    int dbret;
-
-    /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O", &txn))
-        return NULL;
-    if ((PyObject *) txn == Py_None)
-        txn = NULL;
-    if (txn && txn->ob_type != &terane_TxnType)
-        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-    
-    /* create a new cursor */
-    dbret = self->documents->cursor (self->documents, txn? txn->txn : NULL, &cursor, 0);
-    /* if cursor allocation failed, return Error */
-    if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to allocate document cursor: %s",
-            db_strerror (dbret));
-        return NULL;
-    }
-
-    /* retrieve the first item */
-    memset (&key, 0, sizeof (DBT));
-    key.flags = DB_DBT_MALLOC;
-    memset (&data, 0, sizeof (DBT));
-    data.flags = DB_DBT_MALLOC;
-    dbret = cursor->get (cursor, &key, &data, DB_LAST);
-    switch (dbret) {
-        case 0:
-            tuple = _Segment_next_doc ((terane_Iter *)NULL, &key, &data);
-            break;
-        case DB_NOTFOUND:
-            PyErr_Format (PyExc_IndexError, "Segment is empty");
-            break;
-        /* for any other error, set exception and return NULL */
-        case DB_LOCK_DEADLOCK:
-            PyErr_Format (terane_Exc_Deadlock, "Failed to get item: %s",
-                db_strerror (dbret));
-            break;
-        case DB_LOCK_NOTGRANTED:
-            PyErr_Format (terane_Exc_LockTimeout, "Failed to get item: %s",
-                db_strerror (dbret));
-            break;
-        default:
-            PyErr_Format (terane_Exc_Error, "Failed to get item: %s",
-                db_strerror (dbret));
-            break;
-    }
-
-    /* free allocated memory */
-    if (key.data)
-        PyMem_Free (key.data);
-    if (data.data)
-        PyMem_Free (data.data);
-    if (cursor != NULL)
-        cursor->close (cursor);
-    return tuple;
 }
