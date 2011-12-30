@@ -15,9 +15,10 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os
+import os, time
 from twisted.application.service import Service
 from terane.settings import ConfigureError
+from terane.bier.docid import DocID
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.idgen')
@@ -62,6 +63,9 @@ class IDGenerator(Service):
         logger.debug("stopped id generator")
 
     def allocate(self):
+        return DocID(time.time(), 0, self._allocateOffset())
+
+    def _allocateOffset(self):
         """
         Return a new 64-bit long document identifier.
         """
