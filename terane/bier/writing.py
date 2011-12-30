@@ -1,6 +1,7 @@
 import datetime, dateutil.tz
 from zope.interface import Interface
-from terane.bier.schema import fieldFactory
+from terane.bier.schema import ISchema, fieldFactory
+from terane.bier.index import IIndex
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier.writing')
@@ -19,6 +20,9 @@ class WriterError(Exception):
     pass
 
 def writeEventToIndex(event, index):
+    #
+    if not IIndex.implementedBy(index):
+        raise TypeError("index does not implement IIndex")
     # verify required fields are present
     if not 'input' in event:
         raise WriterError("missing required field 'input'")
@@ -47,12 +51,16 @@ def writeEventToIndex(event, index):
     fieldnames = [fieldname for fieldname in event.keys() if fieldname[0].isalpha()]
     # verify that each field name exists in the index schema
     schema = index.schema()
+    if not ISchema.implementedBy(schema):
+        raise TypeError("index.schema() does not implement ISchema")
     for fieldname in fieldnames:
         if not schema.has(fieldname):
             schema.add(fieldname, fieldFactory(event[fieldname]))
 
     # update the index in the context of a transactional writer
     with index.writer() as writer:
+        if not IWriter.implementedBy(writer):
+            raise TypeError("index.writer() does not implement IWriter")
        
         # create a document record
         docId = index.newDocumentId()
@@ -75,7 +83,7 @@ def writeEventToIndex(event, index):
             storedname = "&" + fieldname
             if storedname in event:
                 document[fieldname] = event[storedname]
-            else :
+            else:
                 document[fieldname] = evalue
 
         # store the document data
