@@ -128,15 +128,15 @@ PyObject * terane_Segment_delete_doc (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_contains_doc (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_iter_docs (terane_Segment *self, PyObject *args);
 
-PyObject * terane_Segment_get_word (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_set_word (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_contains_word (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_iter_words (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_get_word_meta (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_set_word_meta (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_iter_words_meta (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_iter_words_meta_from (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_iter_words_meta_range (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_get_term (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_set_term (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_contains_term (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_iter_terms (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_get_term_meta (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_set_term_meta (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_iter_terms_meta (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_iter_terms_meta_from (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_iter_terms_meta_range (terane_Segment *self, PyObject *args);
 
 PyObject * terane_Txn_new (terane_Env *env, terane_Txn *parent);
 PyObject * terane_Txn_new_txn (terane_Txn *self);

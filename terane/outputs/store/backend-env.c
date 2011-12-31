@@ -285,7 +285,7 @@ PyTypeObject terane_EnvType = {
     0,                         /* tp_descr_get */
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
-    _Env_init,                 /* tp_init */
+    (initproc) _Env_init,      /* tp_init */
     0,                         /* tp_alloc */
     _Env_new                   /* tp_new */
 };

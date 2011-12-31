@@ -31,9 +31,9 @@ _Segment_make_term_key (PyObject *term, PyObject *id)
     DBT *key = NULL;
 
     if (!PyUnicode_Check (term))
-        return PyErr_Format (PyExc_TypeError, "Argument 'term' is not unicode type");
+        return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'term' is not unicode type");
     if (id && !PyString_Check (id))
-        return PyErr_Format (PyExc_TypeError, "Argument 'id' is not str type");
+        return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'id' is not str type");
 
     /* convert term from UTF-16 to UTF-8 */
     encoded = PyUnicode_AsUTF8String (term);
@@ -291,7 +291,7 @@ terane_Segment_set_term (terane_Segment *self, PyObject *args)
     PyObject *fieldname = NULL;
     PyObject *term = NULL;
     PyObject *id = NULL;
-    const char *value = NULL;
+    char *value = NULL;
     DBT *key, data;
     DB *field;
     int value_len = 0, dbret;
@@ -400,7 +400,7 @@ _Segment_next_term (terane_Iter *iter, DBT *key, DBT *data)
     int i;
 
     /* find the term end marker */
-    for (i = key->size - 1; i--; i >= 0) {
+    for (i = key->size - 1; i >= 0; i--) {
         doc_id = key->data + i;
         if (*doc_id == '>')
             break;

@@ -320,7 +320,7 @@ PyTypeObject terane_SegmentType = {
     0,                         /* tp_descr_get */
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
-    _Segment_init,             /* tp_init */
+    (initproc) _Segment_init,  /* tp_init */
     0,                         /* tp_alloc */
     _Segment_new               /* tp_new */
 };

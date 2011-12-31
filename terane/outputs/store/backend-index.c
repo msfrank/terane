@@ -306,7 +306,7 @@ PyTypeObject terane_IndexType = {
     0,                         /* tp_descr_get */
     0,                         /* tp_descr_set */
     0,                         /* tp_dictoffset */
-    _Index_init,
+    (initproc) _Index_init,    /* tp_init */
     0,                         /* tp_alloc */
     _Index_new
 };

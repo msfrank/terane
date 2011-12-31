@@ -136,7 +136,7 @@ terane_Segment_set_doc (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     char *doc_id = NULL;
-    const char *document = NULL;
+    char *document = NULL;
     DBT key, data;
     int id_len = 0, doc_len = 0, dbret;
 
@@ -146,7 +146,7 @@ terane_Segment_set_doc (terane_Segment *self, PyObject *args)
     /* use the document id as the record number */
     memset (&key, 0, sizeof (DBT));
     key.data = doc_id;
-    key.size = id_len;
+    key.size = id_len + 1;
     /* set the document from the data parameter */
     memset (&data, 0, sizeof (DBT));
     data.data = document;
