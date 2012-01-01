@@ -77,8 +77,7 @@ Query Grammar
 
 import datetime, dateutil.tz
 import pyparsing as pp
-from whoosh.query import Prefix, DateRange, NumericRange, And, Or, Not, Every
-from whoosh.analysis import SimpleAnalyzer
+from terane.bier.searching import Term, DateRange, AND, OR
 
 class QuerySyntaxError(BaseException):
     """
