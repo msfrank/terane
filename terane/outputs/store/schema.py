@@ -54,6 +54,7 @@ class Schema(object):
             raise IndexError("field named '%s' already exists in Schema" % name)
         with self._index.new_txn() as txn:
             self._index.add_field(txn, name, pickle.dumps(field))
+        self._fields[name] = field
 
     def get(self, name):
         return self._fields[name]
