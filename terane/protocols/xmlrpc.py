@@ -22,8 +22,8 @@ from twisted.web.server import Site
 from twisted.application.service import Service
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
-from terane.query import queries, QueryExecutionError
-from terane.query.dql import QuerySyntaxError
+from terane.bier import queries, QueryExecutionError
+from terane.bier.ql import QuerySyntaxError
 from terane.stats import stats
 from terane.loggers import getLogger
 

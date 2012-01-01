@@ -22,7 +22,7 @@ from twisted.application.service import MultiService
 from twisted.internet.defer import maybeDeferred
 from terane.plugins import plugins
 from terane.routes import routes
-from terane.query import queries
+from terane.bier import queries
 from terane.stats import stats
 from terane.loggers import getLogger, startLogging, StdoutHandler, FileHandler
 from terane.loggers import ERROR, WARNING, INFO, DEBUG
