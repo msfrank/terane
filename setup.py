@@ -56,12 +56,10 @@ setup(
         'terane.outputs',
         'terane.outputs.store',
         'terane.protocols',
-        'terane.query',
         ],
     ext_modules=[
         Extension('terane.outputs.store.backend', [
             'terane/outputs/store/backend.c',
-            'terane/outputs/store/backend-did.c',
             'terane/outputs/store/backend-env.c',
             'terane/outputs/store/backend-index.c',
             'terane/outputs/store/backend-index-field.c',
@@ -73,7 +71,7 @@ setup(
             'terane/outputs/store/backend-segment-doc.c',
             'terane/outputs/store/backend-segment-field.c',
             'terane/outputs/store/backend-segment-meta.c',
-            'terane/outputs/store/backend-segment-word.c',
+            'terane/outputs/store/backend-segment-term.c',
             'terane/outputs/store/backend-txn.c',
             ],
             libraries=['db-4.8',],
