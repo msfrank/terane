@@ -63,8 +63,8 @@ class XMLRPCDispatcher(XMLRPC):
         try:
             iters.value += 1
             results = queries.iter(unicode(query), last, indices, limit, reverse, fields)
-            totalitertime.value += float(results[0]['runtime'])
-            return list(results)
+            totalitertime.value += float(results.meta['runtime'])
+            return [results.meta] + list(results)
         except (QuerySyntaxError, QueryExecutionError), e:
             raise FaultBadRequest(e)
         except BaseException, e:
@@ -76,8 +76,8 @@ class XMLRPCDispatcher(XMLRPC):
         try:
             tails.value += 1
             results = queries.tail(unicode(query), last, indices, limit, fields)
-            totaltailtime.value += float(results[0]['runtime'])
-            return list(results)
+            totaltailtime.value += float(results.meta['runtime'])
+            return [results.meta] + list(results)
         except (QuerySyntaxError, QueryExecutionError), e:
             raise FaultBadRequest(e)
         except BaseException, e:

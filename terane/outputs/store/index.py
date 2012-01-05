@@ -114,7 +114,7 @@ class Index(backend.Index):
         Return a new object implementing ISearcher, which is protected by a new
         transaction.
         """
-        return IndexSearcher(self._current)
+        return IndexSearcher(self._current[0])
     
     def writer(self):
         """

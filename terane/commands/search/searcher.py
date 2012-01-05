@@ -19,7 +19,9 @@ import os, sys, dateutil.parser, dateutil.tz, xmlrpclib
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.web.xmlrpc import Proxy
 from twisted.internet import reactor
-from terane.loggers import startLogging, StdoutHandler, DEBUG
+from terane.loggers import getLogger, startLogging, StdoutHandler, DEBUG
+
+logger = getLogger('terane.commands.search.searcher')
 
 class Searcher(object):
     def configure(self, settings):
@@ -49,7 +51,7 @@ class Searcher(object):
 
     def run(self):
         proxy = Proxy("http://%s/XMLRPC" % self.host, allowNone=True)
-        deferred = proxy.callRemote('iter', self.query, 0, self.indices,
+        deferred = proxy.callRemote('iter', self.query, None, self.indices,
             self.limit, self.reverse, self.fields)
         deferred.addCallback(self.printResult)
         deferred.addErrback(self.printError)
@@ -57,6 +59,7 @@ class Searcher(object):
         return 0
 
     def printResult(self, results):
+        logger.debug("XMLRPC result: %s" % str(results))
         meta = results.pop(0)
         if len(results) > 0:
             for doc in results:

@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
+from zope.interface import implements
 from terane.bier.searching import ISearcher, IPostingList
 from terane.outputs.store.encoding import json_encode, json_decode
 from terane.loggers import getLogger
@@ -31,23 +32,39 @@ class IndexSearcher(object):
     def __enter__(self):
         pass
     
-    def postingsLength(self, fieldname, term):
+    def postingsLength(self, fieldname, term, daterange):
         logger.trace("SegmentSearcher.postingsLength(fieldname=%s, term=%s)" %
             (fieldname, term))
         fieldname = str(fieldname)
         term = unicode(term)
-        try:
-            tmeta = json_decode(self._segment.get_term_meta(None, fieldname, term))
-            return tmeta['num-docs']
-        except KeyError:
-            return 0
+        if daterange == None:
+            try:
+                tmeta = json_decode(self._segment.get_term_meta(None, fieldname, term))
+                return tmeta['num-docs']
+            except KeyError:
+                return 0
+        else:
+            try:
+                fmeta = json_decode(self._segment.get_field_meta(None, fieldname))
+                ndocs = fmeta['num-docs']
+                start = str(daterange.startingID())
+                end = str(daterange.endingID())
+                return int(ndocs * self._segment.estimate_term_postings(None, fieldname, term, start, end))
+            except KeyError:
+                return 0
+        
 
-    def iterPostings(self, fieldname, term, reverse):
+    def iterPostings(self, fieldname, term, daterange, reverse):
         logger.trace("SegmentSearcher.iterPostings(fieldname=%s, term=%s, reverse=%s)" %
             (fieldname, term, reverse))
         fieldname = str(fieldname)
         term = unicode(term)
-        return PostingList(self._segment.iter_terms(fieldname, term))
+        start = str(daterange.startingID())
+        end = str(daterange.endingID())
+        return PostingList(self._segment.iter_terms_within(None, fieldname, term, start, end, reverse))
+
+    def getEvent(self, docId):
+        return json_decode(self._segment.get_doc(None, docId))
 
     def __exit__(self, excType, excValue, traceback):
         pass

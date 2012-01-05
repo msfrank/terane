@@ -21,7 +21,7 @@ class WriterError(Exception):
 
 def writeEventToIndex(event, index):
     #
-    if not IIndex.implementedBy(index):
+    if not IIndex.providedBy(index):
         raise TypeError("index does not implement IIndex")
     # verify required fields are present
     if not 'input' in event:
@@ -51,7 +51,7 @@ def writeEventToIndex(event, index):
     fieldnames = [fieldname for fieldname in event.keys() if fieldname[0].isalpha()]
     # verify that each field name exists in the index schema
     schema = index.schema()
-    if not ISchema.implementedBy(schema):
+    if not ISchema.providedBy(schema):
         raise TypeError("index.schema() does not implement ISchema")
     for fieldname in fieldnames:
         if not schema.has(fieldname):
@@ -59,7 +59,7 @@ def writeEventToIndex(event, index):
 
     # update the index in the context of a transactional writer
     with index.writer() as writer:
-        if not IWriter.implementedBy(writer):
+        if not IWriter.providedBy(writer):
             raise TypeError("index.writer() does not implement IWriter")
        
         # create a document record

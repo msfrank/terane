@@ -77,7 +77,7 @@ Query Grammar
 
 import datetime, dateutil.tz
 import pyparsing as pp
-from terane.bier.searching import Term, DateRange, AND, OR
+from terane.bier.searching import Term, Period, AND, OR
 
 class QuerySyntaxError(BaseException):
     """
@@ -111,14 +111,12 @@ def parseIterQuery(string):
             utcnow = datetime.datetime.utcnow()
             onehourago = utcnow - datetime.timedelta(hours=1)
             where = {'dateFrom': onehourago, 'dateTo': utcnow, 'fromExcl': False, 'toExcl': False}
-        return query, where['dateFrom'], where['dateTo'], where['fromExcl'], where['toExcl']
+        return query, Period(where['dateFrom'], where['dateTo'], where['fromExcl'], where['toExcl'])
     except pp.ParseBaseException, e:
         raise QuerySyntaxError(e, string)
 
 def parseTailQuery(string):
-    """
-    Parse the tail query specified by qstring.  Returns a Query object.
-    """
+    "Parse the tail query specified by qstring.  Returns a Query object."
     try:
         return tailQuery.parseString(string, parseAll=True).asList()[0]
     except pp.ParseBaseException, e:
@@ -130,24 +128,10 @@ fieldSeparator = pp.Suppress('=')
 subjectWord = pp.quotedString | pp.Word(unreservedChars)
 subjectTerm = ( pp.Word(unreservedChars) + fieldSeparator + subjectWord ) | subjectWord
 def parseSubjectTerm(tokens):
-    """
-    Parse a subject term.  The term is normalized by splitting on common boundaries,
-    and converting to lowercase.  Internally, a term consists of a field and a value, but
-    if a field is not specified in the query, the 'default' field is used.  Quotes
-    (both single and double) affect the parsing of a term, as well.  Some examples:
-
-    foo             ->  Prefix('default', 'foo')
-    foo-bar         ->  And([Prefix('default','foo'), Prefix('default', 'bar')])
-    foo=bar         ->  Prefix('foo', 'bar')
-    foo="bar baz"   ->  And([Prefix('foo', 'bar'), Prefix('foo', 'baz')])
-    "foo=bar baz"   ->  And([Prefix('default', 'foo', Prefix('default', 'bar'), Prefix('default', 'baz')])
-    """
-    analyze = SimpleAnalyzer()
+    "Parse a subject term."
     if len(tokens) == 1:
-        field,terms = unicode('default'), analyze(unicode(tokens[0]))
-    else:
-        field,terms = tokens[0], analyze(unicode(tokens[1]))
-    return And([Prefix(field, term.text) for term in terms]).normalize()
+        return Term(None, unicode(tokens[0]))
+    return Term(str(tokens[0]), unicode(tokens[1]))
 subjectTerm.setParseAction(parseSubjectTerm)
 
 def makeUTC(dt):
@@ -227,33 +211,33 @@ subjectDate.setParseAction(parseSubjectDate)
 # groupings
 def parseNotGroup(tokens):
     "Parse NOT statement."
+    raise NotImplemented()
     if len(tokens) == 1:
-        q = tokens[0]
-    else:
-        q = Not(tokens[1])
-    return q
+        return tokens[0]
+    return NOT(tokens[1])
+
 def parseAndGroup(tokens):
     "Parse AND statement."
     tokens = tokens[0]
     if len(tokens) == 1:
-        q = tokens[0]
-    else:
-        q = tokens[0]
-        i = 1
-        while i < len(tokens):
-            q = And([q, tokens[i]]).normalize()
-            i += 1
+        return tokens[0]
+    q = tokens[0]
+    i = 1
+    while i < len(tokens):
+        q = AND([q, tokens[i]])
+        i += 1
     return q
+
 def parseOrGroup(tokens):
     "Parse OR statement."
     tokens = tokens[0]
     if len(tokens) == 1:
-        q = tokens[0]
+        return tokens[0]
     else:
         q = tokens[0]
         i = 1
         while i < len(tokens):
-            q = Or([q, tokens[i]]).normalize()
+            q = OR([q, tokens[i]])
             i += 1
     return q
 
