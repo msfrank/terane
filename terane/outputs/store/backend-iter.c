@@ -52,8 +52,8 @@ terane_Iter_new (PyObject *parent, DBC *cursor, terane_Iter_ops *ops)
     iter->cursor = cursor;
     iter->initialized = 0;
     iter->itype = TERANE_ITER_ALL;
-    iter->key = NULL;
-    iter->len = 0;
+    memset (&iter->start_key, 0, sizeof (DBT));
+    memset (&iter->end_key, 0, sizeof (DBT));
     iter->next = ops->next;
     iter->skip = ops->skip;
     return (PyObject *) iter;
@@ -74,14 +74,14 @@ terane_Iter_new_range (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void
     if (iter == NULL)
         return NULL;
     iter->itype = TERANE_ITER_RANGE;
-    iter->key = PyMem_Malloc (len);
+    iter->start_key.data = PyMem_Malloc (len);
     /* allocation failed */
-    if (iter->key == NULL) {
+    if (iter->start_key.data == NULL) {
         Py_DECREF (iter);
         return PyErr_NoMemory ();
     }
-    iter->len = len;
-    memcpy (iter->key, key, len);
+    iter->start_key.size = len;
+    memcpy (iter->start_key.data, key, len);
     return (PyObject *) iter;
 }
 
@@ -99,15 +99,56 @@ terane_Iter_new_from (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void 
     if (iter == NULL)
         return NULL;
     iter->itype = TERANE_ITER_FROM;
-    iter->key = PyMem_Malloc (len);
-    /* allocation failed */
-    if (iter->key == NULL) {
+    iter->start_key.data = PyMem_Malloc (len);
+    if (iter->start_key.data == NULL) {
         Py_DECREF (iter);
         return PyErr_NoMemory ();
     }
-    iter->len = len;
-    memcpy (iter->key, key, len);
+    iter->start_key.size = len;
+    memcpy (iter->start_key.data, key, len);
     return (PyObject *) iter;
+}
+
+/*
+ * terane_Iter_new_within: allocate a new Iter object using the supplied DB cursor.
+ * 
+ * returns: A new Iter object
+ */
+PyObject *
+terane_Iter_new_within (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, DBT *start, DBT *end)
+{
+    terane_Iter *iter;
+
+    iter = (terane_Iter *) terane_Iter_new (parent, cursor, ops);
+    if (iter == NULL)
+        return NULL;
+    iter->itype = TERANE_ITER_WITHIN;
+
+    iter->start_key.data = PyMem_Malloc (start->size);
+    if (iter->start_key.data == NULL) {
+        PyErr_NoMemory ();
+        goto error;
+    }
+    iter->start_key.size = start->size;
+    memcpy (iter->start_key.data, start->data, start->size);
+
+    iter->end_key.data = PyMem_Malloc (end->size);
+    if (iter->end_key.data == NULL) {
+        PyErr_NoMemory ();
+        goto error;
+    }
+    iter->end_key.size = end->size;
+    memcpy (iter->end_key.data, end->data, end->size);
+
+    return (PyObject *) iter;
+
+error:
+    if (iter->start_key.data)
+        PyMem_Free (iter->start_key.data);
+    if (iter->end_key.data)
+        PyMem_Free (iter->end_key.data);
+    Py_DECREF (iter);
+    return NULL;
 }
 
 /*
@@ -121,13 +162,13 @@ _Iter_iter (terane_Iter *self)
 }
 
 /*
- *
+ * _Iter_get: retreive the iterator item from the cursor.
  */
 static PyObject *
 _Iter_get (terane_Iter *iter, DBT *key, int itype, int flags)
 {
     DBT k, data;
-    int dbret;
+    int cmp, dbret;
     PyObject *item = NULL;
 
     /* get the next cursor item */
@@ -163,8 +204,16 @@ _Iter_get (terane_Iter *iter, DBT *key, int itype, int flags)
     /* perform post-retrieval checks */
     switch (itype) {
         case TERANE_ITER_RANGE:
-            /* if this is a range search, then check that the key prefix matches */
-            if (iter->len <= k.size && memcmp (iter->key, k.data, iter->len) == 0)
+            /* check that the key prefix matches */
+            if (iter->start_key.size <= k.size &&
+              memcmp (iter->start_key.data, k.data, iter->start_key.size) == 0)
+                item = iter->next (iter, &k, &data);
+            break;
+        case TERANE_ITER_WITHIN:
+            /* check that the key is between the start and end keys */
+            cmp = memcmp (k.data, iter->end_key.data, 
+                iter->end_key.size < k.size ? iter->end_key.size : k.size);
+            if (cmp < 0 || (cmp == 0 && k.size > iter->end_key.size))
                 item = iter->next (iter, &k, &data);
             break;
         default:
@@ -209,13 +258,14 @@ _Iter_next (terane_Iter *self)
             break;
         case TERANE_ITER_RANGE:
         case TERANE_ITER_FROM:
+        case TERANE_ITER_WITHIN:
             if (!self->initialized) {
                 /*
                  * if this is a range search, or if we are starting from
                  * a specified key, then set the key before searching
                  */
-                key.data = self->key;
-                key.size = self->len;
+                key.data = self->start_key.data;
+                key.size = self->start_key.size;
                 flags = DB_SET_RANGE;
             }
             else
@@ -313,10 +363,12 @@ terane_Iter_close (terane_Iter *self)
     if (self->parent)
         Py_DECREF (self->parent);
     self->parent = NULL;
-    if (self->key)
-        PyMem_Free (self->key);
-    self->key = NULL;
-    self->len = 0;
+    if (self->start_key.data)
+        PyMem_Free (self->start_key.data);
+    if (self->end_key.data)
+        PyMem_Free (self->end_key.data);
+    memset (&self->start_key, 0, sizeof (DBT));
+    memset (&self->end_key, 0, sizeof (DBT));
     Py_RETURN_NONE;
 }
 

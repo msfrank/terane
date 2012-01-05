@@ -390,6 +390,74 @@ terane_Segment_contains_term (terane_Segment *self, PyObject *args)
 }
 
 /*
+ * terane_Segment_estimate_term_postings: Return an estimate of the number of postings
+ *  for a term between the start and end document ID.
+ *
+ * callspec: Segment.estimate_term_count(txn, fieldname, term, start, end)
+ * parameters:
+ *   txn (Txn): A Txn object to wrap the operation in, or None
+ *   fieldname (string): The field name
+ *   term (unicode): The term
+ *   start (str): The starting document ID
+ *   end (str): The ending document ID
+ * returns: An estimate of the percentage of total postings of all terms in the field which
+ *   are between the start and end document IDs, expressed as a float.
+ * exceptions:
+ *   KeyError: The specified field doesn't exist
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to find the record
+ */
+PyObject *
+terane_Segment_estimate_term_postings (terane_Segment *self, PyObject *args)
+{
+    terane_Txn *txn = NULL;
+    PyObject *fieldname = NULL;
+    PyObject *term = NULL, *start = NULL, *end = NULL;
+    DBT *key;
+    DB *field;
+    DB_KEY_RANGE startrange, endrange;
+    int dbret;
+
+    /* parse parameters */
+    if (!PyArg_ParseTuple (args, "OO!O!O!O!", &txn, &PyString_Type, &fieldname,
+        &PyUnicode_Type, &term, &PyString_Type, &start, &PyString_Type, &end))
+        return NULL;
+    if ((PyObject *) txn == Py_None)
+        txn = NULL;
+    if (txn && txn->ob_type != &terane_TxnType)
+        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
+
+    field = terane_Segment_get_field_DB (self, txn, fieldname);
+    if (field == NULL)
+        return NULL;
+
+    /* build the start key from the term value */
+    key = _Segment_make_term_key (term, start);
+    if (key == NULL)
+        return NULL;
+
+    /* estimate start key range */
+    dbret = field->key_range (field, txn? txn->txn : NULL, key, &startrange, 0);
+    _Segment_free_key (key);
+    if (dbret != 0) 
+        return PyErr_Format (terane_Exc_Error, "Failed to estimate start key range: %s",
+            db_strerror (dbret));
+
+    /* build the end key from the term value */
+    key = _Segment_make_term_key (term, end);
+    if (key == NULL)
+        return NULL;
+
+    /* estimate start key range */
+    dbret = field->key_range (field, txn? txn->txn : NULL, key, &endrange, 0);
+    _Segment_free_key (key);
+    if (dbret != 0) 
+        return PyErr_Format (terane_Exc_Error, "Failed to estimate end key range: %s",
+            db_strerror (dbret));
+
+    return PyFloat_FromDouble (100.0 - (endrange.less + startrange.greater));
+}
+
+/*
  * _Segment_next_term: return the (id,value) tuple from the current cursor item
  */
 static PyObject *
@@ -437,7 +505,7 @@ _Segment_skip_term (terane_Iter *iter, PyObject *args)
         return (void *) PyErr_NoMemory ();
     memset (key, 0, sizeof (DBT));
     /* id_len does not include the trailing '\0' */
-    key->size = iter->len + id_len + 1;
+    key->size = iter->start_key.size + id_len + 1;
     /* iter->key is in the form of '<' + term + '>', without the '\0' */
     key->data = PyMem_Malloc (key->size);
     if (key->data == NULL) {
@@ -446,8 +514,8 @@ _Segment_skip_term (terane_Iter *iter, PyObject *args)
         return NULL;    /* raises MemoryError */
     }
     /* create key in the form of '<' + term + '>' + id + '\0' */
-    memcpy (key->data, iter->key, iter->len);
-    memcpy (key->data + iter->len, doc_id, id_len);
+    memcpy (key->data, iter->start_key.data, iter->start_key.size);
+    memcpy (key->data + iter->start_key.size, doc_id, id_len);
     return key;
 }
 
@@ -500,15 +568,136 @@ terane_Segment_iter_terms (terane_Segment *self, PyObject *args)
     /* create a new cursor */
     dbret = field->cursor (field, txn? txn->txn : NULL, &cursor, 0);
     /* if cursor allocation failed, return Error */
-    if (dbret != 0)
+    if (dbret != 0) {
+        _Segment_free_key (key);
         return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
+    }
+
     iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size);
     _Segment_free_key (key);
     if (iter == NULL)
         cursor->close (cursor);
     return iter;
 }
+
+/*
+ * _Segment_skip_term_within: create a key to skip to the item specified by id.
+ */
+static DBT *
+_Segment_skip_term_within (terane_Iter *iter, PyObject *args)
+{
+    char *doc_id = NULL;
+    int id_len = 0, i;
+    DBT *key = NULL;
+
+    if (!PyArg_ParseTuple (args, "s#", &doc_id, &id_len))
+        return NULL;
+    /* find the term end marker */
+    for (i = iter->start_key.size - 1; i >= 0; i--) {
+        if (((char *)iter->start_key.data)[i] == '>')
+            break;
+    }
+    if (i < 0)
+        return NULL;
+    /* allocate a DBT to store the key */
+    key = PyMem_Malloc (sizeof (DBT));
+    if (key == NULL)
+        return (void *) PyErr_NoMemory ();
+    memset (key, 0, sizeof (DBT));
+    /* id_len does not include the trailing '\0' */
+    key->size = i + 1 + id_len + 1;
+    /* iter->key is in the form of '<' + term + '>', without the '\0' */
+    key->data = PyMem_Malloc (key->size);
+    if (key->data == NULL) {
+        PyErr_NoMemory ();
+        PyMem_Free (key);
+        return NULL;    /* raises MemoryError */
+    }
+    /* create key in the form of '<' + term + '>' + id + '\0' */
+    memcpy (key->data, iter->start_key.data, i + 1);
+    memcpy (key->data + i + 1, doc_id, id_len);
+    return key;
+}
+
+/*
+ * terane_Segment_iter_terms_within: Iterate through all document ids associated
+ *  with the specified term in the specified field between the specified start and
+ *  end document IDs.
+ *
+ * callspec: Segment.iter_terms_within(txn, fieldname, term, start, end)
+ * parameters:
+ *   txn (Txn): A Txn object to wrap the operation in, or None
+ *   fieldname (string): The field name
+ *   term (str): The term
+ *   start (str): The starting document ID, inclusive
+ *   end (str): The ending document ID, inclusive
+ *   reverse (bool): Iterate in reverse order
+ * returns: a new Iterator object.  Each iteration returns a tuple consisting
+ *  of (docId,value).
+ * exceptions:
+ *   KeyError: The specified field doesn't exist
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
+ */
+PyObject *
+terane_Segment_iter_terms_within (terane_Segment *self, PyObject *args)
+{
+    terane_Txn *txn = NULL;
+    PyObject *fieldname = NULL;
+    PyObject *term = NULL, *start = NULL, *end = NULL, *reverse;
+    DB *field = NULL;
+    DBT *start_key = NULL, *end_key = NULL;
+    DBC *cursor = NULL;
+    int dbret;
+    PyObject *iter = NULL;
+    terane_Iter_ops ops = { .next = _Segment_next_term, .skip = _Segment_skip_term_within };
+
+    /* parse parameters */
+    if (!PyArg_ParseTuple (args, "OO!O!O!O!O", &txn, &PyString_Type, &fieldname,
+        &PyUnicode_Type, &term, &PyString_Type, &start, &PyString_Type, &end, &reverse))
+        return NULL;
+    if ((PyObject *) txn == Py_None)
+        txn = NULL;
+    if (txn && txn->ob_type != &terane_TxnType)
+        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
+
+    field = terane_Segment_get_field_DB (self, txn, fieldname);
+    if (field == NULL)
+        return NULL;
+
+    /* build the start and end keys */
+    start_key = _Segment_make_term_key (term, start);
+    if (start_key == NULL)
+        goto error;
+    end_key = _Segment_make_term_key (term, end);
+    if (end_key == NULL)
+        goto error;
+
+    /* create a new cursor */
+    dbret = field->cursor (field, txn? txn->txn : NULL, &cursor, 0);
+    /* if cursor allocation failed, return Error */
+    if (dbret != 0) {
+        PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
+            db_strerror (dbret));
+        goto error;
+    }
+    iter = terane_Iter_new_within ((PyObject *) self, cursor, &ops, start_key, end_key);
+    _Segment_free_key (start_key);
+    _Segment_free_key (end_key);
+    if (iter == NULL)
+        cursor->close (cursor);
+    return iter;
+
+error:
+    if (start_key)
+        _Segment_free_key (start_key);
+    if (end_key)
+        _Segment_free_key (end_key);
+    if (cursor)
+        cursor->close (cursor);
+    return NULL;
+}
+
 
 /*
  * terane_Segment_get_term_meta: Retrieve the metadata associated with the

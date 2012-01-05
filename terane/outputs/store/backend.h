@@ -51,8 +51,8 @@ typedef struct _terane_Iter {
     DBC *cursor;
     int initialized;
     int itype;
-    void *key;
-    size_t len;
+    DBT start_key;
+    DBT end_key;
     PyObject *(*next)(struct _terane_Iter *, DBT *, DBT *);
     DBT *(*skip)(struct _terane_Iter *, PyObject *);
 } terane_Iter;
@@ -131,7 +131,9 @@ PyObject * terane_Segment_iter_docs (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_get_term (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_set_term (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_contains_term (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_estimate_term_postings (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_iter_terms (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_iter_terms_within (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_get_term_meta (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_set_term_meta (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_iter_terms_meta (terane_Segment *self, PyObject *args);
@@ -146,6 +148,7 @@ PyObject * terane_Txn_abort (terane_Txn *self);
 PyObject * terane_Iter_new (PyObject *parent, DBC *cursor, terane_Iter_ops *ops);
 PyObject * terane_Iter_new_range (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void *key, size_t len);
 PyObject * terane_Iter_new_from (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void *key, size_t len);
+PyObject * terane_Iter_new_within (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, DBT *start, DBT *end);
 PyObject * terane_Iter_skip (terane_Iter *self, PyObject *args);
 PyObject * terane_Iter_reset (terane_Iter *self);
 PyObject * terane_Iter_close (terane_Iter *self);
@@ -180,6 +183,7 @@ extern PyObject *terane_Exc_Error;
 #define TERANE_ITER_ALL         1
 #define TERANE_ITER_RANGE       2
 #define TERANE_ITER_FROM        3
+#define TERANE_ITER_WITHIN      4
 
 /* 
  * logging levels.  these values correspond to the logging levels in
@@ -192,8 +196,5 @@ extern PyObject *terane_Exc_Error;
 #define TERANE_LOG_INFO             30
 #define TERANE_LOG_DEBUG            40
 #define TERANE_LOG_TRACE            50
-
-/* the size of a terane_DID_string buffer, including the trailing '\0' */
-#define TERANE_DID_STRING_LEN       17
 
 #endif
