@@ -17,6 +17,7 @@
 
 import os, datetime, traceback
 from Queue import Queue
+from functools import wraps
 from twisted.python.log import startLoggingWithObserver, msg, err, ILogObserver
 from twisted.python.util import untilConcludes
 
@@ -142,6 +143,26 @@ class Logger(object):
 
     def error(self, message, **kwds):
         self.msg(ERROR, message, **kwds)
+
+    def tracedfunc(self, fn):
+        @wraps(fn)
+        def _wrapper(*args, **kwds):
+            def _stringify(arg):
+                if isinstance(arg, str) or isinstance(arg, unicode):
+                    return unicode("'%s'" % arg)
+                return unicode(arg)
+            retval = fn(*args, **kwds)
+            _fn = str(fn.__name__)
+            _args = ', '.join([_stringify(a) for a in args])
+            _kwds = ', '.join(["%s=%s" % (k,_stringify(v)) for k,v in kwds.items()])
+            _retval = str(retval)
+            if _kwds == '':
+                self.trace("%s(%s) => %s" % (_fn, _args, _retval))
+            else:
+                self.trace("%s(%s, %s) => %s" % (_fn, _args, _kwds, _retval))
+            return retval
+        return _wrapper
+
 
 _loggers = Logger('', NOTSET)
 def getLogger(name):
