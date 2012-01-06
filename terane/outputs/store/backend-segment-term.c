@@ -59,19 +59,19 @@ _Segment_make_term_key (PyObject *term, PyObject *id)
     memset (key, 0, sizeof (DBT));
 
     /* create key in the form of '<' + term + '>' + id + '\0' */
-    key->data = PyMem_Malloc (term_len + id_len + 2);
+    key->data = PyMem_Malloc (term_len + id_len + 3);
     if (key->data == NULL) {
         PyErr_NoMemory ();
         PyMem_Free (key);
         Py_DECREF (encoded);
         return NULL;    /* raises MemoryError */
     }
-    key->size = term_len + id_len + 2;
+    key->size = term_len + id_len + 3;
     ((char *)key->data)[0] = '<';
     memcpy (key->data + 1, term_str, term_len);
     ((char *)key->data)[term_len + 1] = '>';
     memcpy (key->data + term_len + 2, doc_id, id_len);
-    ((char *)key->data)[term_len + id_len + 1] = '\0';
+    ((char *)key->data)[term_len + id_len + 2] = '\0';
 
     Py_DECREF (encoded);
     return key;
@@ -278,7 +278,7 @@ terane_Segment_get_term (terane_Segment *self, PyObject *args)
  *   fieldname (string): The field name
  *   term (unicode): The term
  *   id (long): The document id
- *   value (string): JSON-encoded posting data
+ *   value (unicode): JSON-encoded posting data
  * returns: None
  * exceptions:
  *   KeyError: The specified field doesn't exist
@@ -297,7 +297,7 @@ terane_Segment_set_term (terane_Segment *self, PyObject *args)
     int value_len = 0, dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!O!O!O!s", &terane_TxnType, &txn,
+    if (!PyArg_ParseTuple (args, "O!O!O!O!s#", &terane_TxnType, &txn,
         &PyString_Type, &fieldname, &PyUnicode_Type, &term, &PyString_Type, &id,
         &value, &value_len))
         return NULL;
