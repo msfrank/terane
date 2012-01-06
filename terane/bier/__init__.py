@@ -91,7 +91,7 @@ class QueryManager(Service):
         logger.trace("iter period=%s" % period)
         # query each index and return the results
         results = searchIndices(indices, query, period, reverse, fields, limit)
-        results.meta['runtime'] = '0.0'
+        results.meta['runtime'] = 0.0
         return results
 
     def tail(self, query, lastId=0, indices=None, limit=100, fields=None):

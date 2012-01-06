@@ -17,6 +17,7 @@
 
 from zope.interface import implements
 from terane.bier.searching import ISearcher, IPostingList
+from terane.bier.docid import DocID
 from terane.outputs.store.encoding import json_encode, json_decode
 from terane.loggers import getLogger
 
@@ -26,18 +27,19 @@ class IndexSearcher(object):
 
     implements(ISearcher)
 
+    @logger.tracedfunc
     def __init__(self, segment):
         self._segment = segment
 
+    @logger.tracedfunc
     def __enter__(self):
         pass
     
-    def postingsLength(self, fieldname, term, daterange):
-        logger.trace("SegmentSearcher.postingsLength(fieldname=%s, term=%s)" %
-            (fieldname, term))
+    @logger.tracedfunc
+    def postingsLength(self, fieldname, term, period):
         fieldname = str(fieldname)
         term = unicode(term)
-        if daterange == None:
+        if period == None:
             try:
                 tmeta = json_decode(self._segment.get_term_meta(None, fieldname, term))
                 return tmeta['num-docs']
@@ -47,25 +49,25 @@ class IndexSearcher(object):
             try:
                 fmeta = json_decode(self._segment.get_field_meta(None, fieldname))
                 ndocs = fmeta['num-docs']
-                start = str(daterange.startingID())
-                end = str(daterange.endingID())
+                start = str(period.startingID())
+                end = str(period.endingID())
                 return int(ndocs * self._segment.estimate_term_postings(None, fieldname, term, start, end))
             except KeyError:
                 return 0
         
-
-    def iterPostings(self, fieldname, term, daterange, reverse):
-        logger.trace("SegmentSearcher.iterPostings(fieldname=%s, term=%s, reverse=%s)" %
-            (fieldname, term, reverse))
+    @logger.tracedfunc
+    def iterPostings(self, fieldname, term, period, reverse):
         fieldname = str(fieldname)
         term = unicode(term)
-        start = str(daterange.startingID())
-        end = str(daterange.endingID())
+        start = str(period.startingID())
+        end = str(period.endingID())
         return PostingList(self._segment.iter_terms_within(None, fieldname, term, start, end, reverse))
 
+    @logger.tracedfunc
     def getEvent(self, docId):
-        return json_decode(self._segment.get_doc(None, docId))
+        return json_decode(self._segment.get_doc(None, str(docId)))
 
+    @logger.tracedfunc
     def __exit__(self, excType, excValue, traceback):
         pass
     
@@ -73,20 +75,27 @@ class PostingList(object):
     
     implements(IPostingList)
 
+    @logger.tracedfunc
     def __init__(self, postings):
         self._postings = postings
     
+    @logger.tracedfunc
     def nextPosting(self):
         if self._postings == None:
             raise StopIteration()
         try:
             docId,tvalue = self._postings.next()
             docId = DocID.fromString(docId)
-            tvalue = json_decode(tvalue)
+            if tvalue == '':
+                tvalue = None
+            else:
+                tvalue = json_decode(tvalue)
             return docId, tvalue
-        finally:
+        except StopIteration:
             self._postings = None
+            raise
 
+    @logger.tracedfunc
     def skipPosting(self, targetId):
         if self._postings == None:
             raise StopIteration()
@@ -94,7 +103,11 @@ class PostingList(object):
             targetId = str(targetId)
             docId,tvalue = self._postings.skip(targetId)
             docId = DocID.fromString(docId)
-            tvalue = json_decode(tvalue)
+            if tvalue == '':
+                tvalue = None
+            else:
+                tvalue = json_decode(tvalue)
             return docId, tvalue
-        finally:
+        except StopIteration:
             self._postings = None
+            raise

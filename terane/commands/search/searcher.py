@@ -15,10 +15,11 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, sys, dateutil.parser, dateutil.tz, xmlrpclib
+import os, sys, datetime, dateutil.tz, xmlrpclib
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.web.xmlrpc import Proxy
 from twisted.internet import reactor
+from terane.bier.docid import DocID
 from terane.loggers import getLogger, startLogging, StdoutHandler, DEBUG
 
 logger = getLogger('terane.commands.search.searcher')
@@ -62,14 +63,14 @@ class Searcher(object):
         logger.debug("XMLRPC result: %s" % str(results))
         meta = results.pop(0)
         if len(results) > 0:
-            for doc in results:
-                ts = dateutil.parser.parse(doc['ts']).replace(tzinfo=dateutil.tz.tzutc())
+            for docId,event in results:
+                docId = DocID.fromString(docId)
+                ts = datetime.datetime.fromtimestamp(docId.ts, dateutil.tz.tzutc())
                 if self.tz:
                     ts = ts.astimezone(self.tz)
-                print "%s: %s" % (ts.strftime("%d %b %Y %H:%M:%S %Z"), doc['default'])
+                print "%s: %s" % (ts.strftime("%d %b %Y %H:%M:%S %Z"), event['default'])
                 if self.longfmt:
                     del doc['default']
-                    del doc['ts']
                     for field,value in sorted(doc.items(), key=lambda x: x[0]):
                         if self.fields and field not in self.fields:
                             continue

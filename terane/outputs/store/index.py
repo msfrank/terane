@@ -44,6 +44,13 @@ from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.index')
 
+class Segment(backend.Segment):
+    def __init__(self, txn, index, segmentId):
+        backend.Segment.__init__(self, txn, index, segmentId)
+        self._name = "%s.%i" % (index.name, segmentId)
+    def __str__(self):
+        return "<terane.outputs.store.Segment '%s'>" % self._name
+
 class Index(backend.Index):
     """
     Stores events, which are a collection of fields.  Internally, an Index is
@@ -77,7 +84,7 @@ class Index(backend.Index):
             # load data segments
             with self.new_txn() as txn:
                 for segmentid in self.iter_segments(txn):
-                    segment = backend.Segment(txn, self, segmentid)
+                    segment = Segment(txn, self, segmentid)
                     last_update = json_decode(segment.get_meta(txn, 'last-update'))
                     self._currsize = last_update['size']
                     self._indexsize += last_update['size']
@@ -89,7 +96,7 @@ class Index(backend.Index):
             if self._segments == []:
                 with self.new_txn() as txn:
                     segmentid = self.new_segment(txn)
-                    segment = backend.Segment(txn, self, segmentid)
+                    segment = Segment(txn, self, segmentid)
                     segment.set_meta(txn, 'created-on', json_encode(int(time.time())))
                     last_update = {'size': 0, 'last-id': 0, 'last-modified': 0}
                     segment.set_meta(txn, 'last-update', json_encode(last_update))
@@ -105,6 +112,9 @@ class Index(backend.Index):
         except:
             self.close()
             raise
+
+    def __str__(self):
+        return "<terane.outputs.store.Index '%s'>" % self.name
 
     def schema(self):
         return self._schema
@@ -138,7 +148,7 @@ class Index(backend.Index):
         """
         with self.new_txn() as txn:
             segmentid = self.new_segment(txn)
-            segment = backend.Segment(txn, self, segmentid)
+            segment = Segment(txn, self, segmentid)
             segment.set_meta(txn, 'created-on', json_encode(int(time.time())))
             last_update = {'size': 0, 'last-id': 0, 'last-modified': 0}
             segment.set_meta(txn, 'last-update', json_encode(last_update))

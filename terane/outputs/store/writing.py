@@ -72,9 +72,9 @@ class IndexWriter(object):
         except KeyError:
             fmeta = {'num-docs': 1}
         # increment the document count for this field
-        self._segment.set_term_meta(self._txn, fieldname, term, json_encode(tmeta))
+        self._segment.set_field_meta(self._txn, fieldname, json_encode(fmeta))
         if value == None:
-            value = ''
+            value = dict()
         # add the term to the reverse index
         self._segment.set_term(self._txn, fieldname, term, str(docId), json_encode(value))
 

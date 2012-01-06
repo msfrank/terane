@@ -1,6 +1,6 @@
 import time, datetime
 from copy import deepcopy
-from zope.interface import Interface
+from zope.interface import Interface, implements
 from terane.bier.docid import DocID
 from terane.loggers import getLogger
 
@@ -48,6 +48,7 @@ class Period(object):
         return DocID(self.end, 2**32 - 1, 2**64 - 1)
 
 class Term(object):
+    implements(IPostingList)
     def __init__(self, fieldname, value):
         if fieldname == None:
             self.fieldname = 'default'
@@ -59,7 +60,7 @@ class Term(object):
         if not schema.has(self.fieldname):
             return None
         field = schema.get(self.fieldname)
-        terms = list(field.terms(self.value))
+        terms = list([term for term,_ in field.terms(self.value)])
         if len(terms) == 0:
             return None
         elif len(terms) > 1:
@@ -67,14 +68,15 @@ class Term(object):
         else:
             self.value = terms[0]
             return self
+    @logger.tracedfunc
     def postingsLength(self, searcher, period):
         return searcher.postingsLength(self.fieldname, self.value, period)
+    @logger.tracedfunc
     def iterPostings(self, searcher, period, reverse):
-        postings = searcher.iterPostings(self.fieldname, self.value, period, reverse)
-        while True:
-            yield postings.nextPosting()
+        return searcher.iterPostings(self.fieldname, self.value, period, reverse)
 
 class AND(object):
+    implements(IPostingList)
     def __init__(self, children):
         self.children = children
         self._lengths = []
@@ -88,10 +90,12 @@ class AND(object):
         if len(self.children) == 0:
             return None
         return self
+    @logger.tracedfunc
     def postingsLength(self, searcher, period):
         for child in self.children:
             insort_right(self._lengths, (child.postingsLength(searcher, period),child))
         return self._lengths[0][0]
+    @logger.tracedfunc
     def iterPostings(self, searcher, period, reverse):
         smallest = self._lengths[0][1].iterPostings(searcher, period, reverse)
         children = [child[1].iterPostings(searcher, period, reverse) for child in self._lengths]
@@ -107,6 +111,7 @@ class AND(object):
                 yield docId
 
 class OR(object):
+    implements(IPostingList)
     def __init__(self, children):
         self.children = children
     def optimizeQuery(self, index):
@@ -119,11 +124,13 @@ class OR(object):
         if len(self.children) == 0:
             return None
         return self
+    @logger.tracedfunc
     def postingsLength(self, searcher, period):
         length = 0
         for child in self.children:
             length += child.postingsLength(searcher, period)
         return length
+    @logger.tracedfunc
     def iterPostings(self, searcher, period, reverse):
         pass
 
@@ -148,12 +155,15 @@ def searchIndices(indices, query, period, reverse=False, fields=None, limit=100)
         _query = deepcopy(query).optimizeQuery(index)
         if _query != None:
             searcher = index.searcher()
+            piter = _query.iterPostings(searcher, period, reverse)
             i = 0
-            for docId in _query.iterPostings(searcher, period, reverse):
-                i += 1
-                if i == limit:
-                    break
-                postings.append((docId,searcher))
+            try:
+                while i < limit:
+                    docId,pvalue = piter.nextPosting()
+                    postings.append((docId, searcher))
+                    i += 1
+            except StopIteration:
+                pass
     postings.sort()
     foundfields = []
     results = []
@@ -163,5 +173,5 @@ def searchIndices(indices, query, period, reverse=False, fields=None, limit=100)
             if fieldname not in foundfields: foundfields.append(fieldname)
         if fields != None:
             event = dict([(k,v) for k,v in event.items() if k in fields])
-        results.append((docId, event))
+        results.append((str(docId), event))
     return Results(results, foundfields)
