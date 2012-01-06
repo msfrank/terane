@@ -27,3 +27,6 @@ class DocID(object):
 
     def __repr__(self):
         return "<DocID %s>" % str(self)
+
+    def __cmp__(self, other):
+        return cmp(str(self), str(other))
