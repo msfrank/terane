@@ -62,8 +62,8 @@ class IDGenerator(Service):
         self._cache = []
         logger.debug("stopped id generator")
 
-    def allocate(self):
-        return DocID(time.time(), 0, self._allocateOffset())
+    def allocate(self, ts):
+        return DocID(ts, 0, self._allocateOffset())
 
     def _allocateOffset(self):
         """

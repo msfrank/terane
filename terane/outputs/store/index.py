@@ -133,8 +133,8 @@ class Index(backend.Index):
         """
         return IndexWriter(self)
 
-    def newDocumentId(self):
-        return self._ids.allocate()
+    def newDocumentId(self, ts):
+        return self._ids.allocate(ts)
 
     def segments(self):
         """

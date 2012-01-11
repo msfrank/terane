@@ -1,4 +1,4 @@
-import datetime, dateutil.tz
+import datetime, dateutil.tz, time
 from zope.interface import Interface
 from terane.bier.schema import ISchema, fieldFactory
 from terane.bier.index import IIndex
@@ -20,7 +20,7 @@ class WriterError(Exception):
     pass
 
 def writeEventToIndex(event, index):
-    #
+    # verify that the index provides the appropriate interface
     if not IIndex.providedBy(index):
         raise TypeError("index does not implement IIndex")
     # verify required fields are present
@@ -31,8 +31,9 @@ def writeEventToIndex(event, index):
     if not 'ts' in event:
         raise WriterError("missing required field 'ts'")
 
-    # make sure ts timezone is UTC
+    # get the timestamp
     ts = event['ts']
+    del event['ts']
     # if the ts field is not a datetime, then parse its string representation
     if not isinstance(ts, datetime.datetime):
         raise WriterError("field 'ts' is not of type datetime.datetime")
@@ -42,9 +43,7 @@ def writeEventToIndex(event, index):
     # convert to UTC, if necessary
     if not ts.tzinfo == dateutil.tz.tzutc():
         ts = ts.astimezone(dateutil.tz.tzutc())
-    event['ts'] = ts
-    # set the stored value of the 'ts' field to a pretty string
-    event['&ts'] = ts.isoformat()
+    ts = int(time.mktime(ts.timetuple()))
 
     # create a list of valid field names from the passed in fields. a valid
     # field name is defined as any name that starts with an alphabetic character
@@ -63,7 +62,7 @@ def writeEventToIndex(event, index):
             raise TypeError("index.writer() does not implement IWriter")
        
         # create a document record
-        docId = index.newDocumentId()
+        docId = index.newDocumentId(ts)
         logger.trace("created new document with id %s" % docId)
         
         document = {}
@@ -76,15 +75,15 @@ def writeEventToIndex(event, index):
             evalue = event.get(fieldname)
             for term,tvalue in field.terms(evalue):
                 writer.newPosting(fieldname, term, docId, tvalue)
-            # if the full field value should be stored alongside the document,
-            # then fill in the storedvalues array with the actual field value.
-            # if the key '&<fieldname>' exists, then use its value as the stored
-            # value instead.
-            storedname = "&" + fieldname
-            if storedname in event:
+            # add the event value to the document
+            document[fieldname] = evalue
+
+        # fieldnames that start with '&' are stored but not indexed.  this may
+        # possibly overwrite a value for an indexed field in the document.
+        for storedname in event.keys():
+            if storedname.startswith('&') and len(storedname) > 1:
+                fieldname = storedname[1:]
                 document[fieldname] = event[storedname]
-            else:
-                document[fieldname] = evalue
 
         # store the document data
         logger.trace("doc=%s: event=%s" % (docId,document))

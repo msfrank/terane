@@ -10,5 +10,5 @@ class IIndex(Interface):
         "Returns an object implementing ISearcher."
     def writer():
         "Returns an object implementing IWriter."
-    def newDocumentId():
+    def newDocumentId(ts):
         "Returns a new document ID."
