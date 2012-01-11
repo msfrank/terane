@@ -63,7 +63,6 @@ class StoreOutput(Output):
             return
         # store the event in the index
         writeEventToIndex(event, self._index)
-        logger.trace("[output:%s] stored event: %s" % (self.name,str(event)))
         # if the current segment contains more events than specified by
         # _segRotation, then rotate the index to generate a new segment.
         if self._segRotation > 0 and self._index._currsize >= self._segRotation:

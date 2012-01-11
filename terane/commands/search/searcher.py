@@ -70,8 +70,8 @@ class Searcher(object):
                     ts = ts.astimezone(self.tz)
                 print "%s: %s" % (ts.strftime("%d %b %Y %H:%M:%S %Z"), event['default'])
                 if self.longfmt:
-                    del doc['default']
-                    for field,value in sorted(doc.items(), key=lambda x: x[0]):
+                    del event['default']
+                    for field,value in sorted(event.items(), key=lambda x: x[0]):
                         if self.fields and field not in self.fields:
                             continue
                         print "\t%s=%s" % (field,value)
