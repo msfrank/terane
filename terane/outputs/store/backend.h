@@ -150,7 +150,6 @@ PyObject * terane_Iter_new_range (PyObject *parent, DBC *cursor, terane_Iter_ops
 PyObject * terane_Iter_new_from (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void *key, size_t len);
 PyObject * terane_Iter_new_within (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, DBT *start, DBT *end);
 PyObject * terane_Iter_skip (terane_Iter *self, PyObject *args);
-PyObject * terane_Iter_reset (terane_Iter *self);
 PyObject * terane_Iter_close (terane_Iter *self);
 
 /*

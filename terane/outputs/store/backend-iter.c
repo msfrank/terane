@@ -184,8 +184,7 @@ _Iter_get (terane_Iter *iter, DBT *key, int itype, int flags)
             iter->initialized = 1;
             break;
         case DB_NOTFOUND:
-            /* if no item is found, then return NULL to stop iterating */
-            terane_Iter_close (iter);
+            /* if no item is found, then return NULL */
             return NULL;
         /* for any other error, set exception and return NULL */
         case DB_LOCK_DEADLOCK:
@@ -225,9 +224,6 @@ _Iter_get (terane_Iter *iter, DBT *key, int itype, int flags)
         PyMem_Free (k.data);
     if (data.data)
         PyMem_Free (data.data);
-    /* if the callback returned NULL, then close the cursor */
-    if (item == NULL)
-        terane_Iter_close (iter);
 
     return item;
 }
@@ -240,6 +236,7 @@ _Iter_next (terane_Iter *self)
 {
     DBT key;
     uint32_t flags = 0;
+    PyObject *item = NULL;
 
     if (self->cursor == NULL)
         return PyErr_Format (terane_Exc_Error, "iterator is closed");
@@ -272,7 +269,10 @@ _Iter_next (terane_Iter *self)
                 flags = DB_NEXT;
             break;
     }
-    return _Iter_get (self, &key, self->itype, flags);
+    item = _Iter_get (self, &key, self->itype, flags);
+    if (item == NULL)
+        terane_Iter_close (self);
+    return item;
 }
 
 /*
@@ -291,42 +291,31 @@ terane_Iter_skip (terane_Iter *self, PyObject *args)
 {
     DBT *key = NULL;
     PyObject *item = NULL;
+    int itype;
 
     if (self->cursor == NULL)
         return PyErr_Format (terane_Exc_Error, "iterator is closed");
     if (self->skip == NULL)
         return PyErr_Format (terane_Exc_Error, "No skip callback for iterator");
 
-    /* generate the key to skip to */
+    /* generate the key to skip to, or return NULL.  The skip function should set exception */
     key = self->skip (self, args);
     if (key == NULL)
         return NULL;
+    /* set the itype in order to correctly perform post-retrieval check */
+    if (self->itype == TERANE_ITER_WITHIN)
+        itype = self->itype;
+    else
+        itype = TERANE_ITER_RANGE;
     /* retrieve the item associated with the key */
-    item = _Iter_get (self, key, TERANE_ITER_RANGE, DB_SET_RANGE);
+    item = _Iter_get (self, key, itype, DB_SET);
     /* free key data */
     if (key->data != NULL)
         PyMem_Free (key->data);
     PyMem_Free (key);
-    if (item == NULL)
-        return PyErr_Format (PyExc_IndexError, "Target is out of range");
+    if (item == NULL && !PyErr_Occurred())
+        return PyErr_Format (PyExc_IndexError, "Target ID does not exist");
     return item;
-}
-/*
- * terane_Iter_reset: Move the iterator back to the beginning.
- *
- * callspec: Iter.reset()
- * parameters: None
- * returns: None
- * exceptions:
- *  terane.outputs.store.backend.Error: Iterator is closed
- */
-PyObject *
-terane_Iter_reset (terane_Iter *self)
-{
-    if (self->cursor == NULL)
-        return PyErr_Format (terane_Exc_Error, "iterator is closed");
-    self->initialized = 0;
-    Py_RETURN_NONE;
 }
 
 /*
@@ -377,8 +366,6 @@ PyMethodDef _Iter_methods[] =
 {
     { "skip", (PyCFunction) terane_Iter_skip, METH_VARARGS,
         "Move the iterator to the specified item." },
-    { "reset", (PyCFunction) terane_Iter_reset, METH_NOARGS,
-        "Move the iterator back to the beginning." },
     { "close", (PyCFunction) terane_Iter_close, METH_NOARGS,
         "Free resources allocated by the iterator." },
     { NULL, NULL, 0, NULL }
