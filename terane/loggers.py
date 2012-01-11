@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, datetime, traceback
+import os, datetime, traceback, types
 from Queue import Queue
 from functools import wraps
 from twisted.python.log import startLoggingWithObserver, msg, err, ILogObserver
@@ -145,23 +145,35 @@ class Logger(object):
         self.msg(ERROR, message, **kwds)
 
     def tracedfunc(self, fn):
-        @wraps(fn)
-        def _wrapper(*args, **kwds):
-            def _stringify(arg):
-                if isinstance(arg, str) or isinstance(arg, unicode):
-                    return unicode("'%s'" % arg)
-                return unicode(arg)
-            retval = fn(*args, **kwds)
-            _fn = str(fn.__name__)
-            _args = ', '.join([_stringify(a) for a in args])
-            _kwds = ', '.join(["%s=%s" % (k,_stringify(v)) for k,v in kwds.items()])
-            _retval = str(retval)
-            if _kwds == '':
-                self.trace("%s(%s) => %s" % (_fn, _args, _retval))
-            else:
-                self.trace("%s(%s, %s) => %s" % (_fn, _args, _kwds, _retval))
-            return retval
-        return _wrapper
+        class _TracedFuncWrapper(object):
+            """
+            This class is pretty much straight black-magic.  Lots of help came from this
+            stack-overflow discussion: http://stackoverflow.com/questions/306130/
+            """
+            def __init__(self, _fn, logger):
+                self._fn = _fn
+                self.logger = logger
+            def __get__(self, obj, type=None):
+                return self.__class__(self._fn.__get__(obj, type), self.logger)
+            def __call__(self, *args, **kwds):
+                def _stringify(arg):
+                    if isinstance(arg, str) or isinstance(arg, unicode):
+                        return unicode("'%s'" % arg)
+                    return unicode(arg)
+                retval = self._fn(*args, **kwds)
+                if type(self._fn) == types.FunctionType:
+                    _fn = fn.__name__
+                else:
+                    _fn = "%s.%s" % (getattr(self._fn, 'im_class').__name__,self._fn.__name__)
+                _args = ', '.join([_stringify(a) for a in args])
+                _kwds = ', '.join(["%s=%s" % (k,_stringify(v)) for k,v in kwds.items()])
+                _retval = str(retval)
+                if _kwds == '':
+                    self.logger.trace("%s(%s) => %s" % (_fn, _args, _retval))
+                else:
+                    self.logger.trace("%s(%s, %s) => %s" % (_fn, _args, _kwds, _retval))
+                return retval
+        return _TracedFuncWrapper(fn, self)
 
 
 _loggers = Logger('', NOTSET)
