@@ -415,7 +415,8 @@ terane_Segment_estimate_term_postings (terane_Segment *self, PyObject *args)
     DBT *key;
     DB *field;
     DB_KEY_RANGE startrange, endrange;
-    int dbret;
+    double estimate = 0.0;
+    int dbret, result;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OO!O!O!O!", &txn, &PyString_Type, &fieldname,
@@ -454,7 +455,13 @@ terane_Segment_estimate_term_postings (terane_Segment *self, PyObject *args)
         return PyErr_Format (terane_Exc_Error, "Failed to estimate end key range: %s",
             db_strerror (dbret));
 
-    return PyFloat_FromDouble (100.0 - (endrange.less + startrange.greater));
+    if (PyObject_Cmp (start, end, &result) < 0)
+        return PyErr_Format (terane_Exc_Error, "key comparison failed");
+    if (result > 0)
+        estimate = 1.0 - (endrange.less + startrange.greater);
+    else
+        estimate = 1.0 - (startrange.less + endrange.greater);
+    return PyFloat_FromDouble (estimate);
 }
 
 /*
@@ -615,6 +622,7 @@ _Segment_skip_term_within (terane_Iter *iter, PyObject *args)
         return NULL;    /* raises MemoryError */
     }
     /* create key in the form of '<' + term + '>' + id + '\0' */
+    memset (key->data, 0, key->size);
     memcpy (key->data, iter->start_key.data, i + 1);
     memcpy (key->data + i + 1, doc_id, id_len);
     return key;
@@ -898,67 +906,6 @@ terane_Segment_iter_terms_meta (terane_Segment *self, PyObject *args)
         return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
     iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, (void *)"!", 1);
-    if (iter == NULL)
-        cursor->close (cursor);
-    return iter;
-}
-
-/*
- * terane_Segment_iter_terms_meta_from: Iterate through all terms in the specified
- *  field, starting at the specified term, and return the metadata for each term.
- *
- * callspec: Segment.iter_term_meta_from(txn, fieldname, start)
- * parameters:
- *   txn (Txn): A Txn object to wrap the operation in, or None
- *   fieldname (string): The field name
- *   start (unicode): The term text to start at
- * returns: a new Iterator object.  Each iteration returns a tuple consisting
- *  of (term,metadata).
- * exceptions:
- *   KeyError: The specified field doesn't exist
- *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
- */
-PyObject *
-terane_Segment_iter_terms_meta_from (terane_Segment *self, PyObject *args)
-{
-    terane_Txn *txn = NULL;
-    PyObject *fieldname = NULL;
-    PyObject *start = NULL;
-    DB *field = NULL;
-    DBT *key = NULL;
-    DBC *cursor = NULL;
-    int dbret;
-    PyObject *iter = NULL;
-    terane_Iter_ops ops = { .next = _Segment_next_term_meta };
-
-    /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OO!O!", &txn, &PyString_Type, &fieldname,
-        &PyUnicode_Type, &start))
-        return NULL;
-    if ((PyObject *) txn == Py_None)
-        txn = NULL;
-    if (txn && txn->ob_type != &terane_TxnType)
-        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-
-    field = terane_Segment_get_field_DB (self, txn, fieldname);
-    if (field == NULL)
-        return NULL;
-
-    /* build the key from the term value */
-    key = _Segment_make_meta_key (start);
-    if (key == NULL)
-        return NULL;
-
-    /* create a new cursor */
-    dbret = field->cursor (field, txn? txn->txn : NULL, &cursor, 0);
-    /* if cursor allocation failed, return Error */
-    if (dbret != 0) {
-        _Segment_free_key (key);
-        return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
-            db_strerror (dbret));
-    }
-    iter = terane_Iter_new_from ((PyObject *) self, cursor, &ops, key->data, key->size);
-    _Segment_free_key (key);
     if (iter == NULL)
         cursor->close (cursor);
     return iter;
