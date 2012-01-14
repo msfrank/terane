@@ -56,6 +56,8 @@ class Term(object):
         else:
             self.fieldname = fieldname
         self.value = unicode(value)
+    def __str__(self):
+        return "<Term %s=%s>" % (self.fieldname,self.value)
     def optimizeQuery(self, index):
         schema = index.schema()
         if not schema.has(self.fieldname):
@@ -68,65 +70,75 @@ class Term(object):
             return OR([Term(self.fieldname,t).optimizeQuery(index) for t in terms])
         self.value = terms[0]
         return self
-    @logger.tracedfunc
     def postingsLength(self, searcher, period):
-        return searcher.postingsLength(self.fieldname, self.value, period)
-    @logger.tracedfunc
+        length = searcher.postingsLength(self.fieldname, self.value, period)
+        logger.trace("%s: postingsLength() => %i" % (self, length))
+        return length
     def iterPostings(self, searcher, period, reverse):
         self._postings = searcher.iterPostings(self.fieldname, self.value, period, reverse)
         return self
-    @logger.tracedfunc
     def nextPosting(self):
-        return self._postings.nextPosting()[0]
-    @logger.tracedfunc
+        docId = self._postings.nextPosting()[0]
+        logger.trace("%s: nextPosting() => %s" % (self, docId)) 
+        return docId
     def skipPosting(self, targetId):
-        return self._postings.skipPosting(targetId)[0]
+        docId = self._postings.skipPosting(targetId)[0]
+        logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, docId))
+        return docId
 
 class AND(object):
     implements(IPostingList)
     def __init__(self, children):
         self.children = children
         self._lengths = None
+    def __str__(self):
+        return "<AND [%s]>" % ', '.join([str(child) for child in self.children])
     def optimizeQuery(self, index):
         children = []
         for child in self.children:
             child = child.optimizeQuery(index)
-            if child != None:
+            if isinstance(child, AND):
+                for subchild in child.children: children.append(subchild)
+            elif child != None:
                 children.append(child)
         self.children = children
         if len(self.children) == 0:
             return None
         return self
-    @logger.tracedfunc
     def postingsLength(self, searcher, period):
         self._lengths = []
         for child in self.children:
             insort_right(self._lengths, (child.postingsLength(searcher, period),child))
-        return self._lengths[0][0]
-    @logger.tracedfunc
+        length = self._lengths[0][0]
+        logger.trace("%s: postingsLength() => %i" % (self, length))
+        return length
     def iterPostings(self, searcher, period, reverse):
         if self._lengths == None:
             self.postingsLength(searcher, period)
         self._smallest = self._lengths[0][1].iterPostings(searcher, period, reverse)
         self._others = [child[1].iterPostings(searcher, period, reverse) for child in self._lengths[1:]]
         return self
-    @logger.tracedfunc
     def nextPosting(self):
         while True:
             docId = self._smallest.nextPosting()
+            if docId == None:
+                logger.trace("%s: nextPosting() => %s" % (self, docId)) 
+                return docId
             for child in self._others:
-                try:
-                    child.skipPosting(docId)
-                except IndexError:
+                if child.skipPosting(docId) == None:
                     docId = None
                     break
             if docId != None:
+                logger.trace("%s: nextPosting() => %s" % (self, docId)) 
                 return docId
-    @logger.tracedfunc
     def skipPosting(self, targetId):
-        docId = smallest.skipPosting(targetId)
-        for child in self._others:
-            child.skipPosting(docId)
+        docId = self._smallest.skipPosting(targetId)
+        if docId != None:
+            for child in self._others:
+                docId = child.skipPosting(targetId)
+                if docId == None:
+                    break
+        logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, docId))
         return docId
 
 class OR(object):
@@ -143,13 +155,11 @@ class OR(object):
         if len(self.children) == 0:
             return None
         return self
-    @logger.tracedfunc
     def postingsLength(self, searcher, period):
         length = 0
         for child in self.children:
             length += child.postingsLength(searcher, period)
         return length
-    @logger.tracedfunc
     def iterPostings(self, searcher, period, reverse):
         pass
 
@@ -172,17 +182,18 @@ def searchIndices(indices, query, period, reverse=False, fields=None, limit=100)
     postings = []
     for index in indices:
         _query = deepcopy(query).optimizeQuery(index)
+        logger.debug("optimized query for index '%s': %s" % (index.name,str(_query)))
         if _query != None:
             searcher = index.searcher()
             piter = _query.iterPostings(searcher, period, reverse)
             i = 0
-            try:
-                while i < limit:
-                    docId = piter.nextPosting()
-                    postings.append((docId, searcher))
-                    i += 1
-            except StopIteration:
-                pass
+            while i < limit:
+                docId = piter.nextPosting()
+                if docId == None:
+                    break
+                logger.trace("found event %s" % docId)
+                postings.append((docId, searcher))
+                i += 1
     postings.sort()
     foundfields = []
     results = []
