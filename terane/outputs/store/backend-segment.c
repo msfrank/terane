@@ -275,8 +275,6 @@ PyMethodDef _Segment_methods[] =
         "Set metadata for a term in the segment." },
     { "iter_terms_meta", (PyCFunction) terane_Segment_iter_terms_meta, METH_VARARGS,
         "Iterates through all terms in the index." },
-    { "iter_terms_meta_from", (PyCFunction) terane_Segment_iter_terms_meta_from, METH_VARARGS,
-        "Iterates through terms in the index, starting from the specified term." },
     { "iter_terms_meta_range", (PyCFunction) terane_Segment_iter_terms_meta_range, METH_VARARGS,
         "Iterates through all terms in the index matching the prefix." },
     { "delete", (PyCFunction) terane_Segment_delete, METH_NOARGS,

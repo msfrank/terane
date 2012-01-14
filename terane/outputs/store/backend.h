@@ -137,7 +137,6 @@ PyObject * terane_Segment_iter_terms_within (terane_Segment *self, PyObject *arg
 PyObject * terane_Segment_get_term_meta (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_set_term_meta (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_iter_terms_meta (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_iter_terms_meta_from (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_iter_terms_meta_range (terane_Segment *self, PyObject *args);
 
 PyObject * terane_Txn_new (terane_Env *env, terane_Txn *parent);
