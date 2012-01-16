@@ -145,23 +145,81 @@ class OR(object):
     implements(IPostingList)
     def __init__(self, children):
         self.children = children
+    def __str__(self):
+        return "<OR [%s]>" % ', '.join([str(child) for child in self.children])
     def optimizeQuery(self, index):
         children = []
         for child in self.children:
+            # optimize each child query
             child = child.optimizeQuery(index)
-            if child != None:
+            # if the child is an OR operator, then move all of the child's children
+            # into this instance.
+            if isinstance(child, OR):
+                for subchild in child.children: children.append(subchild)
+            # if the child has been optimized away, then toss it
+            elif child != None:
                 children.append(child)
         self.children = children
+        # if there are no children, then we can toss this query too
         if len(self.children) == 0:
             return None
         return self
     def postingsLength(self, searcher, period):
         length = 0
+        # the posting length estimate is the sum of all child queries
         for child in self.children:
             length += child.postingsLength(searcher, period)
         return length
     def iterPostings(self, searcher, period, reverse):
-        pass
+        # smallestIds contains the smallest docId for each child query, or None 
+        self._smallestIds = [None for i in range(len(self.children))]
+        # iters contains the iterator (object implementing IPostingList) for each child query
+        self._iters = [child.iterPostings(searcher,period,reverse) for child in self.children]
+        # lastId is the last docId returned by the iterator
+        self._lastId = None
+        return self
+    def nextPosting(self):
+        curr = 0
+        # check each child iter for the lowest docId
+        for i in range(len(self.children)):
+            # if None, then get the next docId from the iter
+            if self._smallestIds[i] == None:
+                self._smallestIds[i] = self._iters[i].nextPosting()
+            # if the docId is None, then check the next iter
+            if self._smallestIds[i] == None:
+                continue
+            # if the docId equals the last docId returned, then ignore it
+            if self._lastId != None and self._smallestIds[i] == self._lastId:
+                self._smallestIds[i] = None
+                continue
+            # we don't compare the first docId with itself
+            if i == 0:
+                continue
+            # if the docId is the current smallest docId, then remember it
+            if self._smallestIds[curr] == None or self._smallestIds[i] < self._smallestIds[curr]:
+                curr = i
+        # update lastId with the docId
+        docId = self._lastId = self._smallestIds[curr]
+        # forget the docId so we don't return it again
+        self._smallestIds[curr] = None
+        logger.trace("%s: nextPosting() => %s" % (self, docId)) 
+        return docId
+    def skipPosting(self, targetId):
+        docId = None
+        # iterate through each child query
+        for i in range(len(self.children)):
+            docId = self._smallestIds[i]
+            # if the smallestId equals the targetId, we are done
+            if docId == targetId:
+                break
+            # otherwise check if the targetId exists in the child query
+            if docId == None or docId < targetId:
+                docId = self._iters[i].skipPosting(targetId)
+                self._smallestIds[i] = docId
+                if docId == targetId:
+                    break    
+        logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, docId))
+        return docId
 
 class Results(object):
     def __init__(self, results, fields):
