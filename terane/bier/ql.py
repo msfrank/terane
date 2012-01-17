@@ -77,7 +77,7 @@ Query Grammar
 
 import datetime, dateutil.tz
 import pyparsing as pp
-from terane.bier.searching import Term, Period, AND, OR
+from terane.bier.searching import Term, Period, AND, OR, NOT
 
 class QuerySyntaxError(BaseException):
     """
@@ -211,30 +211,24 @@ subjectDate.setParseAction(parseSubjectDate)
 # groupings
 def parseNotGroup(tokens):
     "Parse NOT statement."
-    raise NotImplemented()
-    if len(tokens) == 1:
-        return tokens[0]
-    return NOT(tokens[1])
+    return NOT(tokens[0][0])
 
 def parseAndGroup(tokens):
     "Parse AND statement."
     tokens = tokens[0]
-    if len(tokens) == 1:
-        return tokens[0]
     q = tokens[0]
-    i = 1
-    while i < len(tokens):
-        q = AND([q, tokens[i]])
-        i += 1
+    if len(tokens) > 1:
+        i = 1
+        while i < len(tokens):
+            q = AND([q, tokens[i]])
+            i += 1
     return q
 
 def parseOrGroup(tokens):
     "Parse OR statement."
     tokens = tokens[0]
-    if len(tokens) == 1:
-        return tokens[0]
-    else:
-        q = tokens[0]
+    q = tokens[0]
+    if len(tokens) > 1:
         i = 1
         while i < len(tokens):
             q = OR([q, tokens[i]])
@@ -244,8 +238,8 @@ def parseOrGroup(tokens):
 # iterQuery
 iterTerms = pp.operatorPrecedence(subjectTerm, [
     (pp.Suppress('NOT'), 1, pp.opAssoc.RIGHT, parseNotGroup),
-    (pp.Suppress('AND'), 2, pp.opAssoc.LEFT, parseAndGroup),
-    (pp.Suppress('OR'), 2, pp.opAssoc.LEFT, parseOrGroup),
+    (pp.Suppress('AND'), 2, pp.opAssoc.LEFT,  parseAndGroup),
+    (pp.Suppress('OR'),  2, pp.opAssoc.LEFT,  parseOrGroup),
     ])
 iterTermsAndWhere = iterTerms + pp.Optional((pp.Suppress('WHERE') + subjectDate))
 def parseIterTermsAndWhere(tokens):
@@ -260,6 +254,6 @@ iterQuery = iterWhereOnly | iterTermsAndWhere
 # tailQuery
 tailQuery = pp.operatorPrecedence(subjectTerm, [
     (pp.Suppress('NOT'), 1, pp.opAssoc.RIGHT, parseNotGroup),
-    (pp.Suppress('AND'), 2, pp.opAssoc.LEFT, parseAndGroup),
-    (pp.Suppress('OR'), 2, pp.opAssoc.LEFT, parseOrGroup),
+    (pp.Suppress('AND'), 2, pp.opAssoc.LEFT,  parseAndGroup),
+    (pp.Suppress('OR'),  2, pp.opAssoc.LEFT,  parseOrGroup),
     ])
