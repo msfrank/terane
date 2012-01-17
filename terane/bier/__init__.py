@@ -1,4 +1,4 @@
-# Copyright 2010,2011 Michael Frank <msfrank@syntaxjockey.com>
+# Copyright 2010,2011,2012 Michael Frank <msfrank@syntaxjockey.com>
 #
 # This file is part of Terane.
 #
