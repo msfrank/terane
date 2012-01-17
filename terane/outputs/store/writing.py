@@ -31,9 +31,12 @@ class IndexWriter(object):
     implements(IWriter)
 
     def __init__(self, ix):
-        self._ix = ix
-        self._segment = ix._current[0]
         self._txn = None
+        self._ix = ix
+        self._indexSize = self._ix._indexSize
+        self._currentSize = self._ix._currentSize
+        self._lastId = self._ix._lastId
+        self._lastModified = self._ix._lastModified
 
     def __enter__(self):
         if self._txn:
@@ -42,48 +45,47 @@ class IndexWriter(object):
         return self
 
     def newDocument(self, docId, document):
-        self._segment.set_doc(self._txn, str(docId), json_encode(document))
-        try:
-            last_update = json_decode(self._segment.get_meta(self._txn, 'last-update'))
-            if 'size' not in last_update:
-                raise WriterError("segment metadata corruption: no such key 'size'")
-            last_update['size'] += 1
-        except KeyError:
-            last_update = {'size': 1}
-        last_update['last-id'] = str(docId)
-        last_update['last-modified'] = int(time.time())
-        self._segment.set_meta(self._txn, 'last-update', json_encode(last_update))
+        segment = self._ix._current
+        segment.set_doc(self._txn, str(docId), json_encode(document))
+        self._indexSize += 1
+        self._currentSize += 1
+        self._lastId = str(docId)
+        self._lastModified = int(time.time())
+        lastUpdate = {'size': self._currentSize, 'last-id': self._lastId, 'last-modified': self._lastModified}
+        segment.set_meta(self._txn, 'last-update', json_encode(lastUpdate))
 
     def newPosting(self, fieldname, term, docId, value):
+        segment = self._ix._current
         try:
-            tmeta = json_decode(self._segment.get_term_meta(self._txn, fieldname, term))
+            tmeta = json_decode(segment.get_term_meta(self._txn, fieldname, term))
             if not 'num-docs' in tmeta:
                 raise WriterError("term metadata corruption: no such key 'num-docs'")
             tmeta['num-docs'] += 1
         except KeyError:
             tmeta = {'num-docs': 1}
         # increment the document count for this term
-        self._segment.set_term_meta(self._txn, fieldname, term, json_encode(tmeta))
+        segment.set_term_meta(self._txn, fieldname, term, json_encode(tmeta))
         try:
-            fmeta = json_decode(self._segment.get_field_meta(self._txn, fieldname))
+            fmeta = json_decode(segment.get_field_meta(self._txn, fieldname))
             if not 'num-docs' in fmeta:
                 raise WriterError("field metadata corruption: no such key 'num-docs'")
             fmeta['num-docs'] += 1
         except KeyError:
             fmeta = {'num-docs': 1}
         # increment the document count for this field
-        self._segment.set_field_meta(self._txn, fieldname, json_encode(fmeta))
+        segment.set_field_meta(self._txn, fieldname, json_encode(fmeta))
         if value == None:
             value = dict()
         # add the term to the reverse index
-        self._segment.set_term(self._txn, fieldname, term, str(docId), json_encode(value))
+        segment.set_term(self._txn, fieldname, term, str(docId), json_encode(value))
 
     def __exit__(self, excType, excValue, traceback):
         if (excType, excValue, traceback) == (None, None, None):
             self._txn.commit()
+            self._ix._indexSize = self._indexSize
+            self._ix._currentSize = self._currentSize
+            self._ix._lastId = self._lastId
+            self._ix._lastModified = self._lastModified
         else:
             self._txn.abort()
-        self._ix = None
-        self._segment = None
-        self._txn = None
         return False

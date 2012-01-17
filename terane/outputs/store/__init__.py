@@ -63,17 +63,8 @@ class StoreOutput(Output):
             return
         # store the event in the index
         writeEventToIndex(event, self._index)
-        # if the current segment contains more events than specified by
-        # _segRotation, then rotate the index to generate a new segment.
-        if self._segRotation > 0 and self._index._currsize >= self._segRotation:
-            self._index.rotate()
-            # if the index contains more segments than specified by _segRetention,
-            # then delete the oldest segment.
-            if self._segRetention > 0:
-                segments = self._index.segments()
-                if len(segments) > self._segRetention:
-                    for segment,segmentid in segments[0:len(segments)-self._segRetention]:
-                        self._index.delete(segment, segmentid)
+        # rotate the index segments if necessary
+        self._index.rotateSegments(self._segRotation, self._segRetention)
     
     def index(self):
         return self._index

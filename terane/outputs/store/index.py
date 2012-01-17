@@ -14,28 +14,12 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
-#
-# ---------------------------------------------------------------------
-#
-# This file contains portions of code Copyright 2009 Matt Chaput
-# 
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-# 
-#    http://www.apache.org/licenses/LICENSE-2.0
-# 
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
-import pickle, time
-import datetime, dateutil.parser, dateutil.tz
+import time
 from zope.interface import implements
 from terane.bier.index import IIndex
 from terane.outputs.store import backend
+from terane.outputs.store.segment import Segment
 from terane.outputs.store.schema import Schema
 from terane.outputs.store.searching import IndexSearcher
 from terane.outputs.store.writing import IndexWriter
@@ -43,13 +27,6 @@ from terane.outputs.store.encoding import json_encode, json_decode
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.index')
-
-class Segment(backend.Segment):
-    def __init__(self, txn, index, segmentId):
-        backend.Segment.__init__(self, txn, index, segmentId)
-        self._name = "%s.%i" % (index.name, segmentId)
-    def __str__(self):
-        return "<terane.outputs.store.Segment '%s'>" % self._name
 
 class Index(backend.Index):
     """
@@ -73,39 +50,39 @@ class Index(backend.Index):
         try:
             self.name = name
             self._ids = ids
-            # load the table of contents
             # load schema
             self._schema = Schema(self)
             self._segments = []
-            self._indexsize = 0
-            self._currsize = 0
-            self._lastmodified = 0
-            self._lastid = 0
+            self._indexSize = 0
+            self._currentSize = 0
+            self._lastModified = 0
+            self._lastId = 0
             # load data segments
             with self.new_txn() as txn:
-                for segmentid in self.iter_segments(txn):
-                    segment = Segment(txn, self, segmentid)
+                for segmentId in self.iter_segments(txn):
+                    segment = Segment(txn, self, segmentId)
                     last_update = json_decode(segment.get_meta(txn, 'last-update'))
-                    self._currsize = last_update['size']
-                    self._indexsize += last_update['size']
-                    if last_update['last-id'] > self._lastid:
-                        self._lastid = last_update['last-id']
-                    if last_update['last-modified'] > self._lastmodified:
-                        self._lastmodified = last_update['last-modified']
-                    self._segments.append((segment, segmentid))
+                    self._currentSize = last_update['size']
+                    self._indexSize += last_update['size']
+                    if last_update['last-id'] > self._lastId:
+                        self._lastId = last_update['last-id']
+                    if last_update['last-modified'] > self._lastModified:
+                        self._lastModified = last_update['last-modified']
+                    self._segments.append(segment)
+            # if the index has no segments, create one
             if self._segments == []:
                 with self.new_txn() as txn:
-                    segmentid = self.new_segment(txn)
-                    segment = Segment(txn, self, segmentid)
+                    segmentId = self.new_segment(txn)
+                    segment = Segment(txn, self, segmentId)
                     segment.set_meta(txn, 'created-on', json_encode(int(time.time())))
                     last_update = {'size': 0, 'last-id': 0, 'last-modified': 0}
                     segment.set_meta(txn, 'last-update', json_encode(last_update))
-                self._segments.append((segment, segmentid))
+                self._segments.append(segment)
                 logger.info("created first segment for new index '%s'" % name)
             else:
                 logger.info("found %i documents in %i segments for index '%s'" % (
-                    self._indexsize, len(self._segments), name))
-            logger.debug("last document id is %s" % self._lastid)
+                    self._indexSize, len(self._segments), name))
+            logger.debug("last document id is %s" % self._lastId)
             # get a reference to the current segment
             self._current = self._segments[-1]
             logger.debug("opened event index '%s'" % self.name)
@@ -124,7 +101,7 @@ class Index(backend.Index):
         Return a new object implementing ISearcher, which is protected by a new
         transaction.
         """
-        return IndexSearcher(self._current[0])
+        return IndexSearcher(self._current)
     
     def writer(self):
         """
@@ -136,45 +113,42 @@ class Index(backend.Index):
     def newDocumentId(self, ts):
         return self._ids.allocate(ts)
 
-    def segments(self):
-        """
-        Return a list of (Segment, segment id) tuples.
-        """
-        return list(self._segments)
-
-    def rotate(self):
+    def rotateSegments(self, segRotation, segRetention):
         """
         Allocate a new Segment, making it the new current segment.
         """
-        with self.new_txn() as txn:
-            segmentid = self.new_segment(txn)
-            segment = Segment(txn, self, segmentid)
-            segment.set_meta(txn, 'created-on', json_encode(int(time.time())))
-            last_update = {'size': 0, 'last-id': 0, 'last-modified': 0}
-            segment.set_meta(txn, 'last-update', json_encode(last_update))
-        self._segments.append((segment,segmentid))
-        self._current = (segment,segmentid)
-        self._currsize = 0
-        logger.debug("rotated current segment, new segment is %s.%i" % (self.name, segmentid))
+        # if the current segment contains more events than specified by
+        # segRotation, then rotate the index to generate a new segment.
+        if segRotation > 0 and self._currentSize >= segRotation:
+            with self.new_txn() as txn:
+                segmentId = self.new_segment(txn)
+                segment = Segment(txn, self, segmentId)
+                segment.set_meta(txn, 'created-on', json_encode(int(time.time())))
+                last_update = {'size': 0, 'last-id': 0, 'last-modified': 0}
+                segment.set_meta(txn, 'last-update', json_encode(last_update))
+            self._segments.append(segment)
+            self._current = segment
+            self._currentSize = 0
+            logger.debug("rotated current segment, new segment is %s" % segment.fullName)
+            # if the index contains more segments than specified by segRetention,
+            # then delete the oldest segment.
+            if segRetention > 0:
+                if len(self._segments) > segRetention:
+                    for segment in self._segments[0:len(self._segments)-segRetention]:
+                        self._index.delete(segment)
 
-    def optimize(self, segment):
-        """
-        Optimize the specified Segment on-disk.
-        """
-        raise NotImplemented("Index.optimize() not implemented")
-
-    def delete(self, segment, segmentid):
+    def delete(self, segment):
         """
         Delete the specified Segment.
         """
         # remove the segment from the segment list
-        self._segments.remove((segment,segmentid))
+        self._segments.remove(segment)
         # remove the segment from the TOC.  this also marks the segment
         # for eventual physical deletion, when the Segment is deallocated.
         with self.new_txn() as txn:
-            self.delete_segment(txn, segmentid)
+            self.delete_segment(txn, segment.segmentId)
         segment.delete()
-        logger.debug("deleted segment %s.%i" % (self.name, segmentid))
+        logger.debug("deleted segment %s" % segment.fullName)
 
     def close(self):
         """
@@ -182,7 +156,7 @@ class Index(backend.Index):
         the Index instance cannot be used anymore.
         """
         # close each underlying segment
-        for segment,segmentid in self._segments:
+        for segment in self._segments:
             segment.close()
         self._segments = list()
         # unref the schema
