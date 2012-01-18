@@ -157,7 +157,7 @@ PyObject *
 terane_Index_delete_segment (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    unsigned long sid= 0;
+    db_recno_t sid = 0;
     DBT key;
     int dbret;
 
@@ -168,7 +168,7 @@ terane_Index_delete_segment (terane_Index *self, PyObject *args)
     /* delete segment id from the Index */
     memset (&key, 0, sizeof (DBT));
     key.data = &sid;
-    key.size = sizeof (unsigned long);
+    key.size = sizeof (db_recno_t);
     dbret = self->segments->del (self->segments, txn->txn, &key, 0);
     switch (dbret) {
         case 0:
