@@ -24,35 +24,99 @@ logger = getLogger('terane.bier.searching')
 
 class IPostingList(Interface):
     def nextPosting():
-        "Returns the next docId, or raises StopIteration if finished."
+        """
+        Returns the next posting, or None if iteration is finished.
+
+        :returns: The next posting, which is a tuple containing the docId, the term value, and the searcher, or (None,None,None)
+        :rtype: tuple
+        """
     def skipPosting(targetId):
-        "Skips to the targetId, or raises StopIteration if finished."
+        """
+        Skips to the targetId, returning the posting or None if the posting doesn't exist.
+
+        :param targetId: The target docId to skip to.
+        :type targetId: :class:`terane.bier.docid.DocID`
+        :returns: The target posting, which is a tuple containing the docId, the term value, and the searcher, or (None,None,None)
+        :rtype: tuple
+        """
 
 class IQuery(Interface):
     def optimizeQuery(index):
-        "Returns an optimized query."
+        """
+        Optimizes the query.  This may return the object itself, a new object, or
+        None if the query completely optimizes away.
+
+        :param index: The index we are querying.
+        :type index: An object implementing :class:`terane.bier.index.IIndex`
+        :returns: The optimized query.
+        :rtype: An object implementing :class:`terane.bier.searching.IQuery`
+        """
     def postingsLength(searcher, period):
-        "Returns an estimate of the number of postings within the specified period."
+        """
+        Returns an estimate of the number of postings within the specified period.
+
+        :param searcher: A handle to the index we are searching.
+        :type searcher: An object implementing :class:`terane.bier.searching.ISearcher`
+        :param period: The period within which the search query is constrained.
+        :type period: :class:`terane.bier.searching.Period`
+        :returns: An estimate of the number of postings.
+        :rtype: int
+        """
     def iterPostings(searcher, period, reverse):
         """
-        Returns an object implementing IPostingList which yields docIds for each
-        posting matching the query within the specified period.
+        Returns an object implementing IPostingList which yields each posting matching
+        the query within the specified period.
+        
+        :param searcher: A handle to the index we are searching.
+        :type searcher: An object implementing :class:`terane.bier.searching.ISearcher`
+        :param period: The period within which the search query is constrained.
+        :type period: :class:`terane.bier.searching.Period`
+        :param reverse: If True, then reverse the order of iteration.
+        :type reverse: bool
+        :returns: An object for iterating through events matching the query.
+        :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
 
 class ISearcher(Interface):
-    def __enter__():
-        "Enter the transactional context."
     def postingsLength(fieldname, term, period):
-        "Returns the maximum number of possible postings for the term in the specified field."
+        """
+        Returns an estimate of the  number of possible postings for the term
+        in the specified field.
+
+        :param fieldname: The name of the field to search within.
+        :type fieldname: str
+        :param term: The term to search for.
+        :type term: unicode
+        :param period: The period within which the search query is constrained.
+        :type period: :class:`terane.bier.searching.Period`
+        :returns: An estimate of the number of postings.
+        :rtype: int
+        """
     def iterPostings(fieldname, term, period, reverse):
         """
-        Returns an object implementing IPostingList which yields docIds for each
-        posting of the term in the specified field.
+        Returns an object implementing IPostingList which yields postings for the
+        term in the specified field.
+
+        :param fieldname: The name of the field to search within.
+        :type fieldname: str
+        :param term: The term to search for.
+        :type term: unicode
+        :param period: The period within which the search query is constrained.
+        :type period: :class:`terane.bier.searching.Period`
+        :param reverse: If True, then reverse the order of iteration.
+        :type reverse: bool
+        :returns: An object for iterating through events matching the query.
+        :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
     def getEvent(docId):
-        "Returns the event specified by docId."
-    def __exit__(excType, excValue, traceback):
-        "Exit the transactional context."
+        """
+        Returns the event specified by docId.
+
+        :param docId: The event docId
+        :type docId: :class:`terane.bier.docid.DocID`
+        :returns: A dict mapping fieldnames to values.
+        :rtype: dict
+        """
 
 class SearcherError(Exception):
     pass
@@ -172,6 +236,7 @@ class Term(object):
         :type searcher: An object implementing :class:`terane.bier.searching.ISearcher`
         :param period: The period within which the search query is constrained.
         :type period: :class:`terane.bier.searching.Period`
+          
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
@@ -183,24 +248,24 @@ class Term(object):
         Returns the docId of the next event matching the query, or None if there are no
         more events which match the query.
 
-        :returns: The docId of the next matching event, or None.
-        :rtype: :class:`terane.bier.docid.DocID`
+        :returns: The posting of the next matching event, or (None,None,None).
         """
-        docId = self._postings.nextPosting()[0]
-        logger.trace("%s: nextPosting() => %s" % (self, docId)) 
-        return docId
+        posting = self._postings.nextPosting()
+        logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
+        return posting
 
     def skipPosting(self, targetId):
         """
         Returns the docId matching targetId if the query contains the specified targetId,
         or None if the targetId is not present.
 
-        :returns: The docId matching the targetId, or None.
-        :rtype: :class:`terane.bier.docid.DocID`
+        :param targetId:
+        :type targetId:
+        :returns: The posting matching the targetId, or (None,None,None).
         """
-        docId = self._postings.skipPosting(targetId)[0]
-        logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, docId))
-        return docId
+        posting = self._postings.skipPosting(targetId)
+        logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
+        return posting
 
 class AND(object):
     """
@@ -302,17 +367,17 @@ class AND(object):
         :rtype: :class:`terane.bier.docid.DocID`
         """
         while True:
-            docId = self._smallest.nextPosting()
-            if docId == None:
-                logger.trace("%s: nextPosting() => %s" % (self, docId)) 
-                return docId
+            posting = self._smallest.nextPosting()
+            if posting[0] == None:
+                break
             for child in self._others:
-                if child.skipPosting(docId) == None:
-                    docId = None
+                if child.skipPosting(posting[0])[0] == None:
+                    posting = (None,None,None)
                     break
-            if docId != None:
-                logger.trace("%s: nextPosting() => %s" % (self, docId)) 
-                return docId
+            if posting[0] != None:
+                break
+        logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
+        return posting
 
     def skipPosting(self, targetId):
         """
@@ -322,14 +387,14 @@ class AND(object):
         :returns: The docId matching the targetId, or None.
         :rtype: :class:`terane.bier.docid.DocID`
         """
-        docId = self._smallest.skipPosting(targetId)
-        if docId != None:
+        posting = self._smallest.skipPosting(targetId)
+        if posting[0] != None:
             for child in self._others:
-                docId = child.skipPosting(targetId)
-                if docId == None:
+                posting = child.skipPosting(targetId)
+                if posting[0] == None:
                     break
-        logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, docId))
-        return docId
+        logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
+        return posting[0]
 
 class OR(object):
     """
@@ -414,8 +479,8 @@ class OR(object):
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
-        # smallestIds contains the smallest docId for each child query, or None 
-        self._smallestIds = [None for i in range(len(self.children))]
+        # smallestPostings contains the smallest posting for each child query, or (None,None,None) 
+        self._smallestPostings = [(None,None,None) for i in range(len(self.children))]
         # iters contains the iterator (object implementing IPostingList) for each child query
         self._iters = [child.iterPostings(searcher,period,reverse) for child in self.children]
         # lastId is the last docId returned by the iterator
@@ -433,28 +498,29 @@ class OR(object):
         curr = 0
         # check each child iter for the lowest docId
         for i in range(len(self.children)):
-            # if None, then get the next docId from the iter
-            if self._smallestIds[i] == None:
-                self._smallestIds[i] = self._iters[i].nextPosting()
-            # if the docId is None, then check the next iter
-            if self._smallestIds[i] == None:
+            # if None, then get the next posting from the iter
+            if self._smallestPostings[i][0] == None:
+                self._smallestPostings[i] = self._iters[i].nextPosting()
+            # if the posting docId is None, then check the next iter
+            if self._smallestPostings[i][0] == None:
                 continue
             # if the docId equals the last docId returned, then ignore it
-            if self._lastId != None and self._smallestIds[i] == self._lastId:
-                self._smallestIds[i] = None
+            if self._lastId != None and self._smallestPostings[i][0] == self._lastId:
+                self._smallestPostings[i] = (None,None,None)
                 continue
             # we don't compare the first docId with itself
             if i == 0:
                 continue
             # if the docId is the current smallest docId, then remember it
-            if self._smallestIds[curr] == None or self._smallestIds[i] < self._smallestIds[curr]:
+            if self._smallestPostings[curr][0] == None or self._smallestPostings[i][0] < self._smallestPostings[curr][0]:
                 curr = i
         # update lastId with the docId
-        docId = self._lastId = self._smallestIds[curr]
+        posting = self._smallestPostings[curr]
+        self._lastId = posting[0]
         # forget the docId so we don't return it again
-        self._smallestIds[curr] = None
-        logger.trace("%s: nextPosting() => %s" % (self, docId)) 
-        return docId
+        self._smallestPostings[curr] = (None,None,None)
+        logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
+        return posting
 
     def skipPosting(self, targetId):
         """
@@ -464,21 +530,21 @@ class OR(object):
         :returns: The docId matching the targetId, or None.
         :rtype: :class:`terane.bier.docid.DocID`
         """
-        docId = None
+        posting = None
         # iterate through each child query
         for i in range(len(self.children)):
-            docId = self._smallestIds[i]
+            posting = self._smallestPostings[i]
             # if the smallestId equals the targetId, we are done
-            if docId == targetId:
+            if posting[0] == targetId:
                 break
             # otherwise check if the targetId exists in the child query
-            if docId == None or docId < targetId:
-                docId = self._iters[i].skipPosting(targetId)
-                self._smallestIds[i] = docId
-                if docId == targetId:
+            if posting[0] == None or posting[0] < targetId:
+                posting = self._iters[i].skipPosting(targetId)
+                self._smallestPostings[i] = posting
+                if posting[0] == targetId:
                     break    
-        logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, docId))
-        return docId
+        logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
+        return posting
 
 class NOT(object):
     """
@@ -542,9 +608,9 @@ class NOT(object):
         :returns: The docId of the next matching event, or None.
         :rtype: :class:`terane.bier.docid.DocID`
         """
-        docId = self._iter.nextPosting()
-        logger.trace("%s: nextPosting() => %s" % (self, docId)) 
-        return docId
+        posting = self._iter.nextPosting()
+        logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
+        return posting
 
     def skipPosting(self, targetId):
         """
@@ -554,9 +620,9 @@ class NOT(object):
         :returns: The docId matching the targetId, or None.
         :rtype: :class:`terane.bier.docid.DocID`
         """
-        docId = self._iter.skipPosting(targetId)
-        logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, docId))
-        return docId
+        posting = self._iter.skipPosting(targetId)
+        logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
+        return posting
 
 class Sieve(object):
     """
@@ -628,18 +694,18 @@ class Sieve(object):
         :returns: The docId of the next matching event, or None.
         :rtype: :class:`terane.bier.docid.DocID`
         """
-        docId = None
+        posting = (None,None,None)
         # loop until we find a docId not in the filter, or there are no more docIds
         while True:
-            docId = self._sourceIter.nextPosting()
+            posting = self._sourceIter.nextPosting()
             # if there are not more docIds to retrieve from the source, we are done
-            if docId == None:
+            if posting[0] == None:
                 break
             # if the the docId isn't present in the filter, then return it
-            if docId != self._filterIter.skipPosting(docId):
+            if posting[0] != self._filterIter.skipPosting(posting[0])[0]:
                 break
-        logger.trace("%s: nextPosting() => %s" % (self, docId)) 
-        return docId
+        logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
+        return posting
 
     def skipPosting(self, targetId):
         """
@@ -650,14 +716,14 @@ class Sieve(object):
         :rtype: :class:`terane.bier.docid.DocID`
         """
         # skip the source to the targetId
-        docId = self._sourceIter.skipPosting(targetId)
+        posting = self._sourceIter.skipPosting(targetId)
         # if targetId is not in the source, then the skip fails
-        if docId != None:
+        if posting[0] != None:
             # if the targetId is present in the filter, then the skip fails
-            if docId == self._filterIter.skipPosting(docId):
-                docId = None
-        logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, docId))
-        return docId
+            if posting[0] == self._filterIter.skipPosting(posting[0])[0]:
+                posting = (None,None,None)
+        logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
+        return posting
 
 class Results(object):
     """
@@ -711,24 +777,24 @@ def searchIndices(indices, query, period, reverse=False, fields=None, limit=100)
             continue
         # iterate through the search results
         searcher = index.searcher()
-        piter = _query.iterPostings(searcher, period, reverse)
+        postingList = _query.iterPostings(searcher, period, reverse)
         i = 0
         # we terminate the search prematurely if we have reached the results limit
         while i < limit:
-            docId = piter.nextPosting()
-            if docId == None:
+            posting = postingList.nextPosting()
+            if posting[0] == None:
                 break
-            logger.trace("found event %s" % docId)
+            logger.trace("found event %s" % posting[0])
             # remember the docId and the searcher it came from, so we can retrieve
             # the full event after the final sort.
-            postings.append((docId, searcher))
+            postings.append(posting)
             i += 1
     # perform a sort on the docIds, which orders them naturally by date
     postings.sort()
     foundfields = []
     results = []
     # retrieve the full event for each docId
-    for docId,searcher in postings[:limit]:
+    for docId,tvalue,searcher in postings[:limit]:
         event = searcher.getEvent(docId)
         # keep a record of all field names found in the results.
         for fieldname in event.keys():

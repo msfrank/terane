@@ -98,10 +98,9 @@ class Index(backend.Index):
  
     def searcher(self):
         """
-        Return a new object implementing ISearcher, which is protected by a new
-        transaction.
+        Return a new object implementing ISearcher.
         """
-        return IndexSearcher(self._current)
+        return IndexSearcher(self)
     
     def writer(self):
         """
@@ -135,12 +134,13 @@ class Index(backend.Index):
             if segRetention > 0:
                 if len(self._segments) > segRetention:
                     for segment in self._segments[0:len(self._segments)-segRetention]:
-                        self._index.delete(segment)
+                        self.delete(segment)
 
     def delete(self, segment):
         """
         Delete the specified Segment.
         """
+        fullName = segment.fullName
         # remove the segment from the segment list
         self._segments.remove(segment)
         # remove the segment from the TOC.  this also marks the segment
@@ -148,7 +148,7 @@ class Index(backend.Index):
         with self.new_txn() as txn:
             self.delete_segment(txn, segment.segmentId)
         segment.delete()
-        logger.debug("deleted segment %s" % segment.fullName)
+        logger.debug("deleted segment %s" % fullName)
 
     def close(self):
         """
