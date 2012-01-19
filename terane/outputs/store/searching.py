@@ -17,7 +17,7 @@
 
 import math
 from zope.interface import implements
-from terane.bier.searching import ISearcher, IPostingList
+from terane.bier import ISearcher, IPostingList, IEventStore
 from terane.bier.docid import DocID
 from terane.outputs.store.encoding import json_encode, json_decode
 from terane.loggers import getLogger
@@ -76,9 +76,6 @@ class IndexSearcher(object):
         """
         iters = [s.iterPostings(fieldname, term, period, reverse) for s in self._segmentSearchers]
         return MergedPostingList(iters)
-
-    def getEvent(self, docId):
-        raise NotImplemented()
 
 class MergedPostingList(object):
     """
@@ -159,7 +156,7 @@ class SegmentSearcher(object):
     SegmentSearcher searches a single Segment.
     """
 
-    implements(ISearcher)
+    implements(ISearcher, IEventStore)
 
     def __init__(self, segment):
         """

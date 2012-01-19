@@ -17,7 +17,8 @@
 
 import pickle, time
 from zope.interface import implements
-from terane.bier.writing import IWriter, WriterError
+from terane.bier import IWriter
+from terane.bier.writing import WriterError
 from terane.outputs.store.encoding import json_encode, json_decode
 from terane.loggers import getLogger
 

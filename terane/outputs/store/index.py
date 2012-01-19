@@ -17,7 +17,7 @@
 
 import time
 from zope.interface import implements
-from terane.bier.index import IIndex
+from terane.bier import IIndex
 from terane.outputs.store import backend
 from terane.outputs.store.segment import Segment
 from terane.outputs.store.schema import Schema

@@ -33,7 +33,7 @@
 
 import pickle
 from zope.interface import implements
-from terane.bier.schema import ISchema
+from terane.bier import ISchema
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.schema')
@@ -49,17 +49,17 @@ class Schema(object):
             for fieldname,fieldspec in self._index.list_fields(txn):
                 self._fields[fieldname] = pickle.loads(fieldspec)
 
-    def add(self, name, field):
+    def addField(self, name, field):
         if name in self._fields:
             raise IndexError("field named '%s' already exists in Schema" % name)
         with self._index.new_txn() as txn:
             self._index.add_field(txn, name, pickle.dumps(field))
         self._fields[name] = field
 
-    def get(self, name):
+    def getField(self, name):
         return self._fields[name]
 
-    def has(self, name):
+    def hasField(self, name):
         if name in self._fields:
             return True
         return False
