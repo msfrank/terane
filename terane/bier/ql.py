@@ -77,7 +77,8 @@ Query Grammar
 
 import datetime, dateutil.tz
 import pyparsing as pp
-from terane.bier.searching import Term, Period, AND, OR, NOT
+from terane.bier.matching import Term, AND, OR, NOT
+from terane.bier.searching import Period
 
 class QuerySyntaxError(BaseException):
     """

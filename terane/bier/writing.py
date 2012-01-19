@@ -16,22 +16,11 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import datetime, dateutil.tz, time
-from zope.interface import Interface
-from terane.bier.schema import ISchema, fieldFactory
-from terane.bier.index import IIndex
+from terane.bier import IIndex, ISchema, IWriter
+from terane.bier.schema import fieldFactory
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier.writing')
-
-class IWriter(Interface):
-    def __enter__():
-        "Enter the transactional context."
-    def newDocument(docId, document):
-        "Create a new document with the specified document ID."
-    def newPosting(fieldname, term, docId, value):
-        "Create a new posting for the field term with the specified document ID."
-    def __exit__(excType, excValue, traceback):
-        "Exit the transactional context."
 
 class WriterError(Exception):
     pass
@@ -70,8 +59,8 @@ def writeEventToIndex(event, index):
     if not ISchema.providedBy(schema):
         raise TypeError("index.schema() does not implement ISchema")
     for fieldname in fieldnames:
-        if not schema.has(fieldname):
-            schema.add(fieldname, fieldFactory(event[fieldname]))
+        if not schema.hasField(fieldname):
+            schema.addField(fieldname, fieldFactory(event[fieldname]))
 
     # update the index in the context of a transactional writer
     with index.writer() as writer:
@@ -87,7 +76,7 @@ def writeEventToIndex(event, index):
         # process the value of each field in the event
         for fieldname in fieldnames:
             # create a child transaction for each field in the document
-            field = schema.get(fieldname)
+            field = schema.getField(fieldname)
             # update the field with the event value
             evalue = event.get(fieldname)
             for term,tvalue in field.terms(evalue):

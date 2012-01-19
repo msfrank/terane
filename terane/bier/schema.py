@@ -16,18 +16,9 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import datetime, time, struct, base64
-from zope.interface import Interface
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier.schema')
-
-class ISchema(Interface):
-    def has(name):
-        "Returns True if schema has the specified field, otherwise False."
-    def get(name):
-        "Returns the specified Field."
-    def add(name, field):
-        "Adds a new field to the schema."
 
 class BaseField(object):
     def __init__(self, options):
