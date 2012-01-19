@@ -15,15 +15,10 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-__version__ = (0, 1, 4)
+__version__ = (0, 2, 0)
 
 def versionstring():
     """
     Return the version number as a string.
     """
     return "%i.%i.%i" % __version__
-
-# add the lib/ directory to the module search path
-import sys
-from os.path import abspath, dirname, join
-sys.path.insert(0, abspath(join(dirname(__file__), 'lib')))
