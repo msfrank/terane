@@ -18,6 +18,10 @@
 import time, datetime, struct
 
 class DocID(object):
+
+    MIN_ID = "00000000000000000000000000000000"
+    MAX_ID = "ffffffffffffffffffffffffffffffff"
+
     def __init__(self, ts, node, offset):
         self.ts = int(ts)
         self.node = int(node)
@@ -30,7 +34,7 @@ class DocID(object):
 
     @classmethod
     def fromString(cls, string):
-        ts,node,offset = string.split('-', 2)
+        ts,node,offset = string[0:8], string[8:16], string[16:32]
         ts = int(ts, 16)
         node = int(node, 16)
         offset = long(offset, 16)
@@ -40,10 +44,26 @@ class DocID(object):
         return struct.pack('>IIQ', self.ts, self.node, self.offset)
 
     def __str__(self):
-        return "%.08x-%.08x-%.016x" % (self.ts, self.node, self.offset)
+        return "%.08x%.08x%.016x" % (self.ts, self.node, self.offset)
 
     def __repr__(self):
         return "<DocID %s>" % str(self)
 
     def __cmp__(self, other):
         return cmp(str(self), str(other))
+
+    def __add__(self, other):
+        other = int(other)
+        n = long("%.08x%.08x%.016x" % (self.ts,self.node,self.offset), 16)
+        n += other
+        if n > 2**128 - 1:
+            raise OverflowError()
+        return DocID.fromString("%x" % n)
+
+    def __sub__(self, other):
+        other = int(other)
+        n = long("%.08x%.08x%.016x" % (self.ts,self.node,self.offset), 16)
+        n -= other
+        if n < 0:
+            raise OverflowError()
+        return DocID.fromString("%x" % n)
