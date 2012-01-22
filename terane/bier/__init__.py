@@ -35,6 +35,9 @@ class ISchema(Interface):
         """
         Adds a new field to the schema.
         """
+    def listFields():
+        """
+        """
 
 class IPostingList(Interface):
     def nextPosting():
@@ -65,7 +68,7 @@ class IMatcher(Interface):
         :returns: An optimized matcher.
         :rtype: An object implementing :class:`terane.bier.searching.IMatcher`
         """
-    def matchesLength(searcher, period):
+    def matchesLength(searcher, startId, endId):
         """
         Returns an estimate of the number of matching postings within the specified period.
 
@@ -76,7 +79,7 @@ class IMatcher(Interface):
         :returns: An estimate of the number of postings.
         :rtype: int
         """
-    def iterMatches(searcher, period, reverse):
+    def iterMatches(searcher, startId, endId):
         """
         Returns an object implementing IPostingList which yields each matching posting
         within the specified period.
@@ -92,7 +95,7 @@ class IMatcher(Interface):
         """
 
 class ISearcher(Interface):
-    def postingsLength(fieldname, term, period):
+    def postingsLength(fieldname, term, startId, endId):
         """
         Returns an estimate of the  number of possible postings for the term
         in the specified field.
@@ -106,7 +109,7 @@ class ISearcher(Interface):
         :returns: An estimate of the number of postings.
         :rtype: int
         """
-    def iterPostings(fieldname, term, period, reverse):
+    def iterPostings(fieldname, term, startId, endId):
         """
         Returns an object implementing IPostingList which yields postings for the
         term in the specified field.
@@ -153,5 +156,3 @@ class IIndex(Interface):
         "Returns an object implementing IWriter."
     def newDocumentId(ts):
         "Returns a new document ID."
-
-

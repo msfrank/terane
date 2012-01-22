@@ -70,7 +70,7 @@ class Term(object):
         self.value = terms[0]
         return self
 
-    def matchesLength(self, searcher, period):
+    def matchesLength(self, searcher, startId, endId):
         """
         Returns an estimate of the approximate number of matching postings which will
         be returned using the specified searcher within the specified period.
@@ -82,11 +82,11 @@ class Term(object):
         :returns: The postings length estimate.
         :rtype: int
         """
-        length = searcher.postingsLength(self.fieldname, self.value, period)
+        length = searcher.postingsLength(self.fieldname, self.value, startId, endId)
         logger.trace("%s: postingsLength() => %i" % (self, length))
         return length
 
-    def iterMatches(self, searcher, period, reverse):
+    def iterMatches(self, searcher, startId, endId):
         """
         Returns an object for iterating through matching postings.
 
@@ -98,7 +98,7 @@ class Term(object):
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.IPostingList`
         """
-        self._postings = searcher.iterPostings(self.fieldname, self.value, period, reverse)
+        self._postings = searcher.iterPostings(self.fieldname, self.value, startId, endId)
         return self
 
     def nextPosting(self):
@@ -181,7 +181,7 @@ class AND(object):
             return Sieve(self, excludes)
         return self
 
-    def matchesLength(self, searcher, period):
+    def matchesLength(self, searcher, startId, endId):
         """
         Returns an estimate of the approximate number of postings which will be returned
         for the query using the specified searcher within the specified period.  The estimate
@@ -196,12 +196,12 @@ class AND(object):
         """
         self._lengths = []
         for child in self.children:
-            bisect.insort_right(self._lengths, (child.matchesLength(searcher, period),child))
+            bisect.insort_right(self._lengths, (child.matchesLength(searcher, startId, endId),child))
         length = self._lengths[0][0]
         logger.trace("%s: matchesLength() => %i" % (self, length))
         return length
 
-    def iterMatches(self, searcher, period, reverse):
+    def iterMatches(self, searcher, startId, endId):
         """
         Returns an object for iterating through events matching the query.
 
@@ -213,9 +213,9 @@ class AND(object):
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
         if self._lengths == None:
-            self.matchesLength(searcher, period)
-        self._smallest = self._lengths[0][1].iterPostings(searcher, period, reverse)
-        self._others = [child[1].iterPostings(searcher, period, reverse) for child in self._lengths[1:]]
+            self.matchesLength(searcher, startId, endId)
+        self._smallest = self._lengths[0][1].iterMatches(searcher, startId, endId)
+        self._others = [child[1].iterMatches(searcher, startId, endId) for child in self._lengths[1:]]
         return self
 
     def nextPosting(self):
@@ -309,7 +309,7 @@ class OR(object):
             return Sieve(self, excludes)
         return self
 
-    def matchesLength(self, searcher, period):
+    def matchesLength(self, searcher, startId, endId):
         """
         Returns an estimate of the approximate number of postings which will be returned
         for the query using the specified searcher within the specified period.  The estimate
@@ -325,10 +325,10 @@ class OR(object):
         length = 0
         # the posting length estimate is the sum of all child queries
         for child in self.children:
-            length += child.matchesLength(searcher, period)
+            length += child.matchesLength(searcher, startId, endId)
         return length
 
-    def iterMatches(self, searcher, period, reverse):
+    def iterMatches(self, searcher, startId, endId):
         """
         Returns an object for iterating through events matching the query.
 
@@ -342,7 +342,7 @@ class OR(object):
         # smallestPostings contains the smallest posting for each child query, or (None,None,None) 
         self._smallestPostings = [(None,None,None) for i in range(len(self.children))]
         # iters contains the iterator (object implementing IPostingList) for each child query
-        self._iters = [child.iterMatches(searcher,period,reverse) for child in self.children]
+        self._iters = [child.iterMatches(searcher, startid, endId) for child in self.children]
         # lastId is the last docId returned by the iterator
         self._lastId = None
         return self
@@ -439,14 +439,14 @@ class NOT(object):
             return None
         return self
 
-    def matchesLength(self, searcher, period):
+    def matchesLength(self, searcher, startId, endId):
         """
         The NOT operator has no use for the matchesLength() method, and raises a
         NotImplemented exception if called.
         """
         raise NotImplemented()
 
-    def iterMatches(self, searcher, period, reverse):
+    def iterMatches(self, searcher, startId, endId):
         """
         Returns an object for iterating through events matching the query.
 
@@ -457,7 +457,7 @@ class NOT(object):
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
-        self._iter = self.child.iterMatches(searcher, period, reverse)
+        self._iter = self.child.iterMatches(searcher, startId, endId)
         return self
 
     def nextPosting(self):
@@ -516,7 +516,7 @@ class Sieve(object):
         """
         return self
 
-    def matchesLength(self, searcher, period):
+    def matchesLength(self, searcher, startId, endId):
         """
         Returns an estimate of the approximate number of postings which will be returned
         for the query using the specified searcher within the specified period.  The estimate
@@ -529,9 +529,9 @@ class Sieve(object):
         :returns: The postings length estimate.
         :rtype: int
         """
-        return self.source.matchesLength(searcher, period)
+        return self.source.matchesLength(searcher, startId, endId)
 
-    def iterMatches(self, searcher, period, reverse):
+    def iterMatches(self, searcher, startId, endId):
         """
         Returns an object for iterating through events matching the query.
 
@@ -542,8 +542,8 @@ class Sieve(object):
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
-        self._sourceIter = self.source.iterMatches(searcher, period, reverse)
-        self._filterIter = self.filters.iterMatches(searcher, period, reverse)
+        self._sourceIter = self.source.iterMatches(searcher, startId, endId)
+        self._filterIter = self.filters.iterMatches(searcher, startId, endId)
         return self
 
     def nextPosting(self):

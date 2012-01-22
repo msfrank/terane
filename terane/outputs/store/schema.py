@@ -63,3 +63,6 @@ class Schema(object):
         if name in self._fields:
             return True
         return False
+
+    def listFields(self):
+        return self._fields.keys()

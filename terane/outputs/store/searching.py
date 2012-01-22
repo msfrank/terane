@@ -39,7 +39,7 @@ class IndexSearcher(object):
         """
         self._segmentSearchers = [SegmentSearcher(s) for s in ix._segments]
 
-    def postingsLength(self, fieldname, term, period):
+    def postingsLength(self, fieldname, term, startId, endId):
         """
         Returns an estimate of the number of postings in the index within the
         specified period.
@@ -55,10 +55,10 @@ class IndexSearcher(object):
         """
         length = 0
         for searcher in self._segmentSearchers:
-            length += searcher.postingsLength(fieldname, term, period)
+            length += searcher.postingsLength(fieldname, term, startId, endId)
         return length
 
-    def iterPostings(self, fieldname, term, period, reverse):
+    def iterPostings(self, fieldname, term, startId, endId):
         """
         Returns a MergedPostingList which yields postings for the term
         in the specified field.
@@ -74,7 +74,7 @@ class IndexSearcher(object):
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
-        iters = [s.iterPostings(fieldname, term, period, reverse) for s in self._segmentSearchers]
+        iters = [s.iterPostings(fieldname, term, startId, endId) for s in self._segmentSearchers]
         return MergedPostingList(iters)
 
 class MergedPostingList(object):
@@ -165,7 +165,7 @@ class SegmentSearcher(object):
         """
         self._segment = segment
 
-    def postingsLength(self, fieldname, term, period):
+    def postingsLength(self, fieldname, term, startId, endId):
         """
         Returns an estimate of the number of postings in the segment within the
         specified period.
@@ -181,23 +181,16 @@ class SegmentSearcher(object):
         """
         fieldname = str(fieldname)
         term = unicode(term)
-        if period == None:
-            try:
-                tmeta = json_decode(self._segment.get_term_meta(None, fieldname, term))
-                return tmeta['num-docs']
-            except KeyError:
-                return 0
-        else:
-            try:
-                fmeta = json_decode(self._segment.get_field_meta(None, fieldname))
-                ndocs = fmeta['num-docs']
-                start = str(period.startingID())
-                end = str(period.endingID())
-                return int(math.ceil(ndocs * self._segment.estimate_term_postings(None, fieldname, term, start, end)))
-            except KeyError:
-                return 0
+        try:
+            fmeta = json_decode(self._segment.get_field_meta(None, fieldname))
+            numDocs = fmeta['num-docs']
+            # startId may be greater than endId, but the estimate_term_postings method doesn't care
+            estimate = self._segment.estimate_term_postings(None, fieldname, term, str(startId), str(endId))
+            return int(math.ceil(numDocs * estimate))
+        except KeyError:
+            return 0
         
-    def iterPostings(self, fieldname, term, period, reverse):
+    def iterPostings(self, fieldname, term, startId, endId):
         """
         Returns a PostingList which yields postings for the term in the specified field.
 
@@ -214,9 +207,7 @@ class SegmentSearcher(object):
         """
         fieldname = str(fieldname)
         term = unicode(term)
-        start = str(period.startingID())
-        end = str(period.endingID())
-        return PostingList(self, self._segment.iter_terms_within(None, fieldname, term, start, end, reverse))
+        return PostingList(self, self._segment.iter_terms_within(None, fieldname, term, str(startId), str(endId)))
 
     def getEvent(self, docId):
         """
