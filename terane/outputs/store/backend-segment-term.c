@@ -640,7 +640,6 @@ _Segment_skip_term_within (terane_Iter *iter, PyObject *args)
  *   term (str): The term
  *   start (str): The starting document ID, inclusive
  *   end (str): The ending document ID, inclusive
- *   reverse (bool): Iterate in reverse order
  * returns: a new Iterator object.  Each iteration returns a tuple consisting
  *  of (docId,value).
  * exceptions:
@@ -652,7 +651,7 @@ terane_Segment_iter_terms_within (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
-    PyObject *term = NULL, *start = NULL, *end = NULL, *reverse;
+    PyObject *term = NULL, *start = NULL, *end = NULL;
     DB *field = NULL;
     DBT *start_key = NULL, *end_key = NULL;
     DBC *cursor = NULL;
@@ -661,8 +660,8 @@ terane_Segment_iter_terms_within (terane_Segment *self, PyObject *args)
     terane_Iter_ops ops = { .next = _Segment_next_term, .skip = _Segment_skip_term_within };
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OO!O!O!O!O", &txn, &PyString_Type, &fieldname,
-        &PyUnicode_Type, &term, &PyString_Type, &start, &PyString_Type, &end, &reverse))
+    if (!PyArg_ParseTuple (args, "OO!O!O!O!", &txn, &PyString_Type, &fieldname,
+        &PyUnicode_Type, &term, &PyString_Type, &start, &PyString_Type, &end))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;

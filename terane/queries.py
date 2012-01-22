@@ -61,7 +61,7 @@ class QueryManager(Service):
         :param query: The query string.
         :type query: unicode
         :param lastId: The ID of the last event from the previous iteration.
-        :type last: str
+        :type lastId: str
         :param indices: A list of indices to search, or None to search all indices.
         :type indices: list, or None
         :param limit: The maximum number of events to return.
@@ -70,8 +70,8 @@ class QueryManager(Service):
         :type reverse: bool
         :param fields: A list of fields to return in the results, or None to return all fields.
         :type fields: list
-        :returns: A Results object containing the search results.
-        :rtype: :class:`terane.query.results.Results`
+        :returns:
+        :rtype:
         """
         # look up the named indices
         if indices == None:
@@ -81,22 +81,22 @@ class QueryManager(Service):
                 indices = tuple(self._searchables[name] for name in indices)
             except KeyError, e:
                 raise QueryExecutionError("unknown index '%s'" % e)
+        # if lastId is specified, make sure its a valid value
+        if lastId != None and not isinstance(lastId, DocID):
+            raise QueryExecutionError("lastId is not valid")
         # check that limit is > 0
         if limit < 1:
             raise QueryExecutionError("limit must be greater than 0")
         query,period = parseIterQuery(query)
-        logger.trace("iter query=%s" % query)
-        if lastId != None:
-            period.setEpoch(DocID.fromString(lastId))
-        logger.trace("iter period=%s" % period)
+        logger.trace("iter query: %s" % query)
+        logger.trace("iter period: %s" % period)
         # query each index and return the results
-        results = searchIndices(indices, query, period, reverse, fields, limit)
-        results.meta['runtime'] = 0.0
-        return results
+        results,fields = searchIndices(indices, query, period, lastId, reverse, fields, limit)
+        return list(results), {'runtime': 0.0, 'fields': fields}
 
-    def tail(self, query, lastId=0, indices=None, limit=100, fields=None):
+    def tail(self, query, lastId=None, indices=None, limit=100, fields=None):
         """
-        Return events newer than the specified 'last' docuemtn ID matching the
+        Return events newer than the specified 'lastId' docuemnt ID matching the
         specified query.
 
         :param query: The query string.
@@ -120,47 +120,33 @@ class QueryManager(Service):
                 indices = tuple(self._searchables[name] for name in indices)
             except KeyError, e:
                 raise QueryExecutionError("unknown index '%s'" % e)
+        # if lastId is specified, make sure its a valid value
+        if lastId != None and not isinstance(lastId, DocID):
+            raise QueryExecutionError("lastId is not valid")
         # check that limit is > 0
         if limit < 1:
             raise QueryExecutionError("limit must be greater than 0")
-        # determine the id of the last document
-        lastId = 0
+        # determine the id of the last event written
+        newestId = None
         for index in indices:
-            l = index.lastId()
-            if l > lastId: lastId = l
-        # if last is 0, then return the id of the latest document
-        if last == 0:
-            results.extend(last=lastId, runtime=0.0)
-            return results
-        # if the latest document id is smaller or equal to supplied last id value,
-        # then return the id of the latest document
-        if lastId <= last:
-            results.extend(last=lastId, runtime=0.0)
-            return results
-        if query.strip() == '':
-            query = NumericRange('id', last, 2**64, True)
-        else:
-            query = parseTailQuery(query)
-            # add the additional restriction that the id must be newer than 'last'.
-            query = And([NumericRange('id', last, 2**64, True), query]).normalize()
-        logger.trace("parsed tail query: %s" % str(query))
-        # query each index, and aggregate the results
-        rlist = []
-        runtime = 0.0
-        lastId = 0
-        # query each index, and aggregate the results
-        for index in indices:
-            result = index.search(query, limit, ("ts"), False)
-            rlist.append(result)
-            runtime += result.runtime
-            try:
-                l = result.docnum(-1)
-                if l > lastId: lastId = l
-            except IndexError:
-                # if there are no results, result.docnum() raises IndexError
-                pass
-        results.extend(*rlist, last=lastId, runtime=runtime)
-        return results
+            lastUpdate = index.getLastUpdate()
+            if newestId == None or lastUpdate[0] > newestId:
+                newestId = lastUpdate[0]
+        # if lastId is 0, or the newest id is smaller or equal to the
+        # supplied last id value, then return the id of the latest document
+        if lastId == 0 or lastId >= newestId:
+            results = [], {'runtime': 0.0, 'last-id': newestId}
+        query = parseTailQuery(query)
+        logger.trace("tail query: %s" % query)
+        period = Period(DocID.fromString(lastId), DocID.fromString(DocID.MAX_ID))
+        logger.trace("tail period: %s" % period)
+        # query each index, and return the results
+        results,fields = searchIndices(indices, query, period, lastId, True, fields, limit)
+        try:
+            lastId = results[-1][0]
+        except IndexError:
+            lastId = newestId
+        return list(results), {'runtime': 0.0, 'last-id': lastId, 'fields': fields}
 
     def showIndex(self, name):
         """
@@ -177,14 +163,13 @@ class QueryManager(Service):
             index = self._searchables[name]
         except KeyError, e:
             raise QueryExecutionError("unknown index '%s'" % e)
-        results = Results(None, None, False)
+        lastId,lastModified,size = index.getLastUpdate()
         meta = {}
         meta['name'] = name
-        meta['size'] = index.size()
-        meta['last-modified'] = index.lastModified()
-        meta['last-id'] = index.lastId()
-        results.extend([{'field':{'value':name}} for name in index.schema().names()], **meta)
-        return results
+        meta['last-id'] = lastId
+        meta['last-modified'] = lastModified
+        meta['size'] = size
+        return index.schema().listFields(), meta
 
     def listIndices(self):
         """
@@ -193,10 +178,7 @@ class QueryManager(Service):
         :returns: A Results object containing a list of index names.
         :rtype: :class:`terane.query.results.Results`
         """
-        indices = tuple(self._searchables.keys())
-        results = Results(None, None, False)
-        results.extend([{'index':{'value':v}} for v in indices])
-        return results
+        return list(self._searchables.keys()), {}
 
 
 queries = QueryManager()
