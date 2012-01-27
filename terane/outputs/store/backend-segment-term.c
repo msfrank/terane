@@ -23,18 +23,30 @@
  * _Segment_make_term_key:
  */
 static DBT *
-_Segment_make_term_key (PyObject *term, PyObject *id)
+_Segment_make_term_key (PyObject *fieldname, PyObject *term, PyObject *id)
 {
     PyObject *encoded = NULL;
-    char *term_str, *doc_id;
-    Py_ssize_t term_len, id_len;
+    char *field_str, *term_str, *doc_id;
+    Py_ssize_t field_len, term_len, id_len;
     DBT *key = NULL;
 
+    assert (fieldname != NULL);
+    assert (term != NULL);
+    assert (id != NULL);
+
+    if (!PyString_Check (fieldname))
+        return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'id' is not str type");
     if (!PyUnicode_Check (term))
         return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'term' is not unicode type");
-    if (id && !PyString_Check (id))
+    if (!PyString_Check (id))
         return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'id' is not str type");
 
+    /* get field name string data and length */
+    if (PyString_AsStringAndSize (fieldname, &field_str, &field_len) < 0)
+        return NULL;        /* raises TypeError */
+    /* get document ID string and length */
+    if (PyString_AsStringAndSize (id, &doc_id, &id_len) < 0)
+        return NULL;        /* raises TypeError */
     /* convert term from UTF-16 to UTF-8 */
     encoded = PyUnicode_AsUTF8String (term);
     if (encoded == NULL)
@@ -44,11 +56,6 @@ _Segment_make_term_key (PyObject *term, PyObject *id)
         Py_DECREF (encoded);
         return NULL;        /* raises TypeError */
     }
-    /* get document ID string and length */
-    if (PyString_AsStringAndSize (id, &doc_id, &id_len) < 0) {
-        Py_DECREF (encoded);
-        return NULL;        /* raises TypeError */
-    }
     /* allocate a DBT to store the key */
     key = PyMem_Malloc (sizeof (DBT));
     if (key == NULL) {
@@ -58,42 +65,52 @@ _Segment_make_term_key (PyObject *term, PyObject *id)
     }
     memset (key, 0, sizeof (DBT));
 
-    /* create key in the form of '<' + term + '>' + id + '\0' */
-    key->data = PyMem_Malloc (term_len + id_len + 3);
+    /* create key in the form of field + '=' + term + ':' + id + '\0' */
+    key->size = field_len + term_len + id_len + 3;
+    key->ulen = key->size;
+    key->flags = DB_DBT_USERMEM;
+    key->data = PyMem_Malloc (key->size);
     if (key->data == NULL) {
         PyErr_NoMemory ();
         PyMem_Free (key);
         Py_DECREF (encoded);
         return NULL;    /* raises MemoryError */
     }
-    key->size = term_len + id_len + 3;
-    ((char *)key->data)[0] = '<';
-    memcpy (key->data + 1, term_str, term_len);
-    ((char *)key->data)[term_len + 1] = '>';
-    memcpy (key->data + term_len + 2, doc_id, id_len);
-    ((char *)key->data)[term_len + id_len + 2] = '\0';
+    memcpy (key->data, field_str, field_len);
+    ((char *)key->data)[field_len] = '=';
+    memcpy (key->data + field_len + 1, term_str, term_len);
+    ((char *)key->data)[field_len + term_len + 1] = ':';
+    memcpy (key->data + field_len + term_len + 2, doc_id, id_len);
+    ((char *)key->data)[field_len + term_len + id_len + 2] = '\0';
 
+    /* we don't need the UTF-8 string anymore */
     Py_DECREF (encoded);
+
     return key;
 }
 
 /*
- * _Segment_make_meta_key:
+ * _Segment_make_term_meta_key:
  */
 static DBT *
-_Segment_make_meta_key (PyObject *term)
+_Segment_make_term_meta_key (PyObject *fieldname, PyObject *term)
 {
     PyObject *encoded = NULL;
-    char *term_str;
-    Py_ssize_t term_len;
+    char *field_str, *term_str;
+    Py_ssize_t field_len, term_len;
     DBT *key = NULL;
 
+    assert (fieldname != NULL);
     assert (term != NULL);
-    if (!PyUnicode_Check (term)) {
-        PyErr_SetString (PyExc_TypeError, "Argument 'term' is not Unicode type");
-        return NULL;
-    }
 
+    if (!PyString_Check (fieldname))
+        return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'fieldname' is not Unicode type");
+    if (!PyUnicode_Check (term))
+        return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'term' is not Unicode type");
+
+    /* get field name string data and length */
+    if (PyString_AsStringAndSize (fieldname, &field_str, &field_len) < 0)
+        return NULL;        /* raises TypeError */
     /* convert term from UTF-16 to UTF-8 */
     encoded = PyUnicode_AsUTF8String (term);
     if (encoded == NULL)
@@ -112,40 +129,51 @@ _Segment_make_meta_key (PyObject *term)
     }
     memset (key, 0, sizeof (DBT));
 
-    /* create key in the form of '!' + term + '\0' */
-    key->data = PyMem_Malloc (term_len + 2);
+    /* create key in the form of '#' + fieldname + '=' + term + '\0' */
+    key->size = field_len + term_len + 3;
+    key->ulen = key->size;
+    key->flags = DB_DBT_USERMEM;
+    key->data = PyMem_Malloc (key->size);
     if (key->data == NULL) {
         PyErr_NoMemory ();
         PyMem_Free (key);
         Py_DECREF (encoded);
         return NULL;    /* raises MemoryError */
     }
-    key->size = term_len + 2;
-    ((char *)key->data)[0] = '!';
-    memcpy (key->data + 1, term_str, term_len);
-    ((char *)key->data)[term_len + 1] = '\0';
+    ((char *)key->data)[0] = '#';
+    memcpy (key->data + 1, field_str, field_len);
+    ((char *)key->data)[field_len + 1] = '=';
+    memcpy (key->data + field_len + 2, term_str, term_len);
+    ((char *)key->data)[field_len + term_len + 2] = '\0';
 
+    /* we don't need the UTF-8 string anymore */
     Py_DECREF (encoded);
+
     return key;
 }
 
 /*
- * _Segment_make_iter_key:
+ * _Segment_make_term_iter_key:
  */
 static DBT *
-_Segment_make_iter_key (PyObject *term)
+_Segment_make_term_iter_key (PyObject *fieldname, PyObject *term)
 {
     PyObject *encoded = NULL;
-    char *term_str;
-    Py_ssize_t term_len;
+    char *field_str, *term_str;
+    Py_ssize_t field_len, term_len;
     DBT *key = NULL;
 
+    assert (fieldname != NULL);
     assert (term != NULL);
-    if (!PyUnicode_Check (term)) {
-        PyErr_SetString (PyExc_TypeError, "Argument 'term' is not Unicode type");
-        return NULL;
-    }
 
+    if (!PyUnicode_Check (fieldname))
+        return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'fieldname' is not Unicode type");
+    if (!PyUnicode_Check (term))
+        return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'term' is not Unicode type");
+
+    /* get field name string data and length */
+    if (PyString_AsStringAndSize (fieldname, &field_str, &field_len) < 0)
+        return NULL;        /* raises TypeError */
     /* convert term from UTF-16 to UTF-8 */
     encoded = PyUnicode_AsUTF8String (term);
     if (encoded == NULL)
@@ -164,8 +192,11 @@ _Segment_make_iter_key (PyObject *term)
     }
     memset (key, 0, sizeof (DBT));
 
-    /* create key in the form of '<' + term + '>' + '\0' */
-    key->data = PyMem_Malloc (term_len + 3);
+    /* create key in the form of fieldname + '=' + term + ':' + '\0' */
+    key->size = field_len + term_len + 2;
+    key->ulen = key->size;
+    key->flags = DB_DBT_USERMEM;
+    key->data = PyMem_Malloc (key->size + 1);
     if (key->data == NULL) {
         PyErr_NoMemory ();
         PyMem_Free (key);
@@ -173,25 +204,27 @@ _Segment_make_iter_key (PyObject *term)
         return NULL;    /* raises MemoryError */
     }
     /* 
-     * the actual key is '<' + term + '>' without the \0 terminator.
-     * however its easier to debug with a terminated string, so we add
-     * it although it is not reflected in the DBT size field.
+     * the actual key is fieldname + '=' + term + ':' without the \0 terminator.
+     * however its easier to debug with a terminated string, so we add it although
+     * it is not reflected in the DBT size field.
      */
-    key->size = term_len + 2;
-    ((char *)key->data)[0] = '<';
-    memcpy (key->data + 1, term_str, term_len);
-    ((char *)key->data)[term_len + 1] = '>';
-    ((char *)key->data)[term_len + 2] = '\0';
+    memcpy (key->data, field_str, field_len);
+    ((char *)key->data)[field_len] = '=';
+    memcpy (key->data + field_len + 1, term_str, term_len);
+    ((char *)key->data)[field_len + term_len + 1] = ':';
+    ((char *)key->data)[field_len + term_len + 2] = '\0';
 
+    /* we don't need the UTF-8 string anymore */
     Py_DECREF (encoded);
+
     return key;
 }
 
 /*
- * _Segment_free_key:
+ * _Segment_free_term_key:
  */
 static void
-_Segment_free_key (DBT *key)
+_Segment_free_term_key (DBT *key)
 {
     assert (key != NULL);
     if (key->data != NULL)
@@ -221,7 +254,6 @@ terane_Segment_get_term (terane_Segment *self, PyObject *args)
     PyObject *term = NULL;
     PyObject *id = NULL;
     DBT *key, data;
-    DB *field;
     PyObject *value = NULL;
     int dbret;
 
@@ -234,20 +266,16 @@ terane_Segment_get_term (terane_Segment *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    field = terane_Segment_get_field_DB (self, txn, fieldname);
-    if (field == NULL)
-        return NULL;
-
     /* build the key from the term and id values */
-    key = _Segment_make_term_key (term, id);
+    key = _Segment_make_term_key (fieldname, term, id);
     if (key == NULL)
         return NULL;
 
     /* get the record */
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
-    dbret = field->get (field, txn? txn->txn : NULL, key, &data, 0);
-    _Segment_free_key (key);
+    dbret = self->postings->get (self->postings, txn? txn->txn : NULL, key, &data, 0);
+    _Segment_free_term_key (key);
     switch (dbret) {
         case 0:
             /* create a python string from the data */
@@ -292,8 +320,7 @@ terane_Segment_set_term (terane_Segment *self, PyObject *args)
     PyObject *term = NULL;
     PyObject *id = NULL;
     char *value = NULL;
-    DBT *key, data;
-    DB *field;
+    DBT *key = NULL, data;
     int value_len = 0, dbret;
 
     /* parse parameters */
@@ -302,12 +329,8 @@ terane_Segment_set_term (terane_Segment *self, PyObject *args)
         &value, &value_len))
         return NULL;
 
-    field = terane_Segment_get_field_DB (self, txn, fieldname);
-    if (field == NULL)
-        return NULL;
-
     /* build the key from the term and id values */
-    key = _Segment_make_term_key (term, id);
+    key = _Segment_make_term_key (fieldname, term, id);
     if (key == NULL)
         return NULL;
 
@@ -315,8 +338,8 @@ terane_Segment_set_term (terane_Segment *self, PyObject *args)
     memset (&data, 0, sizeof (DBT));
     data.data = value;
     data.size = value_len + 1;
-    dbret = field->put (field, txn->txn, key, &data, 0);
-    _Segment_free_key (key);
+    dbret = self->postings->put (self->postings, txn->txn, key, &data, 0);
+    _Segment_free_term_key (key);
     switch (dbret) {
         case 0:
             break;
@@ -349,7 +372,6 @@ terane_Segment_contains_term (terane_Segment *self, PyObject *args)
     PyObject *fieldname = NULL;
     PyObject *term = NULL;
     DBT *key;
-    DB *field;
     int dbret;
 
     /* parse parameters */
@@ -361,18 +383,14 @@ terane_Segment_contains_term (terane_Segment *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    field = terane_Segment_get_field_DB (self, txn, fieldname);
-    if (field == NULL)
-        return NULL;
-
     /* build the key from the term value */
-    key = _Segment_make_meta_key (term);
+    key = _Segment_make_term_meta_key (fieldname, term);
     if (key == NULL)
         return NULL;
 
     /* check if key exists in the db */
-    dbret = field->exists (field, txn? txn->txn : NULL, key, 0);
-    _Segment_free_key (key);
+    dbret = self->postings->exists (self->postings, txn? txn->txn : NULL, key, 0);
+    _Segment_free_term_key (key);
     switch (dbret) {
         case 0:
         case DB_NOTFOUND:
@@ -413,7 +431,6 @@ terane_Segment_estimate_term_postings (terane_Segment *self, PyObject *args)
     PyObject *fieldname = NULL;
     PyObject *term = NULL, *start = NULL, *end = NULL;
     DBT *key;
-    DB *field;
     DB_KEY_RANGE startrange, endrange;
     double estimate = 0.0;
     int dbret, result;
@@ -427,30 +444,26 @@ terane_Segment_estimate_term_postings (terane_Segment *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    field = terane_Segment_get_field_DB (self, txn, fieldname);
-    if (field == NULL)
-        return NULL;
-
     /* build the start key from the term value */
-    key = _Segment_make_term_key (term, start);
+    key = _Segment_make_term_key (fieldname, term, start);
     if (key == NULL)
         return NULL;
 
     /* estimate start key range */
-    dbret = field->key_range (field, txn? txn->txn : NULL, key, &startrange, 0);
-    _Segment_free_key (key);
+    dbret = self->postings->key_range (self->postings, txn? txn->txn : NULL, key, &startrange, 0);
+    _Segment_free_term_key (key);
     if (dbret != 0) 
         return PyErr_Format (terane_Exc_Error, "Failed to estimate start key range: %s",
             db_strerror (dbret));
 
     /* build the end key from the term value */
-    key = _Segment_make_term_key (term, end);
+    key = _Segment_make_term_key (fieldname, term, end);
     if (key == NULL)
         return NULL;
 
     /* estimate start key range */
-    dbret = field->key_range (field, txn? txn->txn : NULL, key, &endrange, 0);
-    _Segment_free_key (key);
+    dbret = self->postings->key_range (self->postings, txn? txn->txn : NULL, key, &endrange, 0);
+    _Segment_free_term_key (key);
     if (dbret != 0) 
         return PyErr_Format (terane_Exc_Error, "Failed to estimate end key range: %s",
             db_strerror (dbret));
@@ -477,10 +490,10 @@ _Segment_next_term (terane_Iter *iter, DBT *key, DBT *data)
     /* find the term end marker */
     for (i = key->size - 1; i >= 0; i--) {
         doc_id = key->data + i;
-        if (*doc_id == '>')
+        if (*doc_id == ':')
             break;
     }
-    if (*doc_id != '>')
+    if (*doc_id != ':')
         return NULL;
     doc_id++;
     /* get the document id */
@@ -547,7 +560,6 @@ terane_Segment_iter_terms (terane_Segment *self, PyObject *args)
     terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     PyObject *term = NULL;
-    DB *field = NULL;
     DBT *key = NULL;
     DBC *cursor = NULL;
     int dbret;
@@ -563,26 +575,22 @@ terane_Segment_iter_terms (terane_Segment *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    field = terane_Segment_get_field_DB (self, txn, fieldname);
-    if (field == NULL)
-        return NULL;
-
     /* build the key from the term value */
-    key = _Segment_make_iter_key (term);
+    key = _Segment_make_term_iter_key (fieldname, term);
     if (key == NULL)
         return NULL;
 
     /* create a new cursor */
-    dbret = field->cursor (field, txn? txn->txn : NULL, &cursor, 0);
+    dbret = self->postings->cursor (self->postings, txn? txn->txn : NULL, &cursor, 0);
     /* if cursor allocation failed, return Error */
     if (dbret != 0) {
-        _Segment_free_key (key);
+        _Segment_free_term_key (key);
         return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
     }
 
     iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size);
-    _Segment_free_key (key);
+    _Segment_free_term_key (key);
     if (iter == NULL)
         cursor->close (cursor);
     return iter;
@@ -602,7 +610,7 @@ _Segment_skip_term_within (terane_Iter *iter, PyObject *args)
         return NULL;
     /* find the term end marker */
     for (i = iter->start_key.size - 1; i >= 0; i--) {
-        if (((char *)iter->start_key.data)[i] == '>')
+        if (((char *)iter->start_key.data)[i] == ':')
             break;
     }
     if (i < 0)
@@ -652,7 +660,6 @@ terane_Segment_iter_terms_within (terane_Segment *self, PyObject *args)
     terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     PyObject *term = NULL, *start = NULL, *end = NULL;
-    DB *field = NULL;
     DBT *start_key = NULL, *end_key = NULL;
     DBC *cursor = NULL;
     int dbret;
@@ -668,20 +675,16 @@ terane_Segment_iter_terms_within (terane_Segment *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    field = terane_Segment_get_field_DB (self, txn, fieldname);
-    if (field == NULL)
-        return NULL;
-
     /* build the start and end keys */
-    start_key = _Segment_make_term_key (term, start);
+    start_key = _Segment_make_term_key (fieldname, term, start);
     if (start_key == NULL)
         goto error;
-    end_key = _Segment_make_term_key (term, end);
+    end_key = _Segment_make_term_key (fieldname, term, end);
     if (end_key == NULL)
         goto error;
 
     /* create a new cursor */
-    dbret = field->cursor (field, txn? txn->txn : NULL, &cursor, 0);
+    dbret = self->postings->cursor (self->postings, txn? txn->txn : NULL, &cursor, 0);
     /* if cursor allocation failed, return Error */
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
@@ -689,17 +692,17 @@ terane_Segment_iter_terms_within (terane_Segment *self, PyObject *args)
         goto error;
     }
     iter = terane_Iter_new_within ((PyObject *) self, cursor, &ops, start_key, end_key);
-    _Segment_free_key (start_key);
-    _Segment_free_key (end_key);
+    _Segment_free_term_key (start_key);
+    _Segment_free_term_key (end_key);
     if (iter == NULL)
         cursor->close (cursor);
     return iter;
 
 error:
     if (start_key)
-        _Segment_free_key (start_key);
+        _Segment_free_term_key (start_key);
     if (end_key)
-        _Segment_free_key (end_key);
+        _Segment_free_term_key (end_key);
     if (cursor)
         cursor->close (cursor);
     return NULL;
@@ -727,7 +730,6 @@ terane_Segment_get_term_meta (terane_Segment *self, PyObject *args)
     PyObject *fieldname = NULL;
     PyObject *term = NULL;
     DBT *key, data;
-    DB *field;
     PyObject *metadata = NULL;
     int dbret;
 
@@ -740,20 +742,16 @@ terane_Segment_get_term_meta (terane_Segment *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    field = terane_Segment_get_field_DB (self, txn, fieldname);
-    if (field == NULL)
-        return NULL;
-
-    /* build the key from the term value */
-    key = _Segment_make_meta_key (term);
+    /* build the key from the fieldname and term values */
+    key = _Segment_make_term_meta_key (fieldname, term);
     if (key == NULL)
         return NULL;
 
     /* get the record */
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
-    dbret = field->get (field, txn? txn->txn : NULL, key, &data, 0);
-    _Segment_free_key (key);
+    dbret = self->postings->get (self->postings, txn? txn->txn : NULL, key, &data, 0);
+    _Segment_free_term_key (key);
     switch (dbret) {
         case 0:
             /* create a python string from the data */
@@ -798,7 +796,6 @@ terane_Segment_set_term_meta (terane_Segment *self, PyObject *args)
     PyObject *term = NULL;
     const char *metadata = NULL;
     DBT *key, data;
-    DB *field;
     int dbret;
 
     /* parse parameters */
@@ -806,12 +803,8 @@ terane_Segment_set_term_meta (terane_Segment *self, PyObject *args)
         &PyString_Type, &fieldname, &PyUnicode_Type, &term, &metadata))
         return NULL;
 
-    field = terane_Segment_get_field_DB (self, txn, fieldname);
-    if (field == NULL)
-        return NULL;
-
-    /* build the key from the term value */
-    key = _Segment_make_meta_key (term);
+    /* build the key from the fieldname and term value */
+    key = _Segment_make_term_meta_key (fieldname, term);
     if (key == NULL)
         return NULL;
 
@@ -819,8 +812,8 @@ terane_Segment_set_term_meta (terane_Segment *self, PyObject *args)
     memset (&data, 0, sizeof (DBT));
     data.data = (char *) metadata;
     data.size = strlen (metadata) + 1;
-    dbret = field->put (field, txn->txn, key, &data, 0);
-    _Segment_free_key (key);
+    dbret = self->postings->put (self->postings, txn->txn, key, &data, 0);
+    _Segment_free_term_key (key);
     switch (dbret) {
         case 0:
             break;
@@ -844,7 +837,7 @@ _Segment_next_term_meta (terane_Iter *iter, DBT *key, DBT *data)
     if (key->size == 0)
         return NULL;
     /* if key doesn't start with a '!', then stop iterating */
-    if (((char *) key->data)[0] != '!')
+    if (((char *) key->data)[0] != '#')
         return NULL;
     /* decode UTF-8 term data, excluding the leading '!' and the trailing '\0' */
     term = PyUnicode_DecodeUTF8 ((char *) &((char *)key->data)[1],
@@ -880,8 +873,8 @@ terane_Segment_iter_terms_meta (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
+    DBT *key = NULL;
     DBC *cursor = NULL;
-    DB *field;
     int dbret;
     PyObject *iter = NULL;
     terane_Iter_ops ops = { .next = _Segment_next_term_meta };
@@ -894,17 +887,21 @@ terane_Segment_iter_terms_meta (terane_Segment *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    field = terane_Segment_get_field_DB (self, txn, fieldname);
-    if (field == NULL)
+    /* build the key using NULL term value */
+    key = _Segment_make_term_meta_key (fieldname, NULL);
+    if (key == NULL)
         return NULL;
 
     /* create a new cursor */
-    dbret = field->cursor (field, txn? txn->txn : NULL, &cursor, 0);
+    dbret = self->postings->cursor (self->postings, txn? txn->txn : NULL, &cursor, 0);
     /* if cursor allocation failed, return Error */
-    if (dbret != 0)
+    if (dbret != 0) {
+        _Segment_free_term_key (key);
         return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
-    iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, (void *)"!", 1);
+    }
+    iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size - 1);
+    _Segment_free_term_key (key);
     if (iter == NULL)
         cursor->close (cursor);
     return iter;
@@ -931,7 +928,6 @@ terane_Segment_iter_terms_meta_range (terane_Segment *self, PyObject *args)
     terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     PyObject *prefix = NULL;
-    DB *field = NULL;
     DBT *key = NULL;
     DBC *cursor = NULL;
     int dbret;
@@ -947,26 +943,22 @@ terane_Segment_iter_terms_meta_range (terane_Segment *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    field = terane_Segment_get_field_DB (self, txn, fieldname);
-    if (field == NULL)
-        return NULL;
-
     /* build the key from the term value */
-    key = _Segment_make_meta_key (prefix);
+    key = _Segment_make_term_meta_key (fieldname, prefix);
     if (key == NULL)
         return NULL;
 
     /* create a new cursor */
-    dbret = field->cursor (field, txn? txn->txn : NULL, &cursor, 0);
+    dbret = self->postings->cursor (self->postings, txn? txn->txn : NULL, &cursor, 0);
     /* if cursor allocation failed, return Error */
     if (dbret != 0) {
-        _Segment_free_key (key);
+        _Segment_free_term_key (key);
         return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
     }
     iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size - 1);
     if (iter == NULL)
         cursor->close (cursor);
-    _Segment_free_key (key);
+    _Segment_free_term_key (key);
     return iter;
 }

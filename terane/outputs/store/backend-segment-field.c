@@ -19,117 +19,59 @@
 
 #include "backend.h"
 
-/* compare two terane_Field instances by name */
-static int
-_Segment_cmp_fields (const void *v1, const void *v2)
+/*
+ * _Segment_make_field_meta_key:
+ */
+static DBT *
+_Segment_make_field_meta_key (PyObject *fieldname)
 {
-    const terane_Field *f1 = *(const terane_Field **) v1;
-    const terane_Field *f2 = *(const terane_Field **) v2;
-    return PyObject_Compare (f1->name, f2->name);
+    char *field_str;
+    Py_ssize_t field_len;
+    DBT *key = NULL;
+
+    assert (term != NULL);
+
+    /* convert term from UTF-16 to UTF-8 */
+    if (PyString_AsStringAndSize (fieldname, &field_str, &field_len) < 0)
+        return NULL;        /* raises TypeError */
+
+    /* allocate a DBT to store the key */
+    key = PyMem_Malloc (sizeof (DBT));
+    if (key == NULL) {
+        PyErr_NoMemory ();
+        return NULL;    /* raises MemoryError */
+    }
+    memset (key, 0, sizeof (DBT));
+
+    /* create key in the form of '!' + fieldname + '\0' */
+    key->data = PyMem_Malloc (field_len + 2);
+    if (key->data == NULL) {
+        PyErr_NoMemory ();
+        PyMem_Free (key);
+        return NULL;    /* raises MemoryError */
+    }
+    key->size = field_len + 2;
+    ((char *)key->data)[0] = '!';
+    memcpy (key->data + 1, field_str, field_len);
+    ((char *)key->data)[field_len + 1] = '\0';
+
+    /* we need to set USERMEM because the postings db is opened with DB_THREAD */
+    key->flags = DB_DBT_USERMEM;
+    key->ulen = key->size;
+
+    return key;
 }
 
-/* 
- * return the field specified by name, or NULL if it doesn't exist in the schema
+/*
+ * _Segment_free_field_key:
  */
-DB *
-terane_Segment_get_field_DB (terane_Segment *self, terane_Txn *txn, PyObject *fieldname)
+static void
+_Segment_free_field_key (DBT *key)
 {
-    terane_Field compar = {fieldname, NULL}, *compar_ptr = &compar;
-    terane_Field **result = NULL;
-    terane_Field *new = NULL, **fields = NULL;
-    DB_TXN *field_txn = NULL;
-    int dbret;
-
-    /* search the field handle cache */
-    result = (terane_Field **) bsearch (&compar_ptr, self->fields, self->nfields,
-        sizeof(terane_Field *), _Segment_cmp_fields);
-    /* we have the field handle cached, so return it */
-    /* TODO: check whether the handle is stale (i.e. someone deleted the DB) */
-    if (result && *result)
-        return (*result)->field;
-
-    /* if txn is specified, create a child transaction, otherwise create a new txn */
-    dbret = self->index->env->env->txn_begin (self->index->env->env,
-        txn? txn->txn : NULL, &field_txn, 0);
-    if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to create DB_TXN handle: %s",
-            db_strerror (dbret));
-        goto error;
-    }
-
-    /* allocate a new terane_Field record */
-    new = PyMem_Malloc (sizeof (terane_Field));
-    if (new == NULL) {
-        PyErr_NoMemory ();
-        goto error;
-    }
-    memset (new, 0, sizeof (terane_Field));
-
-    /* increment the reference count for fieldname */
-    Py_INCREF (fieldname);
-    new->name = fieldname;
-
-    /* allocate a new fields array, and copy the old fields content over.
-     * we do this instead of realloc()ing the current fields array because
-     * its easier to recover in a transactionally-safe way if this operation
-     * fails.
-     */
-    fields = PyMem_Malloc (sizeof (terane_Field *) * (self->nfields + 1));
-    if (fields == NULL) {
-        PyErr_NoMemory ();
-        goto error;
-    }
-    memcpy (fields, self->fields, sizeof (terane_Field *) * self->nfields);
-
-    /* create the DB handle for the field */
-    dbret = db_create (&new->field, self->index->env->env, 0);
-    if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to create handle for %s: %s",
-            PyString_AsString (fieldname), db_strerror (dbret));
-        goto error;
-    }
-
-    /* open the field segment.  if the field doesn't exist its an error */
-    dbret = new->field->open (new->field, field_txn, self->name,
-        PyString_AsString (fieldname), DB_BTREE, DB_CREATE | DB_THREAD, 0);
-    if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to open segment for %s: %s",
-            PyString_AsString (fieldname), db_strerror (dbret));
-        goto error;
-    }
-
-    /* commit database changes */
-    dbret = field_txn->commit (field_txn, 0);
-    if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to commit transaction: %s",
-            db_strerror (dbret));
-        goto error;
-    }
-
-    /* swap the old fields array with the new array */
-    PyMem_Free (self->fields);
-    self->fields = fields;
-
-    /* sort the new fields array in alphabetical order */
-    self->fields[self->nfields] = new;
-    self->nfields++;
-    qsort (self->fields, self->nfields, sizeof(terane_Field *), _Segment_cmp_fields);
-
-    return new->field;
-
-error:
-    if (new != NULL) {
-        if (new->field != NULL)
-            new->field->close (new->field, 0);
-        if (new->name != NULL)
-            Py_DECREF (new->name);
-        PyMem_Free (new);
-    }
-    if (fields != NULL)
-        PyMem_Free (fields);
-    if (field_txn != NULL)
-        field_txn->abort (field_txn);
-    return NULL;
+    assert (key != NULL);
+    if (key->data != NULL)
+        PyMem_Free (key->data);
+    PyMem_Free (key);
 }
 
 /*
@@ -150,8 +92,7 @@ terane_Segment_get_field_meta (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
-    DBT key, data;
-    DB *field;
+    DBT *key, data;
     PyObject *metadata = NULL;
     int dbret;
 
@@ -161,17 +102,14 @@ terane_Segment_get_field_meta (terane_Segment *self, PyObject *args)
     if ((PyObject *) txn == Py_None)
         txn = NULL;
 
-    field = terane_Segment_get_field_DB (self, txn, fieldname);
-    if (field == NULL)
-        return NULL;
-
     /* get the record */
-    memset (&key, 0, sizeof (DBT));
-    key.size = 1;
-    key.data = "\0";
+    key = _Segment_make_field_meta_key (fieldname);
+    if (key == NULL)
+        return NULL;
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
-    dbret = field->get (field, txn? txn->txn : NULL, &key, &data, 0);
+    dbret = self->postings->get (self->postings, txn? txn->txn : NULL, key, &data, 0);
+    _Segment_free_field_key (key);
     switch (dbret) {
         case 0:
             /* create a python string from the data */
@@ -215,8 +153,7 @@ terane_Segment_set_field_meta (terane_Segment *self, PyObject *args)
     terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     const char *metadata = NULL;
-    DBT key, data;
-    DB *field;
+    DBT *key, data;
     int dbret;
 
     /* parse parameters */
@@ -224,18 +161,15 @@ terane_Segment_set_field_meta (terane_Segment *self, PyObject *args)
         &PyString_Type, &fieldname, &metadata))
         return NULL;
 
-    field = terane_Segment_get_field_DB (self, txn, fieldname);
-    if (field == NULL)
-        return NULL;
-
     /* set the record */
-    memset (&key, 0, sizeof (DBT));
+    key = _Segment_make_field_meta_key (fieldname);
+    if (key == NULL)
+        return NULL;
     memset (&data, 0, sizeof (DBT));
-    key.size = 1;
-    key.data = "\0";
     data.data = (char *) metadata;
     data.size = strlen (metadata) + 1;
-    dbret = field->put (field, txn->txn, &key, &data, 0);
+    dbret = self->postings->put (self->postings, txn->txn, key, &data, 0);
+    _Segment_free_field_key (key);
     switch (dbret) {
         case 0:
             break;

@@ -72,30 +72,22 @@ typedef struct _terane_Txn {
     struct _terane_Txn *next;       /* pointer to the next child of the parent Txn, or NULL */
 } terane_Txn;
 
-typedef struct _terane_Field {
-    PyObject *name;                 /* PyString object containing the field name */
-    DB *field;                      /* DB handle to the field */
-} terane_Field;
-
 typedef struct _terane_Segment {
     PyObject_HEAD
-    terane_Index *index;            /* reference to the table of contents */
-    char *name;                     /* name of the segment file */
-    DB *metadata;                   /* DB handle to the segment metadata */
-    DB *documents;                  /* DB handle to the segment documents */
-    terane_Field **fields;          /* pointer to an array of terane_Field structs */
-    unsigned long nfields;          /* number of elements in the fields array */
-    int deleted;                    /* non-zero if the segment is scheduled to be deleted */
+    terane_Index *index;    /* reference to the table of contents */
+    char *name;             /* name of the segment file */
+    DB *metadata;           /* DB handle to the segment metadata */
+    DB *documents;          /* DB handle to the segment documents */
+    DB *postings;           /* DB handle to the segment postings */
+    DB *rpostings;          /* Secondary DB handle to segment postings, with reverse compare */
+    int deleted;            /* non-zero if the segment is scheduled to be deleted */
 } terane_Segment;
-
-typedef unsigned PY_LONG_LONG terane_DID_num;
-typedef char terane_DID_string[17];
 
 
 /*
  * class method definitions
  */
-PyObject *terane_Env_close (terane_Env *self);
+PyObject * terane_Env_close (terane_Env *self);
 
 PyObject * terane_Index_get_meta (terane_Index *self, PyObject *args);
 PyObject * terane_Index_set_meta (terane_Index *self, PyObject *args);
@@ -117,7 +109,6 @@ PyObject * terane_Segment_get_meta (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_set_meta (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_get_field_meta (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_set_field_meta (terane_Segment *self, PyObject *args);
-DB *       terane_Segment_get_field_DB (terane_Segment *self, terane_Txn *txn, PyObject *fieldname);
 PyObject * terane_Segment_delete (terane_Segment *self);
 PyObject * terane_Segment_close (terane_Segment *self);
 
