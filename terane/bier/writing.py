@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import datetime, dateutil.tz, time
+import datetime, dateutil.tz, calendar
 from terane.bier import IIndex, ISchema, IWriter
 from terane.bier.schema import fieldFactory
 from terane.loggers import getLogger
@@ -49,7 +49,7 @@ def writeEventToIndex(event, index):
     # convert to UTC, if necessary
     if not ts.tzinfo == dateutil.tz.tzutc():
         ts = ts.astimezone(dateutil.tz.tzutc())
-    ts = int(time.mktime(ts.timetuple()))
+    ts = int(calendar.timegm(ts.timetuple()))
 
     # create a list of valid field names from the passed in fields. a valid
     # field name is defined as any name that starts with an alphabetic character

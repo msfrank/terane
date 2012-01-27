@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import datetime, time, struct, base64
+import datetime, calendar, struct, base64
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier.schema')
@@ -44,7 +44,7 @@ class DatetimeField(BaseField):
         if not isinstance(value, datetime.datetime):
             raise Exception("value '%s' is not of type datetime.datetime" % value)
         # calculate the unix timestamp, with 1 second accuracy
-        ts = int(time.mktime(value.timetuple()))
+        ts = int(calendar.timegm(value.timetuple()))
         # pack the int as a 32 bit big-endian integer
         ts = struct.pack(">I", ts)
         # convert the packed int to base64   

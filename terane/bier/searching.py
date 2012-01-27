@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import time, datetime, copy, bisect
+import time, datetime, calendar, copy, bisect
 from terane.bier.docid import DocID
 from terane.loggers import getLogger
 
@@ -40,13 +40,13 @@ class Period(object):
         :type endexcl: bool
         """
         if isinstance(start, datetime.datetime):
-            self.start = DocID(int(time.mktime(start.timetuple())), 0, 0)
+            self.start = DocID(int(calendar.timegm(start.timetuple())), 0, 0)
         elif isinstance(start, DocID):
             self.start = start
         else:
             raise TypeError("start must be datetime.datetime or terane.bier.docid.DocID")
         if isinstance(end, datetime.datetime):
-            self.end = DocID(int(time.mktime(end.timetuple())), 0, 0)
+            self.end = DocID(int(calendar.timegm(end.timetuple())), 0, 0)
         elif isinstance(end, DocID):
             self.end = end
         else:
