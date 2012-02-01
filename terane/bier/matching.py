@@ -345,6 +345,13 @@ class OR(object):
         self._iters = [child.iterMatches(searcher, startid, endId) for child in self.children]
         # lastId is the last docId returned by the iterator
         self._lastId = None
+        # set our cmp function, which determines the next docId to return.  if we are searching in
+        # reverse order, then reverse the meaning if the regular comparison function.
+        if endId < startId:
+            self._cmp = lambda d1,d2: cmp(d2,d1)
+        # otherwise use the normal comparison function
+        else:
+            self._cmp = cmp
         return self
 
     def nextPosting(self):
@@ -372,7 +379,8 @@ class OR(object):
             if i == 0:
                 continue
             # if the docId is the current smallest docId, then remember it
-            if self._smallestPostings[curr][0] == None or self._smallestPostings[i][0] < self._smallestPostings[curr][0]:
+            if self._smallestPostings[curr][0] == None or \
+              self._cmp(self._smallestPostings[i][0], self._smallestPostings[curr][0]) < 0:
                 curr = i
         # update lastId with the docId
         posting = self._smallestPostings[curr]
@@ -398,7 +406,7 @@ class OR(object):
             if posting[0] == targetId:
                 break
             # otherwise check if the targetId exists in the child query
-            if posting[0] == None or posting[0] < targetId:
+            if posting[0] == None or self._cmp(posting[0], targetId) < 0:
                 posting = self._iters[i].skipPosting(targetId)
                 self._smallestPostings[i] = posting
                 if posting[0] == targetId:

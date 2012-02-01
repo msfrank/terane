@@ -589,7 +589,7 @@ terane_Segment_iter_terms (terane_Segment *self, PyObject *args)
             db_strerror (dbret));
     }
 
-    iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size);
+    iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size, 0);
     _Segment_free_term_key (key);
     if (iter == NULL)
         cursor->close (cursor);
@@ -662,7 +662,7 @@ terane_Segment_iter_terms_within (terane_Segment *self, PyObject *args)
     PyObject *term = NULL, *start = NULL, *end = NULL;
     DBT *start_key = NULL, *end_key = NULL;
     DBC *cursor = NULL;
-    int dbret;
+    int dbret, reverse = 0;
     PyObject *iter = NULL;
     terane_Iter_ops ops = { .next = _Segment_next_term, .skip = _Segment_skip_term_within };
 
@@ -675,6 +675,12 @@ terane_Segment_iter_terms_within (terane_Segment *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
+    /* determine whether ordering is reversed */
+    if (PyObject_Cmp (start, end, &reverse) < 0)
+        return PyErr_Format (terane_Exc_Error, "comparison of start and end failed");
+    if (reverse < 0)
+        reverse = 0;
+
     /* build the start and end keys */
     start_key = _Segment_make_term_key (fieldname, term, start);
     if (start_key == NULL)
@@ -685,17 +691,20 @@ terane_Segment_iter_terms_within (terane_Segment *self, PyObject *args)
 
     /* create a new cursor */
     dbret = self->postings->cursor (self->postings, txn? txn->txn : NULL, &cursor, 0);
-    /* if cursor allocation failed, return Error */
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
         goto error;
     }
-    iter = terane_Iter_new_within ((PyObject *) self, cursor, &ops, start_key, end_key);
+
+    /* allocate a new  Iter object */
+    iter = terane_Iter_new_within ((PyObject *) self, cursor, &ops, start_key, end_key, reverse);
+    if (iter == NULL)
+        goto error;
+
+    /* clean up and return the Iter */
     _Segment_free_term_key (start_key);
     _Segment_free_term_key (end_key);
-    if (iter == NULL)
-        cursor->close (cursor);
     return iter;
 
 error:
@@ -900,7 +909,7 @@ terane_Segment_iter_terms_meta (terane_Segment *self, PyObject *args)
         return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
     }
-    iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size - 1);
+    iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size - 1, 0);
     _Segment_free_term_key (key);
     if (iter == NULL)
         cursor->close (cursor);
@@ -956,7 +965,7 @@ terane_Segment_iter_terms_meta_range (terane_Segment *self, PyObject *args)
         return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
     }
-    iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size - 1);
+    iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size - 1, 0);
     if (iter == NULL)
         cursor->close (cursor);
     _Segment_free_term_key (key);

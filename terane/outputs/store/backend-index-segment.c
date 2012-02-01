@@ -136,7 +136,7 @@ terane_Index_iter_segments (terane_Index *self, PyObject *args)
             db_strerror (dbret));
         return NULL;
     }
-    iter = terane_Iter_new ((PyObject *) self, cursor, &ops);
+    iter = terane_Iter_new ((PyObject *) self, cursor, &ops, 0);
     if (iter == NULL)
         cursor->close (cursor);
     return iter;

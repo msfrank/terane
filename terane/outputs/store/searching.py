@@ -75,7 +75,11 @@ class IndexSearcher(object):
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
         iters = [s.iterPostings(fieldname, term, startId, endId) for s in self._segmentSearchers]
-        return MergedPostingList(iters)
+        if endId < startId:
+            compar = lambda d1,d2: cmp(d2,d1)
+        else:
+            compar = cmp
+        return MergedPostingList(iters, compar)
 
 class MergedPostingList(object):
     """
@@ -85,12 +89,13 @@ class MergedPostingList(object):
 
     implements(IPostingList)
 
-    def __init__(self, iters):
+    def __init__(self, iters, compar):
         """
         :param iters: A sequence of :class:`terane.outputs.store.searching.PostingList` objects.
         :type iters: list
         """
         self._iters = iters
+        self._cmp = compar
         self._smallestPostings = [(None,None,None) for i in range(len(iters))]
         self._lastId = None
 
@@ -118,7 +123,8 @@ class MergedPostingList(object):
             if i == 0:
                 continue
             # if the docId is the current smallest docId, then remember it
-            if self._smallestPostings[curr][0] == None or self._smallestPostings[i][0] < self._smallestPostings[curr][0]:
+            if self._smallestPostings[curr][0] == None or \
+              self._cmp(self._smallestPostings[i][0], self._smallestPostings[curr][0]) < 0:
                 curr = i
         # update lastId with the docId
         posting = self._smallestPostings[curr]
@@ -144,7 +150,7 @@ class MergedPostingList(object):
             if posting[0] == targetId:
                 break
             # otherwise check if the targetId exists in the child query
-            if posting[0] == None or posting[0] < targetId:
+            if posting[0] == None or self._cmp(posting[0], targetId) < 0:
                 posting = self._iters[i].skipPosting(targetId)
                 self._smallestPostings[i] = posting
                 if posting[0] == targetId:
@@ -207,7 +213,8 @@ class SegmentSearcher(object):
         """
         fieldname = str(fieldname)
         term = unicode(term)
-        return PostingList(self, self._segment.iter_terms_within(None, fieldname, term, str(startId), str(endId)))
+        postings = self._segment.iter_terms_within(None, fieldname, term, str(startId), str(endId))
+        return PostingList(self, postings)
 
     def getEvent(self, docId):
         """

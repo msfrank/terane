@@ -136,7 +136,7 @@ def searchIndices(indices, query, period, lastId=None, reverse=False, fields=Non
             postings.append(posting)
             i += 1
     # perform a sort on the docIds, which orders them naturally by date
-    postings.sort()
+    postings.sort(reverse=reverse)
     results = []
     foundfields = []
     # retrieve the full event for each docId

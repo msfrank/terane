@@ -49,35 +49,6 @@ _Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 }
 
 /*
- * _Segment_postings_forward_compar:
- *
- */
-static int
-_Segment_postings_forward_compar (DB *db, const DBT *dbt1, const DBT *dbt2)
-{
-    int ret;
-
-    ret = memcmp (dbt1->data, dbt2->data, dbt1->size < dbt2->size? dbt1->size : dbt2->size);
-    if (ret != 0)
-        return ret;
-    if (dbt1->size < dbt2->size)
-        return -1;
-    if (dbt1->size > dbt2->size)
-        return 1;
-    return 0;
-}
-
-/*
- * _Segment_postings_reverse_compar:
- *
- */
-static int
-_Segment_postings_reverse_compar (DB *db, const DBT *dbt1, const DBT *dbt2)
-{
-    return 0 - _Segment_postings_forward_compar (db, dbt1, dbt2);
-}
-
-/*
  * _Segment_init: initialize a Segment object.
  *
  * callspec: Segment.__init__(txn, index, sid)
@@ -173,32 +144,11 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
         goto error;
     }
 
-    self->postings->set_bt_compare (self->postings, _Segment_postings_forward_compar);
-
     /* open the postings DB */
     dbret = self->postings->open (self->postings, segment_txn, self->name,
         "_postings", DB_BTREE, DB_CREATE | DB_THREAD, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open _postings: %s",
-            db_strerror (dbret));
-        goto error;
-    }
-
-    /* create the DB handle for reversed postings */
-    dbret = db_create (&self->rpostings, self->index->env->env, 0);
-    if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to create handle for reversed _postings: %s",
-            db_strerror (dbret));
-        goto error;
-    }
-
-    self->rpostings->set_bt_compare (self->rpostings, _Segment_postings_reverse_compar);
-
-    /* open the postings DB */
-    dbret = self->rpostings->open (self->rpostings, segment_txn, self->name,
-        "_postings", DB_BTREE, DB_CREATE | DB_THREAD, 0);
-    if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to open reversed _postings: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -274,15 +224,6 @@ terane_Segment_close (terane_Segment *self)
                 db_strerror (dbret));
     }
     self->postings = NULL;
-
-    /* close the rpostings db */
-    if (self->rpostings != NULL) {
-        dbret = self->rpostings->close (self->rpostings, 0);
-        if (dbret != 0)
-            PyErr_Format (terane_Exc_Error, "Failed to close reverse _postings DB: %s",
-                db_strerror (dbret));
-    }
-    self->rpostings = NULL;
 
     /* if this segment is marked to be deleted */
     if (self->deleted) {
