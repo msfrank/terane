@@ -15,11 +15,14 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, sys, dateutil.parser, dateutil.tz, xmlrpclib
+import os, sys, datetime, dateutil.tz, xmlrpclib
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.web.xmlrpc import Proxy
 from twisted.internet import reactor
-from terane.loggers import startLogging, StdoutHandler, DEBUG
+from terane.bier.docid import DocID
+from terane.loggers import getLogger, startLogging, StdoutHandler, DEBUG
+
+logger = getLogger('terane.commands.tail.tailer')
 
 class Tailer(object):
 
@@ -49,34 +52,35 @@ class Tailer(object):
             startLogging(None)
 
     def run(self):
-        self._proxy = Proxy("http://%s/XMLRPC" % self.host)
+        self._proxy = Proxy("http://%s/XMLRPC" % self.host, allowNone=True)
         # make the XMLRPC call
-        self.tail(0)
+        self.tail(None)
         reactor.run()
 
-    def tail(self, last):
-        deferred = self._proxy.callRemote('tail', self.query, last)
+    def tail(self, lastId):
+        deferred = self._proxy.callRemote('tail', self.query, lastId, self.indices,
+            self.limit, self.fields)
         deferred.addCallback(self.printResult)
         deferred.addCallback(self.rescheduleTail)
         deferred.addErrback(self.printError)
 
     def printResult(self, results):
+        logger.debug("XMLRPC result: %s" % str(results))
         meta = results.pop(0)
         if len(results) > 0:
-            last = meta['last']
-            for doc in results:
-                ts = dateutil.parser.parse(doc['ts']).replace(tzinfo=dateutil.tz.tzutc())
+            for docId,event in results:
+                docId = DocID.fromString(docId)
+                ts = datetime.datetime.fromtimestamp(docId.ts, dateutil.tz.tzutc())
                 if self.tz:
                     ts = ts.astimezone(self.tz)
-                print "%s: %s" % (ts.strftime("%d %b %Y %H:%M:%S %Z"), doc['default'])
+                print "%s: %s" % (ts.strftime("%d %b %Y %H:%M:%S %Z"), event['default'])
                 if self.longfmt:
-                    del doc['default']
-                    del doc['ts']
-                    for field,value in sorted(doc.items(), key=lambda x: x[0]):
+                    del event['default']
+                    for field,value in sorted(event.items(), key=lambda x: x[0]):
                         if self.fields and field not in self.fields:
                             continue
                         print "\t%s=%s" % (field,value)
-        return meta['last']
+        return meta['last-id']
 
     def printError(self, failure):
         try:
@@ -87,5 +91,5 @@ class Tailer(object):
             print "Search failed: %s" % str(e)
         reactor.stop()
 
-    def rescheduleTail(self, last):
-        reactor.callLater(self.refresh, self.tail, last)
+    def rescheduleTail(self, lastId):
+        reactor.callLater(self.refresh, self.tail, lastId)

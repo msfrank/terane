@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, sys, re, urwid, dateutil.parser, dateutil.tz
+import os, sys, re, urwid, datetime, dateutil.tz
 from itertools import cycle, islice
 from csv import DictWriter
 from terane.commands.console import filters
@@ -25,8 +25,11 @@ from terane.loggers import getLogger
 logger = getLogger('terane.commands.console.results')
 
 class Result(urwid.WidgetWrap):
-    def __init__(self, fields):
-        self.fields = fields
+    def __init__(self, docId, event):
+        self.docId = docId
+        self.ts = datetime.datetime.fromtimestamp(docId.ts, dateutil.tz.tzutc())
+        self.default = event['default']
+        self.fields = dict([(k,v) for k,v in event.items() if k != 'default'])
         self.visible = True
         self.highlighted = False
         self._text = urwid.Text('', wrap='any')
@@ -65,23 +68,23 @@ class Result(urwid.WidgetWrap):
                     nexts = cycle(islice(nexts, pending))
             return markup
         # convert timestamp timezone if necessary
-        ts = dateutil.parser.parse(self.fields['ts']).replace(tzinfo=dateutil.tz.tzutc())
         if resultslist.tz:
-            ts = ts.astimezone(resultslist.tz)
+            ts = self.ts.astimezone(resultslist.tz)
+        else:
+            ts = self.ts
         # we always display these fields
         text = [(console.palette['date'], "%s: " % ts.strftime("%d %b %Y %H:%M:%S %Z"))]
-        text.extend(_highlight(self.fields['default'], console.palette['text'], console.palette['highlight']))
+        text.extend(_highlight(self.default, console.palette['text'], console.palette['highlight']))
         # if we are not collapsed, then show all fields
         if not resultslist.collapsed:
-            fields = self.fields.copy()
-            del fields['default']
-            del fields['ts']
-            fields = sorted([(k,v) for k,v in fields.items() if k not in resultslist.hidefields and v != ''])
+            fields = sorted([(k,v) for k,v in self.fields.items() if k not in resultslist.hidefields and v != ''])
             for (k,v) in fields:
                 text.append('\n')
                 text.append((console.palette['field-name'], "  %s=" % k))
                 text.extend(_highlight(v, console.palette['field-value'], console.palette['highlight']))
         self._text.set_text(text)
+        # return the results object itself, which makes this method useful for chaining
+        return self
 
 class ResultsListWalker(urwid.ListWalker):
     def __init__(self, maxsize=1000):
@@ -168,11 +171,10 @@ class ResultsListbox(urwid.WidgetWrap):
         self._listbox = urwid.ListBox(self._results)
         urwid.WidgetWrap.__init__(self, self._listbox)
  
-    def append(self, r):
-        r = Result(r)
-        r.reformat(self)
-        self._results.append(r)
-        self._fields += [f for f in r.fields.keys() if f not in self._fields]
+    def append(self, docId, event):
+        result = Result(docId, event).reformat(self)
+        self._results.append(result)
+        self._fields += [f for f in result.fields.keys() if f not in self._fields]
 
     def keypress(self, size, key):
         if key == 'up' or key == 'k':

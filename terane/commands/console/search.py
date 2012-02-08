@@ -19,6 +19,7 @@ import os, sys, urwid
 from dateutil.parser import parse
 from xmlrpclib import Fault
 from twisted.web.xmlrpc import Proxy
+from terane.bier.docid import DocID
 from terane.commands.console.switcher import Window
 from terane.commands.console.results import ResultsListbox
 from terane.commands.console.console import console
@@ -52,8 +53,8 @@ class Searcher(Window):
         Append each search result into the ResultsListbox.
         """
         self._meta = results.pop(0)
-        for r in results:
-            self._results.append(r)
+        for docId,event in results:
+            self._results.append(DocID.fromString(docId), event)
         console.redraw()
 
     @useMainThread
@@ -80,7 +81,7 @@ class Searcher(Window):
             self._deferred.cancel()
         self._results.clear()
         proxy = Proxy(self._url, allowNone=True)
-        self._deferred = proxy.callRemote('search', self._query)
+        self._deferred = proxy.callRemote('iter', self._query)
         self._deferred.addCallback(self._getResult)
         self._deferred.addErrback(self._getError)
         logger.debug("searching with query '%s'" % self._query)
