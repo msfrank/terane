@@ -20,7 +20,7 @@ from terane.plugins import plugins
 from terane.outputs import ISearchableOutput
 from terane.bier.docid import DocID
 from terane.bier.ql import parseIterQuery, parseTailQuery
-from terane.bier.searching import searchIndices
+from terane.bier.searching import searchIndices, Period
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier')
@@ -120,33 +120,27 @@ class QueryManager(Service):
                 indices = tuple(self._searchables[name] for name in indices)
             except KeyError, e:
                 raise QueryExecutionError("unknown index '%s'" % e)
-        # if lastId is specified, make sure its a valid value
-        if lastId != None and not isinstance(lastId, DocID):
-            raise QueryExecutionError("lastId is not valid")
+        # if lastId is 0, return the id of the latest document
+        if lastId == None:
+            return [], {'runtime': 0.0, 'last-id': str(DocID.fromDatetime())}
+        try:
+            lastId = DocID.fromString(lastId)
+        except:
+            raise QueryExecutionError("invalid lastId '%s'" % str(lastId))
         # check that limit is > 0
         if limit < 1:
             raise QueryExecutionError("limit must be greater than 0")
-        # determine the id of the last event written
-        newestId = None
-        for index in indices:
-            lastUpdate = index.getLastUpdate()
-            if newestId == None or lastUpdate[0] > newestId:
-                newestId = lastUpdate[0]
-        # if lastId is 0, or the newest id is smaller or equal to the
-        # supplied last id value, then return the id of the latest document
-        if lastId == 0 or lastId >= newestId:
-            results = [], {'runtime': 0.0, 'last-id': newestId}
         query = parseTailQuery(query)
         logger.trace("tail query: %s" % query)
-        period = Period(DocID.fromString(lastId), DocID.fromString(DocID.MAX_ID))
+        period = Period(lastId, DocID.fromString(DocID.MAX_ID), True, False)
         logger.trace("tail period: %s" % period)
         # query each index, and return the results
-        results,fields = searchIndices(indices, query, period, lastId, True, fields, limit)
+        results,fields = searchIndices(indices, query, period, None, True, fields, limit)
         try:
             lastId = results[-1][0]
         except IndexError:
-            lastId = newestId
-        return list(results), {'runtime': 0.0, 'last-id': lastId, 'fields': fields}
+            pass
+        return list(results), {'runtime': 0.0, 'last-id': str(lastId), 'fields': fields}
 
     def showIndex(self, name):
         """

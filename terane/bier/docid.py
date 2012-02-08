@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import time, datetime, struct
+import time, datetime, dateutil.tz, struct, calendar
 
 class DocID(object):
 
@@ -39,6 +39,20 @@ class DocID(object):
         node = int(node, 16)
         offset = long(offset, 16)
         return DocID(ts, node, offset)
+
+    @classmethod
+    def fromDatetime(cls, dt=None):
+        if dt == None:
+            dt = datetime.datetime.now()
+        elif not isinstance(dt, datetime.datetime):
+            raise TypeError("dt must be a datetime.datetime or None")
+        # if no timezone is specified, then assume local tz
+        if dt.tzinfo == None:
+            dt = dt.replace(tzinfo=dateutil.tz.tzlocal())
+        # convert to UTC, if necessary
+        if not dt.tzinfo == dateutil.tz.tzutc():
+            dt = dt.astimezone(dateutil.tz.tzutc())
+        return DocID(int(calendar.timegm(dt.timetuple())), 0, 0)
 
     def pack(self):
         return struct.pack('>IIQ', self.ts, self.node, self.offset)
