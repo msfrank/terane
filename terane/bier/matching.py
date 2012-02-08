@@ -342,7 +342,7 @@ class OR(object):
         # smallestPostings contains the smallest posting for each child query, or (None,None,None) 
         self._smallestPostings = [(None,None,None) for i in range(len(self.children))]
         # iters contains the iterator (object implementing IPostingList) for each child query
-        self._iters = [child.iterMatches(searcher, startid, endId) for child in self.children]
+        self._iters = [child.iterMatches(searcher, startId, endId) for child in self.children]
         # lastId is the last docId returned by the iterator
         self._lastId = None
         # set our cmp function, which determines the next docId to return.  if we are searching in
