@@ -113,7 +113,9 @@ _Env_init (terane_Env *self, PyObject *args, PyObject *kwds)
 {
     char *envdir = NULL, *datadir = NULL, *tmpdir = NULL;
     PyObject *options = NULL, *value = NULL;
-    int dbret;
+    uint32_t u32, cache_gbytes = 0, cache_bytes = 0;
+    unsigned PY_LONG_LONG u64;
+    int ncaches = 0, dbret;
 
     /* __init__ has already been called, don't repeat initialization */
     if (self->env != NULL)
@@ -147,36 +149,85 @@ _Env_init (terane_Env *self, PyObject *args, PyObject *kwds)
     }
     /* set the cache size */
     if ((value = PyDict_GetItemString (options, "cache size")) && PyLong_Check (value)) {
-        dbret = self->env->set_cachesize (self->env, 0, (u_int32_t) PyLong_AsLong (value), 0);
+        u64 = PyLong_AsUnsignedLongLong (value);
+        cache_gbytes = u64 / (1024 * 1024 * 1024);
+        cache_bytes = u64 % (1024 * 1024 * 1024);
+        dbret = self->env->set_cachesize (self->env, cache_gbytes, cache_bytes, 0);
         if (dbret != 0) {
             PyErr_Format (terane_Exc_Error, "Failed to set cache size: %s", db_strerror (dbret));
             goto error;
         }
     }
+    if (self->env->get_cachesize (self->env, &cache_gbytes, &cache_bytes, &ncaches) == 0) {
+        u64 = (cache_gbytes * 1024 * 1024 * 1024) + cache_bytes;
+        terane_log_msg (TERANE_LOG_DEBUG, "terane.outputs.store.backend",
+            "environment cache is configured with %i regions, total size is %llu bytes", ncaches, u64);
+    }
     /* set max txn lockers */
     if ((value = PyDict_GetItemString (options, "max lockers")) && PyLong_Check (value)) {
-        dbret = self->env->set_lk_max_lockers (self->env, (u_int32_t) PyLong_AsLong (value));
+        u32 = (u_int32_t) PyLong_AsLong (value);
+        dbret = self->env->set_lk_max_lockers (self->env, u32);
         if (dbret != 0) {
             PyErr_Format (terane_Exc_Error, "Failed to set max lockers: %s", db_strerror (dbret));
             goto error;
         }
     }
+    if (self->env->get_lk_max_lockers (self->env, &u32) == 0)
+        terane_log_msg (TERANE_LOG_DEBUG, "terane.outputs.store.backend",
+            "environment max lockers is %i", u32);
     /* set max txn locks */
     if ((value = PyDict_GetItemString (options, "max locks")) && PyLong_Check (value)) {
-        dbret = self->env->set_lk_max_locks (self->env, (u_int32_t) PyLong_AsLong (value));
+        u32 = (u_int32_t) PyLong_AsLong (value);
+        dbret = self->env->set_lk_max_locks (self->env, u32);
         if (dbret != 0) {
             PyErr_Format (terane_Exc_Error, "Failed to set max locks: %s", db_strerror (dbret));
             goto error;
         }
     }
+    if (self->env->get_lk_max_locks (self->env, &u32) == 0)
+        terane_log_msg (TERANE_LOG_DEBUG, "terane.outputs.store.backend",
+            "environment max locks is %i", u32);
     /* set max txn objects */
     if ((value = PyDict_GetItemString (options, "max objects")) && PyLong_Check (value)) {
-        dbret = self->env->set_lk_max_objects (self->env, (u_int32_t) PyLong_AsLong (value));
+        u32 = (u_int32_t) PyLong_AsLong (value);
+        dbret = self->env->set_lk_max_objects (self->env, u32);
         if (dbret != 0) {
             PyErr_Format (terane_Exc_Error, "Failed to set max objects: %s", db_strerror (dbret));
             goto error;
         }
     }
+    if (self->env->get_lk_max_objects (self->env, &u32) == 0)
+        terane_log_msg (TERANE_LOG_DEBUG, "terane.outputs.store.backend",
+            "environment max objects is %i", u32);
+    /* set max transactions */
+    if ((value = PyDict_GetItemString (options, "max transactions")) && PyLong_Check (value)) 
+        u32 = (u_int32_t) PyLong_AsLong (value);
+    else
+        u32 = 0;
+    /* if u32 <= 0, then try to automatically determine the appropriate max transactions */
+    if (u32 <= 0) {
+        long pagesize = sysconf (_SC_PAGESIZE);
+        if (pagesize < 0) {
+            terane_log_msg (TERANE_LOG_ERROR, "terane.outputs.store.backend",
+                "couldn't determine _SC_PAGESIZE, you need to specify 'max transactions'");
+            PyErr_Format (terane_Exc_Error, "Failed to determine _SC_PAGESIZE: %s", strerror (errno));
+            goto error;
+        }
+        /* the estimation formula is total cache size divided by page size */
+        u64 = ((cache_gbytes * 1024 * 1024 * 1024) + cache_bytes) / pagesize;
+        if (u64 > 0xFFFFFFFF)
+            u32 = 0xFFFFFFFF;
+        else
+            u32 = (uint32_t) u64;
+    }
+    dbret = self->env->set_tx_max (self->env, u32);
+    if (dbret != 0) {
+        PyErr_Format (terane_Exc_Error, "Failed to set max transactions: %s", db_strerror (dbret));
+        goto error;
+    }
+    if (self->env->get_tx_max (self->env, &u32) == 0)
+        terane_log_msg (TERANE_LOG_DEBUG, "terane.outputs.store.backend",
+            "environment max transactions is %i", u32);
     /* set db log management parameters */
     dbret = self->env->log_set_config (self->env, DB_LOG_AUTO_REMOVE, 1);
     if (dbret != 0) {
@@ -199,6 +250,9 @@ _Env_init (terane_Env *self, PyObject *args, PyObject *kwds)
         PyErr_Format (terane_Exc_Error, "Failed to start checkpoint thread: %s",
             strerror (dbret));
     }
+    else
+        terane_log_msg (TERANE_LOG_DEBUG, "terane.outputs.store.backend",
+            "started checkpoint thread (tid %i)", self->checkpoint_thread);
 
     return 0;
 

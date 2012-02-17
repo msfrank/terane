@@ -88,10 +88,11 @@ class StoreOutputPlugin(Plugin):
         """
         self._dbdir = os.path.abspath(section.getPath('data directory', '/var/lib/terane/db/'))
         self._options = {}
-        self._options['cache size'] = section.getInt('cache size', 64 * 1024 * 1024)
-        self._options['max lockers'] = section.getInt('max lockers', 65536)
-        self._options['max locks'] = section.getInt('max locks', 65536)
-        self._options['max objects'] = section.getInt('max objects', 65536)
+        self._options['cache size'] = long(section.getInt('cache size', 64 * 1024 * 1024))
+        self._options['max lockers'] = long(section.getInt('max lockers', 65536))
+        self._options['max locks'] = long(section.getInt('max locks', 65536))
+        self._options['max objects'] = long(section.getInt('max objects', 65536))
+        self._options['max transactions'] = long(section.getInt('max transactions', 0))
         self._ids.configure(section, self._dbdir)
 
     def startService(self):
