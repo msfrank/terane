@@ -62,15 +62,17 @@ def writeEventToIndex(event, index):
         if not schema.hasField(fieldname):
             schema.addField(fieldname, fieldFactory(event[fieldname]))
 
-    # update the index in the context of a transactional writer
-    with index.writer() as writer:
-        if not IWriter.providedBy(writer):
-            raise TypeError("index.writer() does not implement IWriter")
-       
+    # create a new transactional writer
+    writer = index.writer()
+    if not IWriter.providedBy(writer):
+        raise TypeError("index.writer() does not implement IWriter")
+    writer.begin()
+
+    # update the index in the context of a writer
+    try:   
         # create a document record
         docId = index.newDocumentId(ts)
         logger.trace("created new document with id %s" % docId)
-        
         document = {}
 
         # process the value of each field in the event
@@ -94,5 +96,10 @@ def writeEventToIndex(event, index):
         # store the document data
         logger.trace("doc=%s: event=%s" % (docId,document))
         writer.newDocument(docId, document)
-    # return the document id
+    # if an exception was raised, then abort the transaction
+    except:
+        writer.abort()
+        raise
+    # otherwise commit the transaction and return the document id
+    writer.commit()
     return docId

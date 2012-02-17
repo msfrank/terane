@@ -15,7 +15,8 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import time, datetime, calendar, copy, bisect
+import time, datetime, calendar, copy
+from terane.bier import ISearcher, IPostingList, IEventStore
 from terane.bier.docid import DocID
 from terane.loggers import getLogger
 
@@ -113,40 +114,53 @@ def searchIndices(indices, query, period, lastId=None, reverse=False, fields=Non
         startId = lastId
     # search each index separately, then merge the results
     postings = []
-    for index in indices:
-        # we create a copy of the original query, which can possibly be optimized
-        # with index-specific knowledge.
-        _query = copy.deepcopy(query).optimizeMatcher(index)
-        logger.debug("optimized query for index '%s': %s" % (index.name,str(_query)))
-        # if the query optimized out entirely, then skip to the next index
-        if _query == None:
-            continue
-        # iterate through the search results
-        searcher = index.searcher()
-        postingList = _query.iterMatches(searcher, startId, endId)
-        i = 0
-        # we terminate the search prematurely if we have reached the results limit
-        while i < limit:
-            posting = postingList.nextPosting()
-            if posting[0] == None:
-                break
-            logger.trace("found event %s" % posting[0])
-            # remember the docId and the searcher it came from, so we can retrieve
-            # the full event after the final sort.
-            postings.append(posting)
-            i += 1
-    # perform a sort on the docIds, which orders them naturally by date
-    postings.sort(reverse=reverse)
-    results = []
-    foundfields = []
-    # retrieve the full event for each docId
-    for docId,tvalue,store in postings[:limit]:
-        event = store.getEvent(docId)
-        # keep a record of all field names found in the results.
-        for fieldname in event.keys():
-            if fieldname not in foundfields: foundfields.append(fieldname)
-        # filter out unwanted fields
-        if fields != None:
-            event = dict([(k,v) for k,v in event.items() if k in fields])
-        results.append((str(docId), event))
-    return results, foundfields
+    searchers = []
+    try:
+        for index in indices:
+            # we create a copy of the original query, which can possibly be optimized
+            # with index-specific knowledge.
+            _query = copy.deepcopy(query).optimizeMatcher(index)
+            logger.debug("optimized query for index '%s': %s" % (index.name,str(_query)))
+            # if the query optimized out entirely, then skip to the next index
+            if _query == None:
+                continue
+            # iterate through the search results
+            searcher = index.searcher()
+            if not ISearcher.providedBy(searcher):
+                raise TypeError("searcher does not implement ISearcher")
+            searchers.append(searcher)
+            postingList = _query.iterMatches(searcher, startId, endId)
+            if not IPostingList.providedBy(postingList):
+                raise TypeError("posting list does not implement IPostingList")
+            i = 0
+            # we terminate the search prematurely if we have reached the results limit
+            while i < limit:
+                posting = postingList.nextPosting()
+                if posting[0] == None:
+                    break
+                logger.trace("found event %s" % posting[0])
+                # remember the docId and the store it came from, so we can retrieve
+                # the full event after the final sort.
+                postings.append(posting)
+                i += 1
+            postingList.close()
+        # perform a sort on the docIds, which orders them naturally by date
+        postings.sort(reverse=reverse)
+        results = []
+        foundfields = []
+        # retrieve the full event for each docId
+        for docId,tvalue,store in postings[:limit]:
+            if not IEventStore.providedBy(store):
+                raise TypeError("store does not implement IEventStore")
+            event = store.getEvent(docId)
+            # keep a record of all field names found in the results.
+            for fieldname in event.keys():
+                if fieldname not in foundfields: foundfields.append(fieldname)
+            # filter out unwanted fields
+            if fields != None:
+                event = dict([(k,v) for k,v in event.items() if k in fields])
+            results.append((str(docId), event))
+        return results, foundfields
+    # free any resources the searchers may be holding
+    finally:
+        for searcher in searchers: searcher.close()

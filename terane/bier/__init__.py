@@ -30,13 +30,27 @@ class ISchema(Interface):
     def getField(name):
         """
         Returns the specified Field.
+
+        :param name: The name of the field.
+        :type name: str
+        :returns: The field specified by name.
+        :rtype: A subclass of :class:`terane.bier.schema.BaseField`
         """
     def addField(name, field):
         """
         Adds a new field to the schema.
+
+        :param name: The name of the field.
+        :type name: str
+        :param field: The field to add.
+        :type field: A subclass of :class:`terane.bier.schema.BaseField`
         """
     def listFields():
         """
+        Returns a list of field names present in the schema.
+
+        :returns: The list of field names.
+        :rtype: list
         """
 
 class IPostingList(Interface):
@@ -55,6 +69,10 @@ class IPostingList(Interface):
         :type targetId: :class:`terane.bier.docid.DocID`
         :returns: A tuple containing the docId, the term value, and the store, or (None,None,None)
         :rtype: tuple
+        """
+    def close():
+        """
+        Frees any resources associated with the searcher.
         """
 
 class IMatcher(Interface):
@@ -125,6 +143,10 @@ class ISearcher(Interface):
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
+    def close():
+        """
+        Frees any resources associated with the searcher.
+        """
 
 class IEventStore(Interface):
     def getEvent(docId):
@@ -138,21 +160,53 @@ class IEventStore(Interface):
         """
 
 class IWriter(Interface):
-    def __enter__():
-        "Enter the transactional context."
+    def begin():
+        """
+        Enter the transactional context.
+        """
     def newDocument(docId, document):
-        "Create a new document with the specified document ID."
+        """
+        Create a new document with the specified document ID.
+
+        :param docId: The docId to use for the document."
+        :type docId: :class:`terane.bier.docid.DocID`
+        """
     def newPosting(fieldname, term, docId, value):
-        "Create a new posting for the field term with the specified document ID."
-    def __exit__(excType, excValue, traceback):
-        "Exit the transactional context."
+        """
+        Create a new posting for the field term with the specified document ID.
+
+        :param fieldname:
+        :type fieldname: str
+        :param term:
+        :type term: unicode
+        :param docId:
+        :type docId: :class:`terane.bier.docid.DocID`
+        :param value:
+        :type value:
+        """
+    def commit():
+        """
+        Exit the transactional context, committing any modifications.
+        """
+    def abort():
+        """
+        Exit the transactional context, discarding any modifications.
+        """
           
 class IIndex(Interface):
     def schema():
-        "Returns an object implementing ISchema."
+        """
+        Returns an object implementing ISchema.
+        """
     def searcher():
-        "Returns an object implementing ISearcher."
+        """
+        Returns an object implementing ISearcher.
+        """
     def writer():
-        "Returns an object implementing IWriter."
+        """
+        Returns an object implementing IWriter.
+        """
     def newDocumentId(ts):
-        "Returns a new document ID."
+        """
+        Returns a new document ID.
+        """

@@ -127,6 +127,10 @@ class Term(object):
         logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
         return posting
 
+    def close(self):
+        self._postings.close()
+        self._postings = None
+
 class AND(object):
     """
     The AND operator is an intersection matcher.  In order for an event to match, it must
@@ -255,6 +259,12 @@ class AND(object):
                     break
         logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
         return posting[0]
+
+    def close(self):
+        self._smallest.close()
+        for i in self._others: i.close()
+        self._smallest = None
+        self._others = None
 
 class OR(object):
     """
@@ -414,6 +424,10 @@ class OR(object):
         logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
         return posting
 
+    def close(self):
+        for i in self._iters: i.close()
+        self._iters = None
+
 class NOT(object):
     """
     The NOT operator is a negation query.  In our boolean logic implementation,
@@ -491,6 +505,10 @@ class NOT(object):
         posting = self._iter.skipPosting(targetId)
         logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
         return posting
+
+    def close(self):
+        self._iter.close()
+        self._iter = None
 
 class Sieve(object):
     """
@@ -592,3 +610,9 @@ class Sieve(object):
                 posting = (None,None,None)
         logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
         return posting
+
+    def close(self):
+        self._sourceIter.close()
+        self._filterIter.close()
+        self._filterIter = None
+        self._sourceIter = None
