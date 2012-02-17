@@ -21,6 +21,7 @@
 #define TERANE_STORAGE_H
 
 #include <Python.h>
+#include <unistd.h>
 #include <db.h>
 #include <pthread.h>
 #include <assert.h>
@@ -106,7 +107,7 @@ int        terane_Index_contains_segment (terane_Index *self, terane_Txn *txn, d
 PyObject * terane_Index_iter_segments (terane_Index *self, PyObject *args);
 PyObject * terane_Index_count_segments (terane_Index *self);
 PyObject * terane_Index_delete_segment (terane_Index *self, PyObject *args);
-PyObject * terane_Index_new_txn (terane_Index *self);
+PyObject * terane_Index_new_txn (terane_Index *self, PyObject *args, PyObject *kwds);
 PyObject * terane_Index_close (terane_Index *self);
 
 /* Segment methods */
@@ -134,8 +135,8 @@ PyObject * terane_Segment_delete (terane_Segment *self);
 PyObject * terane_Segment_close (terane_Segment *self);
 
 /* Txn methods */
-PyObject * terane_Txn_new (terane_Env *env, terane_Txn *parent);
-PyObject * terane_Txn_new_txn (terane_Txn *self);
+PyObject * terane_Txn_new (terane_Env *env, terane_Txn *parent, PyObject *args, PyObject *kwds);
+PyObject * terane_Txn_new_txn (terane_Txn *self, PyObject *args, PyObject *kwds);
 PyObject * terane_Txn_commit (terane_Txn *self);
 PyObject * terane_Txn_abort (terane_Txn *self);
 

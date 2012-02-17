@@ -39,7 +39,7 @@ class IndexWriter(object):
         self._lastId = self._ix._lastId
         self._lastModified = self._ix._lastModified
 
-    def __enter__(self):
+    def begin(self):
         if self._txn:
             raise WriterError("IndexWriter is already in a transaction")
         self._txn = self._ix.new_txn()
@@ -80,13 +80,14 @@ class IndexWriter(object):
         # add the term to the reverse index
         segment.set_term(self._txn, fieldname, term, str(docId), json_encode(value))
 
-    def __exit__(self, excType, excValue, traceback):
-        if (excType, excValue, traceback) == (None, None, None):
-            self._txn.commit()
-            self._ix._indexSize = self._indexSize
-            self._ix._currentSize = self._currentSize
-            self._ix._lastId = self._lastId
-            self._ix._lastModified = self._lastModified
-        else:
-            self._txn.abort()
-        return False
+    def commit(self):
+        self._txn.commit()
+        self._ix._indexSize = self._indexSize
+        self._ix._currentSize = self._currentSize
+        self._ix._lastId = self._lastId
+        self._ix._lastModified = self._lastModified
+        self._txn = None
+
+    def abort(self):
+        self._txn.abort()
+        self._txn = None

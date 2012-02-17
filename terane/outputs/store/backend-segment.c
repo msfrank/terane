@@ -112,7 +112,7 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
     }
     /* open the metadata DB */
     dbret = self->metadata->open (self->metadata, segment_txn, self->name,
-        "_metadata", DB_BTREE, DB_CREATE | DB_THREAD, 0);
+        "_metadata", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open _metadata: %s",
             db_strerror (dbret));
@@ -129,7 +129,7 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
 
     /* open the documents DB */
     dbret = self->documents->open (self->documents, segment_txn, self->name,
-        "_documents", DB_BTREE, DB_CREATE | DB_THREAD, 0);
+        "_documents", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open _documents: %s",
             db_strerror (dbret));
@@ -146,7 +146,7 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
 
     /* open the postings DB */
     dbret = self->postings->open (self->postings, segment_txn, self->name,
-        "_postings", DB_BTREE, DB_CREATE | DB_THREAD, 0);
+        "_postings", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open _postings: %s",
             db_strerror (dbret));

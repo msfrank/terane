@@ -102,7 +102,7 @@ _Index_init (terane_Index *self, PyObject *args, PyObject *kwds)
     }
     /* open the metadata store */
     dbret = self->metadata->open (self->metadata, txn, tocname, "_metadata",
-        DB_BTREE, DB_CREATE | DB_THREAD, 0);
+        DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open _metadata: %s",
             db_strerror (dbret));
@@ -118,7 +118,7 @@ _Index_init (terane_Index *self, PyObject *args, PyObject *kwds)
     }
     /* open the schema store */
     dbret = self->schema->open (self->schema, txn, tocname, "_schema",
-        DB_BTREE, DB_CREATE | DB_THREAD, 0);
+        DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open _schema: %s",
             db_strerror (dbret));
@@ -148,7 +148,7 @@ _Index_init (terane_Index *self, PyObject *args, PyObject *kwds)
     }
     /* open the segments store */
     dbret = self->segments->open (self->segments, txn, tocname, "_segments",
-        DB_RECNO, DB_CREATE | DB_THREAD, 0);
+        DB_RECNO, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open _segments: %s",
             db_strerror (dbret));
@@ -181,16 +181,23 @@ error:
 /*
  * terane_Index_new_txn: create a new top-level Txn object.
  *
- * callspec: Index.new_txn()
- * parameters: None
+ * callspec: Index.new_txn(READ_COMMITTED=False, READ_UNCOMMITTED=False, TXN_NOSYNC=False,
+    TXN_NOWAIT=False, TXN_SNAPSHOT=False, TXN_WAIT_NOSYNC=False)
+ * parameters:
+ *  READ_COMMITTED (bool):
+ *  READ_UNCOMMITTED (bool):
+ *  TXN_NOSYNC (bool):
+ *  TXN_NOWAIT (bool):
+ *  TXN_SNAPSHOT (bool):
+ *  TXN_WAIT_NOSYNC (bool):
  * returns: A new Txn object.
  * exceptions:
  *  terane.outputs.store.backend:Error: failed to create a DB_TXN handle.
  */
 PyObject *
-terane_Index_new_txn (terane_Index *self)
+terane_Index_new_txn (terane_Index *self, PyObject *args, PyObject *kwds)
 {
-    return terane_Txn_new (self->env, NULL);
+    return terane_Txn_new (self->env, NULL, args, kwds);
 }
 
 /*
@@ -261,7 +268,7 @@ PyMethodDef _Index_methods[] =
         "Iterate all segment IDs in the Index." },
     { "delete_segment", (PyCFunction) terane_Index_delete_segment, METH_VARARGS,
         "Delete the segment from the Index." },
-    { "new_txn", (PyCFunction) terane_Index_new_txn, METH_NOARGS,
+    { "new_txn", (PyCFunction) terane_Index_new_txn, METH_VARARGS|METH_KEYWORDS,
         "Create a top-level Txn." },
     { "close", (PyCFunction) terane_Index_close, METH_NOARGS,
         "Close the Index." },

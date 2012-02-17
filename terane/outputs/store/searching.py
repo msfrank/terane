@@ -37,7 +37,9 @@ class IndexSearcher(object):
         :param ix: The index to search.
         :type ix: :class:`terane.outputs.store.index.Index`
         """
-        self._segmentSearchers = [SegmentSearcher(s) for s in ix._segments]
+        txn = ix.new_txn(TXN_SNAPSHOT=True)
+        self._segmentSearchers = [SegmentSearcher(s,txn) for s in ix._segments]
+        self._txn = txn
 
     def postingsLength(self, fieldname, term, startId, endId):
         """
@@ -80,6 +82,12 @@ class IndexSearcher(object):
         else:
             compar = cmp
         return MergedPostingList(iters, compar)
+
+    def close(self):
+        for searcher in self._segmentSearchers: searcher.close()
+        self._segmentSearchers = None
+        self._txn.abort()
+        self._txn = None
 
 class MergedPostingList(object):
     """
@@ -157,6 +165,12 @@ class MergedPostingList(object):
                     break    
         return posting
 
+    def close(self):
+        for i in self._iters: i.close()
+        self._iters = None
+        self._smallestPostings = None
+        self._lastId = None
+
 class SegmentSearcher(object):
     """
     SegmentSearcher searches a single Segment.
@@ -164,12 +178,13 @@ class SegmentSearcher(object):
 
     implements(ISearcher, IEventStore)
 
-    def __init__(self, segment):
+    def __init__(self, segment, txn):
         """
         :param segment: The segment to search.
         :type segment: :class:`terane.outputs.store.segment.Segment`
         """
         self._segment = segment
+        self._txn = txn 
 
     def postingsLength(self, fieldname, term, startId, endId):
         """
@@ -188,10 +203,10 @@ class SegmentSearcher(object):
         fieldname = str(fieldname)
         term = unicode(term)
         try:
-            fmeta = json_decode(self._segment.get_field_meta(None, fieldname))
+            fmeta = json_decode(self._segment.get_field_meta(self._txn, fieldname))
             numDocs = fmeta['num-docs']
             # startId may be greater than endId, but the estimate_term_postings method doesn't care
-            estimate = self._segment.estimate_term_postings(None, fieldname, term, str(startId), str(endId))
+            estimate = self._segment.estimate_term_postings(self._txn, fieldname, term, str(startId), str(endId))
             return int(math.ceil(numDocs * estimate))
         except KeyError:
             return 0
@@ -213,7 +228,7 @@ class SegmentSearcher(object):
         """
         fieldname = str(fieldname)
         term = unicode(term)
-        postings = self._segment.iter_terms_within(None, fieldname, term, str(startId), str(endId))
+        postings = self._segment.iter_terms_within(self._txn, fieldname, term, str(startId), str(endId))
         return PostingList(self, postings)
 
     def getEvent(self, docId):
@@ -225,7 +240,10 @@ class SegmentSearcher(object):
         :returns: A dict mapping fieldnames to values.
         :rtype: dict
         """
-        return json_decode(self._segment.get_doc(None, str(docId)))
+        return json_decode(self._segment.get_doc(self._txn, str(docId)))
+
+    def close(self):
+        self._txn = None
 
 class PostingList(object):
     """
@@ -262,6 +280,7 @@ class PostingList(object):
                 tvalue = json_decode(tvalue)
             return docId, tvalue, self._searcher
         except StopIteration:
+            self._postings.close()
             self._postings = None
         return None, None, None
 
@@ -288,5 +307,12 @@ class PostingList(object):
         except IndexError:
             return None, None, None
         except StopIteration:
+            self._postings.close()
             self._postings = None
         return None, None, None
+
+    def close(self):
+        if not self._postings == None:
+            self._postings.close()
+        self._postings = None
+        self._searcher = None

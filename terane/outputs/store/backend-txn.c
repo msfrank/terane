@@ -33,22 +33,57 @@ _Txn_dealloc (terane_Txn *self)
 }
 
 /*
- * Txn_new: allocate a new Txn object.
+ * terane_Txn_new: allocate a new Txn object.
  *
  * parameters:
  *  env (terane.outputs.store.backend:Env): The database environment
  *  parent (terane.outputs.store.backend:Txn): A parent Txn, or NULL
+ *  args: 
+ *  kwds:
  * returns: A new terane.outputs.store.backend:Txn object
  * exceptions:
  *  terane.outputs.store.backend:Error: failed to create the DB_TXN handle
  */
 PyObject *
-terane_Txn_new (terane_Env *env, terane_Txn *parent)
+terane_Txn_new (terane_Env *env, terane_Txn *parent, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn, *prev;
-    int dbret;
+    int dbret, dbflags = 0;
+    PyObject *read_committed = NULL;
+    PyObject *read_uncommitted = NULL;
+    PyObject *txn_nosync = NULL;
+    PyObject *txn_nowait = NULL;
+    PyObject *txn_snapshot = NULL;
+    PyObject *txn_write_nosync = NULL;
+
+    char *kwdlist[] = {
+        "READ_COMMITTED",
+        "READ_UNCOMMITTED",
+        "TXN_NOSYNC",
+        "TXN_NOWAIT",
+        "TXN_SNAPSHOT", 
+        "TXN_WRITE_NOSYNC",
+        NULL
+    };
 
     assert (env != NULL);
+
+    /* parse parameters and set transaction flags */
+    if (!PyArg_ParseTupleAndKeywords (args, kwds, "|OOOOOO", kwdlist, &read_committed,
+      &read_uncommitted, &txn_nosync, &txn_nowait, &txn_snapshot, &txn_write_nosync))
+        return NULL;
+    if (read_committed && PyObject_IsTrue (read_committed))
+        dbflags |= DB_READ_COMMITTED;
+    if (read_uncommitted && PyObject_IsTrue (read_uncommitted))
+        dbflags |= DB_READ_UNCOMMITTED;
+    if (txn_nosync && PyObject_IsTrue (txn_nosync))
+        dbflags |= DB_TXN_NOSYNC;
+    if (txn_nowait && PyObject_IsTrue (txn_nowait))
+        dbflags |= DB_TXN_NOWAIT;
+    if (txn_snapshot && PyObject_IsTrue (txn_snapshot))
+        dbflags |= DB_TXN_SNAPSHOT;
+    if (txn_write_nosync && PyObject_IsTrue (txn_write_nosync))
+        dbflags |= DB_TXN_WRITE_NOSYNC;
 
     /* allocate the Txn object */
     txn = PyObject_New (terane_Txn, &terane_TxnType);
@@ -59,7 +94,7 @@ terane_Txn_new (terane_Env *env, terane_Txn *parent)
     txn->env = env;
     /* create the DB_TXN handle */
     txn->txn = NULL;
-    dbret = env->env->txn_begin (env->env, parent ? parent->txn : NULL, &txn->txn, 0);
+    dbret = env->env->txn_begin (env->env, parent ? parent->txn : NULL, &txn->txn, dbflags);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create DB_TXN: %s", db_strerror (dbret));
         goto error;
@@ -89,15 +124,15 @@ error:
 /*
  * terane_Txn_new_txn: Create a child Txn.
  *
- * parameters: None
+ * parameters:
  * returns: A new terane.outputs.store.backend:Txn object
  * exceptions:
  *  terane.outputs.store.backend:Error: failed to create a DB_TXN handle.
  */
 PyObject *
-terane_Txn_new_txn (terane_Txn *self)
+terane_Txn_new_txn (terane_Txn *self, PyObject *args, PyObject *kwds)
 {
-    return terane_Txn_new (self->env, self);
+    return terane_Txn_new (self->env, self, args, kwds);
 }
 
 /*
@@ -250,7 +285,7 @@ terane_Txn_exit (terane_Txn *self, PyObject *args)
 /* Txn methods declaration */
 PyMethodDef _Txn_methods[] =
 {
-    { "new_txn", (PyCFunction) terane_Txn_new_txn, METH_NOARGS, "Create a child Txn." },
+    { "new_txn", (PyCFunction) terane_Txn_new_txn, METH_VARARGS|METH_KEYWORDS, "Create a child Txn." },
     { "commit", (PyCFunction) terane_Txn_commit, METH_NOARGS, "Close the DB Txn." },
     { "abort", (PyCFunction) terane_Txn_abort, METH_NOARGS, "Close the DB Txn." },
     { "__enter__", (PyCFunction) terane_Txn_enter, METH_NOARGS, "Enter the DB Txn context." },
