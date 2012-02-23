@@ -66,6 +66,7 @@ setup(
             'terane/outputs/store/backend-index-meta.c',
             'terane/outputs/store/backend-index-segment.c',
             'terane/outputs/store/backend-iter.c',
+            'terane/outputs/store/backend-json.c',
             'terane/outputs/store/backend-logfd.c',
             'terane/outputs/store/backend-segment.c',
             'terane/outputs/store/backend-segment-doc.c',
