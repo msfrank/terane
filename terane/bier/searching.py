@@ -17,7 +17,7 @@
 
 import time, datetime, calendar, copy
 from terane.bier import ISearcher, IPostingList, IEventStore
-from terane.bier.docid import DocID
+from terane.bier.evid import EVID
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier.searching')
@@ -41,31 +41,31 @@ class Period(object):
         :type endexcl: bool
         """
         if isinstance(start, datetime.datetime):
-            self.start = DocID(int(calendar.timegm(start.timetuple())), 0, 0)
-        elif isinstance(start, DocID):
+            self.start = EVID(int(calendar.timegm(start.timetuple())), 0, 0)
+        elif isinstance(start, EVID):
             self.start = start
         else:
-            raise TypeError("start must be datetime.datetime or terane.bier.docid.DocID")
+            raise TypeError("start must be datetime.datetime or terane.bier.evid.EVID")
         if isinstance(end, datetime.datetime):
-            self.end = DocID(int(calendar.timegm(end.timetuple())), 0, 0)
-        elif isinstance(end, DocID):
+            self.end = EVID(int(calendar.timegm(end.timetuple())), 0, 0)
+        elif isinstance(end, EVID):
             self.end = end
         else:
-            raise TypeError("end must be datetime.datetime or terane.bier.docid.DocID")
+            raise TypeError("end must be datetime.datetime or terane.bier.evid.EVID")
         self.startexcl = startexcl
         self.endexcl = endexcl
 
-    def __contains__(self, docId):
-        if not isinstance(docId, DocID):
+    def __contains__(self, evid):
+        if not isinstance(evid, EVID):
             raise TypeError()
         if not self.startexcl:
-            if docId < self.start: return False
+            if evid < self.start: return False
         else:
-            if docId <= self.start: return False
+            if evid <= self.start: return False
         if not self.endexcl:
-            if docId < self.end: return False
+            if evid < self.end: return False
         else:
-            if docId >= self.end: return False
+            if evid >= self.end: return False
         return True
 
     def __str__(self):
@@ -93,7 +93,7 @@ def searchIndices(indices, query, period, lastId=None, reverse=False, fields=Non
     :param period: The period within which the search is constrained.
     :type period: :class:`terane.bier.searching.Period`
     :param lastId: The real key to start iterating from.
-    :type lastId: :class:`terane.bier.docid.DocID`
+    :type lastId: :class:`terane.bier.evid.EVID`
     :param reverse: If True, then reverse the order of events.
     :type reverse: bool
     :param fields: If not None, then only return the specified fields of each event. 
@@ -103,7 +103,7 @@ def searchIndices(indices, query, period, lastId=None, reverse=False, fields=Non
     :returns: The list of results, and the list of field names present in the results.
     :rtype: tuple
     """
-    # determine the docIds to use as start and end keys
+    # determine the evids to use as start and end keys
     if reverse == False:
         startId, endId = period.getRange()
     else:
@@ -139,27 +139,27 @@ def searchIndices(indices, query, period, lastId=None, reverse=False, fields=Non
                 if posting[0] == None:
                     break
                 logger.trace("found event %s" % posting[0])
-                # remember the docId and the store it came from, so we can retrieve
+                # remember the evid and the store it came from, so we can retrieve
                 # the full event after the final sort.
                 postings.append(posting)
                 i += 1
             postingList.close()
-        # perform a sort on the docIds, which orders them naturally by date
+        # perform a sort on the evids, which orders them naturally by date
         postings.sort(reverse=reverse)
         results = []
         foundfields = []
-        # retrieve the full event for each docId
-        for docId,tvalue,store in postings[:limit]:
+        # retrieve the full event for each evid
+        for evid,tvalue,store in postings[:limit]:
             if not IEventStore.providedBy(store):
                 raise TypeError("store does not implement IEventStore")
-            event = store.getEvent(docId)
+            event = store.getEvent(evid)
             # keep a record of all field names found in the results.
             for fieldname in event.keys():
                 if fieldname not in foundfields: foundfields.append(fieldname)
             # filter out unwanted fields
             if fields != None:
                 event = dict([(k,v) for k,v in event.items() if k in fields])
-            results.append((str(docId), event))
+            results.append((str(evid), event))
         return results, foundfields
     # free any resources the searchers may be holding
     finally:

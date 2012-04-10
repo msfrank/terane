@@ -71,18 +71,17 @@ def writeEventToIndex(event, index):
     # update the index in the context of a writer
     try:   
         # create a document record
-        docId = index.newDocumentId(ts)
-        logger.trace("created new document with id %s" % docId)
+        evid = EVID(ts)
+        logger.trace("created new document with id %s" % evid)
         document = {}
 
         # process the value of each field in the event
         for fieldname in fieldnames:
-            # create a child transaction for each field in the document
             field = schema.getField(fieldname)
             # update the field with the event value
             evalue = event.get(fieldname)
             for term,tvalue in field.terms(evalue):
-                writer.newPosting(fieldname, term, docId, tvalue)
+                writer.newPosting(fieldname, term, evid, tvalue)
             # add the event value to the document
             document[fieldname] = evalue
 
@@ -94,12 +93,12 @@ def writeEventToIndex(event, index):
                 document[fieldname] = event[storedname]
 
         # store the document data
-        logger.trace("doc=%s: event=%s" % (docId,document))
-        writer.newDocument(docId, document)
+        logger.trace("id=%s: event=%s" % (evid,document))
+        writer.newDocument(evid, document)
     # if an exception was raised, then abort the transaction
     except:
         writer.abort()
         raise
     # otherwise commit the transaction and return the document id
     writer.commit()
-    return docId
+    return evid

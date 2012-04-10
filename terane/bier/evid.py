@@ -17,20 +17,20 @@
 
 import time, datetime, dateutil.tz, struct, calendar
 
-class DocID(object):
+class EVID(object):
 
     MIN_ID = "00000000000000000000000000000000"
     MAX_ID = "ffffffffffffffffffffffffffffffff"
 
-    def __init__(self, ts, node, offset):
+    def __init__(self, ts, uuid):
         self.ts = int(ts)
         self.node = int(node)
         self.offset = long(offset)
 
     @classmethod
     def fromPackedBytes(cls, packedbytes):
-        ts,node,offset = struct.unpack('>IIQ', packedbytes)
-        return DocID(ts, node, offset)
+        ts,node,offset = struct.unpack('>IQ', packedbytes)
+        return EVID(ts, node, offset)
 
     @classmethod
     def fromString(cls, string):
@@ -38,7 +38,7 @@ class DocID(object):
         ts = int(ts, 16)
         node = int(node, 16)
         offset = long(offset, 16)
-        return DocID(ts, node, offset)
+        return EVID(ts, node, offset)
 
     @classmethod
     def fromDatetime(cls, dt=None):
@@ -52,7 +52,7 @@ class DocID(object):
         # convert to UTC, if necessary
         if not dt.tzinfo == dateutil.tz.tzutc():
             dt = dt.astimezone(dateutil.tz.tzutc())
-        return DocID(int(calendar.timegm(dt.timetuple())), 0, 0)
+        return EVID(int(calendar.timegm(dt.timetuple())), 0, 0)
 
     def pack(self):
         return struct.pack('>IIQ', self.ts, self.node, self.offset)
@@ -61,7 +61,7 @@ class DocID(object):
         return "%.08x%.08x%.016x" % (self.ts, self.node, self.offset)
 
     def __repr__(self):
-        return "<DocID %s>" % str(self)
+        return "<EVID %s>" % str(self)
 
     def __cmp__(self, other):
         return cmp(str(self), str(other))
@@ -72,7 +72,7 @@ class DocID(object):
         n += other
         if n > 2**128 - 1:
             raise OverflowError()
-        return DocID.fromString("%x" % n)
+        return EVID.fromString("%x" % n)
 
     def __sub__(self, other):
         other = int(other)
@@ -80,4 +80,4 @@ class DocID(object):
         n -= other
         if n < 0:
             raise OverflowError()
-        return DocID.fromString("%x" % n)
+        return EVID.fromString("%x" % n)

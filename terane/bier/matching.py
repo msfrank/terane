@@ -18,7 +18,7 @@
 import time, datetime, copy, bisect
 from zope.interface import implements
 from terane.bier import IMatcher, IPostingList
-from terane.bier.docid import DocID
+from terane.bier.evid import EVID
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier.matching')
@@ -118,8 +118,8 @@ class Term(object):
         Returns the posting matching targetId if the matcher contains the specified targetId,
         or None if the targetId is not present.
 
-        :param targetId: The target docId.
-        :type targetId: :class:`terane.bier.docid.DocID`
+        :param targetId: The target event identifier.
+        :type targetId: :class:`terane.bier.evid.EVID`
         :returns: The posting matching the targetId, or (None,None,None).
         :rtype: tuple
         """
@@ -224,11 +224,11 @@ class AND(object):
 
     def nextPosting(self):
         """
-        Returns the docId of the next event matching the query, or None if there are no
+        Returns the event identifier of the next event matching the query, or None if there are no
         more events which match the query.
 
-        :returns: The docId of the next matching event, or None.
-        :rtype: :class:`terane.bier.docid.DocID`
+        :returns: The event identifier of the next matching event, or None.
+        :rtype: :class:`terane.bier.evid.EVID`
         """
         while True:
             posting = self._smallest.nextPosting()
@@ -245,11 +245,11 @@ class AND(object):
 
     def skipPosting(self, targetId):
         """
-        Returns the docId matching targetId if the query contains the specified targetId,
+        Returns the event identifier matching targetId if the query contains the specified targetId,
         or None if the targetId is not present.
 
-        :returns: The docId matching the targetId, or None.
-        :rtype: :class:`terane.bier.docid.DocID`
+        :returns: The event identifier matching the targetId, or None.
+        :rtype: :class:`terane.bier.evid.EVID`
         """
         posting = self._smallest.skipPosting(targetId)
         if posting[0] != None:
@@ -353,9 +353,9 @@ class OR(object):
         self._smallestPostings = [(None,None,None) for i in range(len(self.children))]
         # iters contains the iterator (object implementing IPostingList) for each child query
         self._iters = [child.iterMatches(searcher, startId, endId) for child in self.children]
-        # lastId is the last docId returned by the iterator
+        # lastId is the last evid returned by the iterator
         self._lastId = None
-        # set our cmp function, which determines the next docId to return.  if we are searching in
+        # set our cmp function, which determines the next evid to return.  if we are searching in
         # reverse order, then reverse the meaning if the regular comparison function.
         if endId < startId:
             self._cmp = lambda d1,d2: cmp(d2,d1)
@@ -366,47 +366,47 @@ class OR(object):
 
     def nextPosting(self):
         """
-        Returns the docId of the next event matching the query, or None if there are no
+        Returns the event identifier of the next event matching the query, or None if there are no
         more events which match the query.
 
-        :returns: The docId of the next matching event, or None.
-        :rtype: :class:`terane.bier.docid.DocID`
+        :returns: The event identifier of the next matching event, or None.
+        :rtype: :class:`terane.bier.evid.EVID`
         """
         curr = 0
-        # check each child iter for the lowest docId
+        # check each child iter for the lowest evid
         for i in range(len(self.children)):
             # if None, then get the next posting from the iter
             if self._smallestPostings[i][0] == None:
                 self._smallestPostings[i] = self._iters[i].nextPosting()
-            # if the posting docId is None, then check the next iter
+            # if the posting evid is None, then check the next iter
             if self._smallestPostings[i][0] == None:
                 continue
-            # if the docId equals the last docId returned, then ignore it
+            # if the evid equals the last evid returned, then ignore it
             if self._lastId != None and self._smallestPostings[i][0] == self._lastId:
                 self._smallestPostings[i] = (None,None,None)
                 continue
-            # we don't compare the first docId with itself
+            # we don't compare the first evid with itself
             if i == 0:
                 continue
-            # if the docId is the current smallest docId, then remember it
+            # if the evid is the current smallest evid, then remember it
             if self._smallestPostings[curr][0] == None or \
               self._cmp(self._smallestPostings[i][0], self._smallestPostings[curr][0]) < 0:
                 curr = i
-        # update lastId with the docId
+        # update lastId with the evid
         posting = self._smallestPostings[curr]
         self._lastId = posting[0]
-        # forget the docId so we don't return it again
+        # forget the evid so we don't return it again
         self._smallestPostings[curr] = (None,None,None)
         logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
         return posting
 
     def skipPosting(self, targetId):
         """
-        Returns the docId matching targetId if the query contains the specified targetId,
+        Returns the event identifier matching targetId if the query contains the specified targetId,
         or None if the targetId is not present.
 
-        :returns: The docId matching the targetId, or None.
-        :rtype: :class:`terane.bier.docid.DocID`
+        :returns: The event identifier matching the targetId, or None.
+        :rtype: :class:`terane.bier.evid.EVID`
         """
         posting = None
         # iterate through each child query
@@ -484,11 +484,11 @@ class NOT(object):
 
     def nextPosting(self):
         """
-        Returns the docId of the next event matching the query, or None if there are no
+        Returns the event identifier of the next event matching the query, or None if there are no
         more events which match the query.
 
-        :returns: The docId of the next matching event, or None.
-        :rtype: :class:`terane.bier.docid.DocID`
+        :returns: The event identifier of the next matching event, or None.
+        :rtype: :class:`terane.bier.evid.EVID`
         """
         posting = self._iter.nextPosting()
         logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
@@ -496,11 +496,11 @@ class NOT(object):
 
     def skipPosting(self, targetId):
         """
-        Returns the docId matching targetId if the query contains the specified targetId,
-        or None if the targetId is not present.
+        Returns the event identifier matching targetId if the query contains
+        the specified targetId, or None if the targetId is not present.
 
-        :returns: The docId matching the targetId, or None.
-        :rtype: :class:`terane.bier.docid.DocID`
+        :returns: The event identifier matching the targetId, or None.
+        :rtype: :class:`terane.bier.evid.EVID`
         """
         posting = self._iter.skipPosting(targetId)
         logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
@@ -574,20 +574,20 @@ class Sieve(object):
 
     def nextPosting(self):
         """
-        Returns the docId of the next event matching the query, or None if there are no
-        more events which match the query.
+        Returns the event identifier of the next event matching the query, or None
+        if there are no more events which match the query.
 
-        :returns: The docId of the next matching event, or None.
-        :rtype: :class:`terane.bier.docid.DocID`
+        :returns: The event identifier of the next matching event, or None.
+        :rtype: :class:`terane.bier.evid.EVID`
         """
         posting = (None,None,None)
-        # loop until we find a docId not in the filter, or there are no more docIds
+        # loop until we find a evid not in the filter, or there are no more evids
         while True:
             posting = self._sourceIter.nextPosting()
-            # if there are not more docIds to retrieve from the source, we are done
+            # if there are not more evids to retrieve from the source, we are done
             if posting[0] == None:
                 break
-            # if the the docId isn't present in the filter, then return it
+            # if the the evid isn't present in the filter, then return it
             if posting[0] != self._filterIter.skipPosting(posting[0])[0]:
                 break
         logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
@@ -595,11 +595,11 @@ class Sieve(object):
 
     def skipPosting(self, targetId):
         """
-        Returns the docId matching targetId if the query contains the specified targetId,
-        or None if the targetId is not present.
+        Returns the event identifier matching targetId if the query contains
+        the specified targetId, or None if the targetId is not present.
 
-        :returns: The docId matching the targetId, or None.
-        :rtype: :class:`terane.bier.docid.DocID`
+        :returns: The event identifier matching the targetId, or None.
+        :rtype: :class:`terane.bier.evid.EVID`
         """
         # skip the source to the targetId
         posting = self._sourceIter.skipPosting(targetId)

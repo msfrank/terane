@@ -58,16 +58,16 @@ class IPostingList(Interface):
         """
         Returns the next posting, or None if iteration is finished.
 
-        :returns: A tuple containing the docId, the term value, and the store, or (None,None,None)
+        :returns: A tuple containing the evid, the term value, and the store, or (None,None,None)
         :rtype: tuple
         """
     def skipPosting(targetId):
         """
         Skips to the targetId, returning the posting or None if the posting doesn't exist.
 
-        :param targetId: The target docId to skip to.
-        :type targetId: :class:`terane.bier.docid.DocID`
-        :returns: A tuple containing the docId, the term value, and the store, or (None,None,None)
+        :param targetId: The target evid to skip to.
+        :type targetId: :class:`terane.bier.evid.EVID`
+        :returns: A tuple containing the evid, the term value, and the store, or (None,None,None)
         :rtype: tuple
         """
     def close():
@@ -149,12 +149,12 @@ class ISearcher(Interface):
         """
 
 class IEventStore(Interface):
-    def getEvent(docId):
+    def getEvent(evid):
         """
-        Returns the event specified by docId.
+        Returns the event specified by evid.
 
-        :param docId: The event docId
-        :type docId: :class:`terane.bier.docid.DocID`
+        :param evid: The event identifier.
+        :type evid: :class:`terane.bier.evid.EVID`
         :returns: A dict mapping fieldnames to values.
         :rtype: dict
         """
@@ -164,23 +164,25 @@ class IWriter(Interface):
         """
         Enter the transactional context.
         """
-    def newDocument(docId, document):
+    def newEvent(evid, event):
         """
-        Create a new document with the specified document ID.
+        Create a new event with the specified event identifier.
 
-        :param docId: The docId to use for the document."
-        :type docId: :class:`terane.bier.docid.DocID`
+        :param evid: The event identifier to use for the document."
+        :type evid: :class:`terane.bier.evid.EVID`
+        :param event: The event fields.
+        :type event: dict
         """
-    def newPosting(fieldname, term, docId, value):
+    def newPosting(fieldname, term, evid, value):
         """
-        Create a new posting for the field term with the specified document ID.
+        Create a new posting for the field term with the specified event identifier.
 
         :param fieldname:
         :type fieldname: str
         :param term:
         :type term: unicode
-        :param docId:
-        :type docId: :class:`terane.bier.docid.DocID`
+        :param evid:
+        :type evid: :class:`terane.bier.evid.EVID`
         :param value:
         :type value:
         """
@@ -205,8 +207,4 @@ class IIndex(Interface):
     def writer():
         """
         Returns an object implementing IWriter.
-        """
-    def newDocumentId(ts):
-        """
-        Returns a new document ID.
         """
