@@ -19,7 +19,7 @@ import os, sys, urwid
 from dateutil.parser import parse
 from xmlrpclib import Fault
 from twisted.web.xmlrpc import Proxy
-from terane.bier.docid import DocID
+from terane.bier.evid import EVID
 from terane.commands.console.switcher import Window
 from terane.commands.console.results import ResultsListbox
 from terane.commands.console.console import console
@@ -68,8 +68,8 @@ class Tailer(Window):
         self._lastId = meta['last']
         logger.debug("tail returned %i results, last id is %i" % (len(results), self._lastId))
         if len(results) > 0:
-            for docId,event in results:
-                self._results.append(DocID.fromString(docId), event)
+            for evid,event in results:
+                self._results.append(EVID.fromString(evid), event)
             console.redraw()
         from twisted.internet import reactor
         self._call = reactor.callLater(self.interval, self._doTail)

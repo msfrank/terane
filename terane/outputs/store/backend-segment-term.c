@@ -235,12 +235,12 @@ _Segment_free_term_key (DBT *key)
 /*
  * terane_Segment_get_term:
  *
- * callspec: Segment.get_term(txn, fieldname, term, docId)
+ * callspec: Segment.get_term(txn, fieldname, term, evid)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   fieldname (string): The field name
  *   term (unicode): The term
- *   docId (str): The document ID string
+ *   evid (str): The event identifier string
  * returns: The JSON-encoded posting data
  * exceptions:
  *   KeyError: The specified field or record doesn't exist
@@ -300,12 +300,12 @@ terane_Segment_get_term (terane_Segment *self, PyObject *args)
 /*
  * terane_Segment_set_term:
  *
- * callspec: Segment.set_term(txn, fieldname, term, docId, value)
+ * callspec: Segment.set_term(txn, fieldname, term, evid, value)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  *   fieldname (string): The field name
  *   term (unicode): The term
- *   id (long): The document id
+ *   evid (str): The event identifier string
  *   value (unicode): JSON-encoded posting data
  * returns: None
  * exceptions:
@@ -549,7 +549,7 @@ _Segment_skip_term (terane_Iter *iter, PyObject *args)
  *   fieldname (string): The field name
  *   term (string): The term
  * returns: a new Iterator object.  Each iteration returns a tuple consisting
- *  of (docId,value).
+ *  of (evid,value).
  * exceptions:
  *   KeyError: The specified field doesn't exist
  *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
@@ -649,7 +649,7 @@ _Segment_skip_term_within (terane_Iter *iter, PyObject *args)
  *   start (str): The starting document ID, inclusive
  *   end (str): The ending document ID, inclusive
  * returns: a new Iterator object.  Each iteration returns a tuple consisting
- *  of (docId,value).
+ *  of (evid,value).
  * exceptions:
  *   KeyError: The specified field doesn't exist
  *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record

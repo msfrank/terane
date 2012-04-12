@@ -45,17 +45,17 @@ class IndexWriter(object):
         self._txn = self._ix.new_txn()
         return self
 
-    def newDocument(self, docId, document):
+    def newEvent(self, evid, fields):
         segment = self._ix._current
-        segment.set_doc(self._txn, str(docId), json_encode(document))
+        segment.set_doc(self._txn, str(evid), json_encode(fields))
         self._indexSize += 1
         self._currentSize += 1
-        self._lastId = str(docId)
+        self._lastId = str(evid)
         self._lastModified = int(time.time())
         lastUpdate = {'size': self._currentSize, 'last-id': self._lastId, 'last-modified': self._lastModified}
         segment.set_meta(self._txn, 'last-update', json_encode(lastUpdate))
 
-    def newPosting(self, fieldname, term, docId, value):
+    def newPosting(self, fieldname, term, evid, value):
         segment = self._ix._current
         try:
             tmeta = json_decode(segment.get_term_meta(self._txn, fieldname, term))
@@ -78,7 +78,7 @@ class IndexWriter(object):
         if value == None:
             value = dict()
         # add the term to the reverse index
-        segment.set_term(self._txn, fieldname, term, str(docId), json_encode(value))
+        segment.set_term(self._txn, fieldname, term, str(evid), json_encode(value))
 
     def commit(self):
         self._txn.commit()

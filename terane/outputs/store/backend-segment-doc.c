@@ -22,10 +22,10 @@
 /*
  * terane_Segment_new_doc: create a new document
  *
- * callspec: Segment.new_doc(txn, docId)
+ * callspec: Segment.new_doc(txn, evid)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
- *   docId (str): The document ID string
+ *   evid (str): The event identifier string
  * returns: None
  * exceptions:
  *   terane.outputs.store.backend.DocExists: The specified document id already exists
@@ -47,7 +47,7 @@ terane_Segment_new_doc (terane_Segment *self, PyObject *args)
     memset (&data, 0, sizeof (DBT));
     key.data = doc_id;
     key.size = id_len + 1;
-    /* put a new document.  raise DocExists if the document ID already exists. */
+    /* put a new document.  raise DocExists if the event identifier already exists. */
     dbret = self->documents->put (self->documents, txn->txn, &key, &data, DB_NOOVERWRITE);
     switch (dbret) {
         case 0:
@@ -65,10 +65,10 @@ terane_Segment_new_doc (terane_Segment *self, PyObject *args)
 /*
  * terane_Segment_get_doc: retrieve a document
  *
- * callspec: Segment.get_doc(txn, docId)
+ * callspec: Segment.get_doc(txn, evid)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
- *   docId (str): The document ID string
+ *   evid (str): The event identifier string
  * returns: A string representing the document contents 
  * exceptions:
  *   KeyError: The document with the specified id doesn't exist
@@ -122,10 +122,10 @@ terane_Segment_get_doc (terane_Segment *self, PyObject *args)
 /*
  * terane_Segment_set_doc: set the document contents
  *
- * callspec: Segment.set_doc(txn, docId, document)
+ * callspec: Segment.set_doc(txn, evid, document)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
- *   docId (str): The document ID string
+ *   evid (str): The event identifier string
  *   document (str): Data to store in the document
  * returns: None
  * exceptions:
@@ -168,10 +168,10 @@ terane_Segment_set_doc (terane_Segment *self, PyObject *args)
 /*
  * terane_Segment_delete_doc: Delete a document record.
  *
- * callspec: Segment.delete_doc(txn, docId)
+ * callspec: Segment.delete_doc(txn, evid)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
- *   docId (str): The document ID string
+ *   evid (str): The event identifier string
  * returns: None
  * exceptions:
  *   KeyError: The document with the specified id doesn't exist
@@ -213,10 +213,10 @@ terane_Segment_delete_doc (terane_Segment *self, PyObject *args)
 /*
  * terane_Segment_contains_doc: Determine whether a document exists.
  *
- * callspec: Segment.contains_doc(txn, docId)
+ * callspec: Segment.contains_doc(txn, evid)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
- *   docId (str): The document ID string
+ *   evid (str): The event identifier string
  * returns: True if the document exists, otherwise False.
  * exceptions:
  *   Exception: A db error occurred when trying to get the record
@@ -257,7 +257,7 @@ terane_Segment_contains_doc (terane_Segment *self, PyObject *args)
 }
 
 /*
- * _Segment_next_doc: build a (docId,document) tuple from the current cursor item
+ * _Segment_next_doc: build a (evid,document) tuple from the current cursor item
  */
 static PyObject *
 _Segment_next_doc (terane_Iter *iter, DBT *key, DBT *data)
@@ -282,7 +282,7 @@ _Segment_next_doc (terane_Iter *iter, DBT *key, DBT *data)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  * returns: a new Iterator object.  Each iteration returns a tuple consisting
- *  of (docId,document).
+ *  of (evid,document).
  * exceptions:
  *   Exception: A db error occurred when trying to get the record
  */

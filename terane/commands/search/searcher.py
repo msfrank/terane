@@ -19,7 +19,7 @@ import os, sys, datetime, dateutil.tz, xmlrpclib
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.web.xmlrpc import Proxy
 from twisted.internet import reactor
-from terane.bier.docid import DocID
+from terane.bier.evid import EVID
 from terane.loggers import getLogger, startLogging, StdoutHandler, DEBUG
 
 logger = getLogger('terane.commands.search.searcher')
@@ -63,9 +63,9 @@ class Searcher(object):
         logger.debug("XMLRPC result: %s" % str(results))
         meta = results.pop(0)
         if len(results) > 0:
-            for docId,event in results:
-                docId = DocID.fromString(docId)
-                ts = datetime.datetime.fromtimestamp(docId.ts, dateutil.tz.tzutc())
+            for evid,event in results:
+                evid = EVID.fromString(evid)
+                ts = datetime.datetime.fromtimestamp(evid.ts, dateutil.tz.tzutc())
                 if self.tz:
                     ts = ts.astimezone(self.tz)
                 print "%s: %s" % (ts.strftime("%d %b %Y %H:%M:%S %Z"), event['default'])

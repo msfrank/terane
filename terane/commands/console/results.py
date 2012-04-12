@@ -25,9 +25,9 @@ from terane.loggers import getLogger
 logger = getLogger('terane.commands.console.results')
 
 class Result(urwid.WidgetWrap):
-    def __init__(self, docId, event):
-        self.docId = docId
-        self.ts = datetime.datetime.fromtimestamp(docId.ts, dateutil.tz.tzutc())
+    def __init__(self, evid, event):
+        self.evid = evid
+        self.ts = datetime.datetime.fromtimestamp(evid.ts, dateutil.tz.tzutc())
         self.default = event['default']
         self.fields = dict([(k,v) for k,v in event.items() if k != 'default'])
         self.visible = True
@@ -171,8 +171,8 @@ class ResultsListbox(urwid.WidgetWrap):
         self._listbox = urwid.ListBox(self._results)
         urwid.WidgetWrap.__init__(self, self._listbox)
  
-    def append(self, docId, event):
-        result = Result(docId, event).reformat(self)
+    def append(self, evid, event):
+        result = Result(evid, event).reformat(self)
         self._results.append(result)
         self._fields += [f for f in result.fields.keys() if f not in self._fields]
 

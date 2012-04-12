@@ -18,7 +18,7 @@
 import math
 from zope.interface import implements
 from terane.bier import ISearcher, IPostingList, IEventStore
-from terane.bier.docid import DocID
+from terane.bier.evid import EVID
 from terane.outputs.store.encoding import json_encode, json_decode
 from terane.loggers import getLogger
 
@@ -111,33 +111,33 @@ class MergedPostingList(object):
         """
         Returns the next posting, or None if iteration is finished.
 
-        :returns: The next posting, which is a tuple containing the docId, the term value, and the searcher, or (None,None,None)
+        :returns: The next posting, which is a tuple containing the evid, the term value, and the searcher, or (None,None,None)
         :rtype: tuple
         """
         curr = 0
-        # check each child iter for the lowest docId
+        # check each child iter for the lowest evid
         for i in range(len(self._iters)):
             # if None, then get the next posting from the iter
             if self._smallestPostings[i][0] == None:
                 self._smallestPostings[i] = self._iters[i].nextPosting()
-            # if the posting docId is None, then check the next iter
+            # if the posting evid is None, then check the next iter
             if self._smallestPostings[i][0] == None:
                 continue
-            # if the docId equals the last docId returned, then ignore it
+            # if the evid equals the last evid returned, then ignore it
             if self._lastId != None and self._smallestPostings[i][0] == self._lastId:
                 self._smallestPostings[i] = (None,None,None)
                 continue
-            # we don't compare the first docId with itself
+            # we don't compare the first evid with itself
             if i == 0:
                 continue
-            # if the docId is the current smallest docId, then remember it
+            # if the evid is the current smallest evid, then remember it
             if self._smallestPostings[curr][0] == None or \
               self._cmp(self._smallestPostings[i][0], self._smallestPostings[curr][0]) < 0:
                 curr = i
-        # update lastId with the docId
+        # update lastId with the evid
         posting = self._smallestPostings[curr]
         self._lastId = posting[0]
-        # forget the docId so we don't return it again
+        # forget the evid so we don't return it again
         self._smallestPostings[curr] = (None,None,None)
         return posting
 
@@ -145,9 +145,9 @@ class MergedPostingList(object):
         """
         Skips to the targetId, returning the posting or None if the posting doesn't exist.
 
-        :param targetId: The target docId to skip to.
-        :type targetId: :class:`terane.bier.docid.DocID`
-        :returns: The target posting, which is a tuple containing the docId, the term value, and the searcher, or (None,None,None)
+        :param targetId: The target evid to skip to.
+        :type targetId: :class:`terane.bier.evid.EVID`
+        :returns: The target posting, which is a tuple containing the evid, the term value, and the searcher, or (None,None,None)
         :rtype: tuple
         """
         posting = None
@@ -231,16 +231,16 @@ class SegmentSearcher(object):
         postings = self._segment.iter_terms_within(self._txn, fieldname, term, str(startId), str(endId))
         return PostingList(self, postings)
 
-    def getEvent(self, docId):
+    def getEvent(self, evid):
         """
-        Returns the event specified by docId.
+        Returns the event specified by evid.
 
-        :param docId: The event docId
-        :type docId: :class:`terane.bier.docid.DocID`
+        :param evid: The event identifier
+        :type evid: :class:`terane.bier.evid.EVID`
         :returns: A dict mapping fieldnames to values.
         :rtype: dict
         """
-        return json_decode(self._segment.get_doc(self._txn, str(docId)))
+        return json_decode(self._segment.get_doc(self._txn, str(evid)))
 
     def close(self):
         self._txn = None
@@ -266,19 +266,19 @@ class PostingList(object):
         """
         Returns the next posting, or None if iteration is finished.
 
-        :returns: The next posting, which is a tuple containing the docId, the term value, and the searcher, or (None,None,None)
+        :returns: The next posting, which is a tuple containing the evid, the term value, and the searcher, or (None,None,None)
         :rtype: tuple
         """
         if self._postings == None:
             return None, None, None
         try:
-            docId,tvalue = self._postings.next()
-            docId = DocID.fromString(docId)
+            evid,tvalue = self._postings.next()
+            evid = EVID.fromString(evid)
             if tvalue == '':
                 tvalue = None
             else:
                 tvalue = json_decode(tvalue)
-            return docId, tvalue, self._searcher
+            return evid, tvalue, self._searcher
         except StopIteration:
             self._postings.close()
             self._postings = None
@@ -288,22 +288,22 @@ class PostingList(object):
         """
         Skips to the targetId, returning the posting or None if the posting doesn't exist.
 
-        :param targetId: The target docId to skip to.
-        :type targetId: :class:`terane.bier.docid.DocID`
-        :returns: The target posting, which is a tuple containing the docId, the term value, and the searcher, or (None,None,None)
+        :param targetId: The target evid to skip to.
+        :type targetId: :class:`terane.bier.evid.EVID`
+        :returns: The target posting, which is a tuple containing the evid, the term value, and the searcher, or (None,None,None)
         :rtype: tuple
         """
         if self._postings == None:
             return None, None, None
         try:
             targetId = str(targetId)
-            docId,tvalue = self._postings.skip(targetId)
-            docId = DocID.fromString(docId)
+            evid,tvalue = self._postings.skip(targetId)
+            evid = EVID.fromString(evid)
             if tvalue == '':
                 tvalue = None
             else:
                 tvalue = json_decode(tvalue)
-            return docId, tvalue, self._searcher
+            return evid, tvalue, self._searcher
         except IndexError:
             return None, None, None
         except StopIteration:

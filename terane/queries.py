@@ -18,7 +18,7 @@
 from twisted.application.service import Service
 from terane.plugins import plugins
 from terane.outputs import ISearchableOutput
-from terane.bier.docid import DocID
+from terane.bier.evid import EVID
 from terane.bier.ql import parseIterQuery, parseTailQuery
 from terane.bier.searching import searchIndices, Period
 from terane.loggers import getLogger
@@ -82,7 +82,7 @@ class QueryManager(Service):
             except KeyError, e:
                 raise QueryExecutionError("unknown index '%s'" % e)
         # if lastId is specified, make sure its a valid value
-        if lastId != None and not isinstance(lastId, DocID):
+        if lastId != None and not isinstance(lastId, EVID):
             raise QueryExecutionError("lastId is not valid")
         # check that limit is > 0
         if limit < 1:
@@ -96,7 +96,7 @@ class QueryManager(Service):
 
     def tail(self, query, lastId=None, indices=None, limit=100, fields=None):
         """
-        Return events newer than the specified 'lastId' docuemnt ID matching the
+        Return events newer than the specified 'lastId' event ID matching the
         specified query.
 
         :param query: The query string.
@@ -122,9 +122,9 @@ class QueryManager(Service):
                 raise QueryExecutionError("unknown index '%s'" % e)
         # if lastId is 0, return the id of the latest document
         if lastId == None:
-            return [], {'runtime': 0.0, 'last-id': str(DocID.fromDatetime())}
+            return [], {'runtime': 0.0, 'last-id': str(EVID.fromDatetime())}
         try:
-            lastId = DocID.fromString(lastId)
+            lastId = EVID.fromString(lastId)
         except:
             raise QueryExecutionError("invalid lastId '%s'" % str(lastId))
         # check that limit is > 0
@@ -132,7 +132,7 @@ class QueryManager(Service):
             raise QueryExecutionError("limit must be greater than 0")
         query = parseTailQuery(query)
         logger.trace("tail query: %s" % query)
-        period = Period(lastId, DocID.fromString(DocID.MAX_ID), True, False)
+        period = Period(lastId, EVID.fromString(EVID.MAX_ID), True, False)
         logger.trace("tail period: %s" % period)
         # query each index, and return the results
         results,fields = searchIndices(indices, query, period, None, True, fields, limit)
@@ -146,7 +146,7 @@ class QueryManager(Service):
         """
         Return metadata about the specified index.  Currently the only information
         returned is the number of events in the index, the last-modified time (as a
-        unix timestamp), and the document ID of the latest event.
+        unix timestamp), and the event ID of the latest event.
 
         :param name: The name of the index.
         :type name: unicode
