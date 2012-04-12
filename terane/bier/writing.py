@@ -18,6 +18,8 @@
 import datetime, dateutil.tz, calendar
 from terane.bier import IIndex, ISchema, IWriter
 from terane.bier.schema import fieldFactory
+from terane.bier.evid import EVID
+from terane.idgen import idgen
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier.writing')
@@ -40,7 +42,6 @@ def writeEventToIndex(event, index):
     # get the timestamp
     ts = event['ts']
     del event['ts']
-    # if the ts field is not a datetime, then parse its string representation
     if not isinstance(ts, datetime.datetime):
         raise WriterError("field 'ts' is not of type datetime.datetime")
     # if no timezone is specified, then assume local tz
@@ -70,9 +71,9 @@ def writeEventToIndex(event, index):
 
     # update the index in the context of a writer
     try:   
-        # create a document record
-        evid = EVID(ts)
-        logger.trace("created new document with id %s" % evid)
+        # create a new event identifier
+        evid = EVID(ts, 0, idgen.allocate())
+        logger.trace("created new event %s" % evid)
         document = {}
 
         # process the value of each field in the event
@@ -94,7 +95,7 @@ def writeEventToIndex(event, index):
 
         # store the document data
         logger.trace("id=%s: event=%s" % (evid,document))
-        writer.newDocument(evid, document)
+        writer.newEvent(evid, document)
     # if an exception was raised, then abort the transaction
     except:
         writer.abort()

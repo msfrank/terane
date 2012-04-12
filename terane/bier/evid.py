@@ -22,7 +22,7 @@ class EVID(object):
     MIN_ID = "00000000000000000000000000000000"
     MAX_ID = "ffffffffffffffffffffffffffffffff"
 
-    def __init__(self, ts, uuid):
+    def __init__(self, ts, node, offset):
         self.ts = int(ts)
         self.node = int(node)
         self.offset = long(offset)

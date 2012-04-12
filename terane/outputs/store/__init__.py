@@ -24,7 +24,6 @@ from terane.bier.writing import writeEventToIndex
 from terane.outputs import Output, ISearchableOutput
 from terane.outputs.store.env import Env
 from terane.outputs.store.index import Index
-from terane.outputs.store.idgen import IDGenerator
 from terane.outputs.store.logfd import LogFD
 from terane.loggers import getLogger
 
@@ -46,7 +45,7 @@ class StoreOutput(Output):
     def startService(self):
         if self._indexName in self.parent._outputs:
             raise Exception("[output:%s] index '%s' is already open" % (self.name,self._indexName))
-        self._index = Index(self.parent._env, self._indexName, self.parent._ids)
+        self._index = Index(self.parent._env, self._indexName)
         logger.debug("[output:%s] opened index '%s'" % (self.name,self._indexName))
         Output.startService(self)
 
@@ -78,8 +77,6 @@ class StoreOutputPlugin(Plugin):
     def __init__(self):
         Plugin.__init__(self)
         self._env = None
-        self._ids = IDGenerator()
-        self._lock = None
         self._outputs = {}
 
     def configure(self, section):
@@ -93,7 +90,6 @@ class StoreOutputPlugin(Plugin):
         self._options['max locks'] = long(section.getInt('max locks', 65536))
         self._options['max objects'] = long(section.getInt('max objects', 65536))
         self._options['max transactions'] = long(section.getInt('max transactions', 0))
-        self._ids.configure(section, self._dbdir)
 
     def startService(self):
         """
@@ -105,8 +101,6 @@ class StoreOutputPlugin(Plugin):
         # open the db environment
         self._env = Env(self._dbdir, self._options)
         logger.debug("[%s] opened database environment in %s" % (self.name,self._dbdir))
-        # start the id generator
-        self._ids.startService()
         Plugin.startService(self)
 
     def stopService(self):
@@ -119,8 +113,6 @@ class StoreOutputPlugin(Plugin):
             if output.running:
                 output.stopService()
             del self._outputs[name]
-        # stop the id generator
-        self._ids.stopService()
         # close the DB environment
         self._env.close()
         logger.debug("[%s] closed database environment" % self.name)

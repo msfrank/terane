@@ -164,14 +164,14 @@ class IWriter(Interface):
         """
         Enter the transactional context.
         """
-    def newEvent(evid, event):
+    def newEvent(evid, fields):
         """
         Create a new event with the specified event identifier.
 
         :param evid: The event identifier to use for the document."
         :type evid: :class:`terane.bier.evid.EVID`
-        :param event: The event fields.
-        :type event: dict
+        :param fields: The event fields.
+        :type fields: dict
         """
     def newPosting(fieldname, term, evid, value):
         """

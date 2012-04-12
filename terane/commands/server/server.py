@@ -23,6 +23,7 @@ from twisted.internet.defer import maybeDeferred
 from terane.plugins import plugins
 from terane.routes import routes
 from terane.queries import queries
+from terane.idgen import idgen
 from terane.stats import stats
 from terane.loggers import getLogger, startLogging, StdoutHandler, FileHandler
 from terane.loggers import ERROR, WARNING, INFO, DEBUG
@@ -107,6 +108,9 @@ class Server(MultiService):
         # configure the query manager
         queries.setServiceParent(self)
         queries.configure(self.settings)
+        # configure the id generator
+        idgen.setServiceParent(self)
+        idgen.configure(self.settings)
         # catch SIGINT and SIGTERM
         signal.signal(signal.SIGINT, self._signal)
         signal.signal(signal.SIGTERM, self._signal)

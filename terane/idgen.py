@@ -1,4 +1,4 @@
-# Copyright 2010,2011 Michael Frank <msfrank@syntaxjockey.com>
+# Copyright 2010,2011,2012 Michael Frank <msfrank@syntaxjockey.com>
 #
 # This file is part of Terane.
 #
@@ -18,7 +18,6 @@
 import os, time
 from twisted.application.service import Service
 from terane.settings import ConfigureError
-from terane.bier.docid import DocID
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.idgen')
@@ -32,14 +31,15 @@ class IDGenerator(Service):
         self._fd = None
         self._cache = []
 
-    def configure(self, section, dbdir):
+    def configure(self, settings):
         """
         Configure the ID generator.
         """
+        section = settings.section('server')
+        self._backingfile = section.getString('id cache file', '/var/lib/terane/idgen')
         self.cachesize = section.getInt('id cache size', 256)
         if self.cachesize < 0:
             raise ConfigureError("'id cache size' cannot be smaller than 0")
-        self._backingfile = os.path.join(dbdir, 'idgen')
 
     def startService(self):
         """
@@ -62,8 +62,10 @@ class IDGenerator(Service):
         self._cache = []
         logger.debug("stopped id generator")
 
-    def allocate(self, ts):
-        return DocID(ts, 0, self._allocateOffset())
+    def allocate(self):
+        """
+        """
+        return self._allocateOffset()
 
     def _allocateOffset(self):
         """
@@ -127,3 +129,6 @@ class IDGenerator(Service):
             os.fsync(self._fd)
         except EnvironmentError, (errno, strerror):
             raise Exception("ID generator failed to write to idgen: %s (%i)" % (strerror,errno))
+
+
+idgen = IDGenerator()

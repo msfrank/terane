@@ -39,24 +39,21 @@ class Index(backend.Index):
     :type env: :class:`terane.db.backend.Env`
     :param name: The name of the index.
     :type name: str
-    :param ids: The ID generator to use for allocating new document identifiers.
-    :type ids: :class:`terane.db.idgen.IDGenerator`
     """
 
     implements(IIndex)
 
-    def __init__(self, env, name, ids):
+    def __init__(self, env, name):
         backend.Index.__init__(self, env, name)
         try:
             self.name = name
-            self._ids = ids
-            # load schema
-            self._schema = Schema(self)
             self._segments = []
             self._indexSize = 0
             self._currentSize = 0
             self._lastModified = 0
             self._lastId = 0
+            # load schema
+            self._schema = Schema(self)
             # load data segments
             with self.new_txn() as txn:
                 for segmentId in self.iter_segments(txn):
@@ -108,9 +105,6 @@ class Index(backend.Index):
         transaction.
         """
         return IndexWriter(self)
-
-    def newDocumentId(self, ts):
-        return self._ids.allocate(ts)
 
     def rotateSegments(self, segRotation, segRetention):
         """
