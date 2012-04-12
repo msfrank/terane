@@ -16,6 +16,7 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import socket, datetime
+from dateutil.tz import tzutc
 from twisted.application.service import MultiService
 from terane.plugins import plugins
 from terane.filters import FilterError, StopFiltering
@@ -90,11 +91,11 @@ class Route(object):
 
     def _receivedEvent(self, fields):
         try:
-            # set default values for input, tx, hostname, and default fields
+            # set default values for basic fields if they are missing
             if not 'input' in fields:
                 fields['input'] = self._input.name
             if not 'ts' in fields:
-                fields['ts'] = datetime.datetime.now().isoformat()
+                fields['ts'] = datetime.datetime.now(tzutc())
             if not 'hostname' in fields:
                 fields['hostname'] = socket.gethostname()
             if not 'default' in fields:

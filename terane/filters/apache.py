@@ -59,7 +59,7 @@ class ApacheCommonFilter(Filter):
             raise FilterError("regex did not match 'date'")
         # parse the timestamp
         try:
-            fields['ts'] = dateutil.parser.parse(date, dayfirst=True, fuzzy=True).isoformat()
+            fields['ts'] = dateutil.parser.parse(date, dayfirst=True, fuzzy=True)
         except Exception, e:
             raise FilterError("failed to parse date '%s': %s" % (date, e))
         # extract each field
@@ -112,7 +112,7 @@ class ApacheCombinedFilter(Filter):
             raise FilterError("regex did not match 'date'")
         # parse the timestamp
         try:
-            fields['ts'] = dateutil.parser.parse(date, dayfirst=True, fuzzy=True).isoformat()
+            fields['ts'] = dateutil.parser.parse(date, dayfirst=True, fuzzy=True)
         except Exception, e:
             raise FilterError("failed to parse date '%s': %s" % (date, e))
         # extract each field
