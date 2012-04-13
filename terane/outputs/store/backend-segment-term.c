@@ -411,7 +411,7 @@ terane_Segment_contains_term (terane_Segment *self, PyObject *args)
  * terane_Segment_estimate_term_postings: Return an estimate of the number of postings
  *  for a term between the start and end document ID.
  *
- * callspec: Segment.estimate_term_count(txn, fieldname, term, start, end)
+ * callspec: Segment.estimate_term_postings(txn, fieldname, term, start, end)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   fieldname (string): The field name
@@ -697,7 +697,7 @@ terane_Segment_iter_terms_within (terane_Segment *self, PyObject *args)
         goto error;
     }
 
-    /* allocate a new  Iter object */
+    /* allocate a new Iter object */
     iter = terane_Iter_new_within ((PyObject *) self, cursor, &ops, start_key, end_key, reverse);
     if (iter == NULL)
         goto error;

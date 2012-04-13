@@ -115,31 +115,36 @@ class IMatcher(Interface):
 class ISearcher(Interface):
     def postingsLength(fieldname, term, startId, endId):
         """
-        Returns an estimate of the  number of possible postings for the term
-        in the specified field.
+        Returns an estimate of the number of possible postings for the term in the
+        specified field.  As a special case, if fieldname and term are None, then
+        return an estimate of the number of documents within the specified period.
 
         :param fieldname: The name of the field to search within.
         :type fieldname: str
         :param term: The term to search for.
         :type term: unicode
-        :param period: The period within which the search query is constrained.
-        :type period: :class:`terane.bier.searching.Period`
+        :param startId:
+        :type startId: :class:`terane.bier.evid.EVID`
+        :param endId:
+        :type endId: :class:`terane.bier.evid.EVID`
         :returns: An estimate of the number of postings.
         :rtype: int
         """
     def iterPostings(fieldname, term, startId, endId):
         """
         Returns an object implementing IPostingList which yields postings for the
-        term in the specified field.
+        term in the specified field.  As a special case, if fieldname and term are
+        None, then yield postings for all terms in all fields within the specified
+        period.
 
         :param fieldname: The name of the field to search within.
         :type fieldname: str
         :param term: The term to search for.
         :type term: unicode
-        :param period: The period within which the search query is constrained.
-        :type period: :class:`terane.bier.searching.Period`
-        :param reverse: If True, then reverse the order of iteration.
-        :type reverse: bool
+        :param startId:
+        :type startId: :class:`terane.bier.evid.EVID`
+        :param endId:
+        :type endId: :class:`terane.bier.evid.EVID`
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
