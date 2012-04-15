@@ -59,16 +59,14 @@ class Grokker(object):
     def listIndicesResult(self, results):
         meta = results.pop(0)
         if len(results) > 0:
-            for row in results: print "%s" % (row['index'])
+            for row in results: print "%s" % row
         reactor.stop()
  
     def showIndexResult(self, results):
         meta = results.pop(0)
-        print "size: %i" % meta['size']
-        ts = meta['last-modified']
-        print "last-modified: %s (%i)" % (datetime.datetime.fromtimestamp(ts).isoformat(), ts)
-        print "last-id: %i" % meta['last-id']
-        print "fields: %s" % ', '.join([row['field'] for row in results])
+        for key,value in sorted(meta.items()):
+            print "%s: %s" % (key,value)
+        print "fields: %s" % ', '.join(results)
         reactor.stop()
 
     def explainQueryResult(self, results):

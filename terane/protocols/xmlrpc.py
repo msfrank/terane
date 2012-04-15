@@ -87,7 +87,8 @@ class XMLRPCDispatcher(XMLRPC):
     @useThread
     def xmlrpc_listIndices(self):
         try:
-            return list(queries.listIndices())
+            indices,meta = queries.listIndices()
+            return [meta] + list(indices)
         except (QuerySyntaxError, QueryExecutionError), e:
             raise FaultBadRequest(e)
         except BaseException, e:
@@ -97,7 +98,8 @@ class XMLRPCDispatcher(XMLRPC):
     @useThread
     def xmlrpc_showIndex(self, name):
         try:
-            return list(queries.showIndex(name))
+            fields,stats = queries.showIndex(name)
+            return [stats] + fields
         except (QuerySyntaxError, QueryExecutionError), e:
             raise FaultBadRequest(e)
         except BaseException, e:

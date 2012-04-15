@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import time
+import time, datetime
 from zope.interface import implements
 from terane.bier import IIndex
 from terane.outputs.store import backend
@@ -105,6 +105,18 @@ class Index(backend.Index):
         transaction.
         """
         return IndexWriter(self)
+
+    def getStats(self):
+        """
+        """
+        lastModified = datetime.datetime.fromtimestamp(self._lastModified).isoformat()
+        return {
+            "index-size": self._indexSize,
+            "current-segment-size": self._currentSize,
+            "num-segments": len(self._segments),
+            "last-modified": lastModified,
+            "last-event": self._lastId
+            }
 
     def rotateSegments(self, segRotation, segRetention):
         """

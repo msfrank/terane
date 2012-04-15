@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
+import time
 from twisted.application.service import Service
 from terane.plugins import plugins
 from terane.outputs import ISearchableOutput
@@ -91,8 +92,10 @@ class QueryManager(Service):
         logger.trace("iter query: %s" % query)
         logger.trace("iter period: %s" % period)
         # query each index and return the results
+        runtime = time.time()
         results,fields = searchIndices(indices, query, period, lastId, reverse, fields, limit)
-        return list(results), {'runtime': 0.0, 'fields': fields}
+        runtime = time.time() - runtime
+        return list(results), {'runtime': runtime, 'fields': fields}
 
     def tail(self, query, lastId=None, indices=None, limit=100, fields=None):
         """
@@ -135,12 +138,14 @@ class QueryManager(Service):
         period = Period(lastId, EVID.fromString(EVID.MAX_ID), True, False)
         logger.trace("tail period: %s" % period)
         # query each index, and return the results
+        runtime = time.time()
         results,fields = searchIndices(indices, query, period, None, True, fields, limit)
+        runtime = time.time() - runtime
         try:
             lastId = results[-1][0]
         except IndexError:
             pass
-        return list(results), {'runtime': 0.0, 'last-id': str(lastId), 'fields': fields}
+        return list(results), {'runtime': runtime, 'last-id': str(lastId), 'fields': fields}
 
     def showIndex(self, name):
         """
@@ -157,13 +162,8 @@ class QueryManager(Service):
             index = self._searchables[name]
         except KeyError, e:
             raise QueryExecutionError("unknown index '%s'" % e)
-        lastId,lastModified,size = index.getLastUpdate()
-        meta = {}
-        meta['name'] = name
-        meta['last-id'] = lastId
-        meta['last-modified'] = lastModified
-        meta['size'] = size
-        return index.schema().listFields(), meta
+        stats = index.getStats()
+        return index.schema().listFields(), stats
 
     def listIndices(self):
         """
@@ -172,7 +172,7 @@ class QueryManager(Service):
         :returns: A Results object containing a list of index names.
         :rtype: :class:`terane.query.results.Results`
         """
-        return list(self._searchables.keys()), {}
+        return self._searchables.keys(), {}
 
 
 queries = QueryManager()
