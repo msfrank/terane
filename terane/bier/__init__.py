@@ -208,3 +208,7 @@ class IIndex(Interface):
         """
         Returns an object implementing IWriter.
         """
+    def getStats():
+        """
+        Returns a dict with Index statistics.
+        """
