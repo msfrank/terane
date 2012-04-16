@@ -20,6 +20,56 @@
 #include "backend.h"
 
 /*
+ * _Segment_make_doc_key:
+ */
+static DBT *
+_Segment_make_doc_key (PyObject *id)
+{
+    char *id_str;
+    Py_ssize_t id_len;
+    DBT *key = NULL;
+
+    assert (id != NULL);
+
+    if (!PyString_Check (id))
+        return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'id' is not str type");
+
+    /* get document ID string and length */
+    if (PyString_AsStringAndSize (id, &id_str, &id_len) < 0)
+        return NULL;        /* raises TypeError */
+
+    /* allocate a DBT to store the key */
+    key = PyMem_Malloc (sizeof (DBT));
+    if (key == NULL)
+        return (DBT *) PyErr_NoMemory ();
+    memset (key, 0, sizeof (DBT));
+
+    /* initialize the DBT */
+    key->size = id_len + 1;
+    key->ulen = key->size;
+    key->flags = DB_DBT_USERMEM;
+    key->data = PyMem_Malloc (key->size);
+    if (key->data == NULL) {
+        PyMem_Free (key);
+        return (DBT *) PyErr_NoMemory ();
+    }
+    strncpy ((char *) key->data, id_str, id_len + 1);
+    return key;
+}
+
+/*
+ * _Segment_free_doc_key:
+ */
+static void
+_Segment_free_doc_key (DBT *key)
+{
+    assert (key != NULL);
+    if (key->data != NULL)
+        PyMem_Free (key->data);
+    PyMem_Free (key);
+}
+
+/*
  * terane_Segment_new_doc: create a new document
  *
  * callspec: Segment.new_doc(txn, evid)
@@ -257,62 +307,152 @@ terane_Segment_contains_doc (terane_Segment *self, PyObject *args)
 }
 
 /*
+ * terane_Segment_estimate_docs: Return an estimate of the number of documents
+ *  between the start and end document IDs.
+ *
+ * callspec: Segment.estimate_docs(txn, start, end)
+ * parameters:
+ *   txn (Txn): A Txn object to wrap the operation in, or None
+ *   start (str): The starting document ID
+ *   end (str): The ending document ID
+ * returns: An estimate of the percentage of documents between the start and end IDs, expressed as a float.
+ * exceptions:
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to find the record
+ */
+PyObject *
+terane_Segment_estimate_docs (terane_Segment *self, PyObject *args)
+{
+    terane_Txn *txn = NULL;
+    PyObject *start = NULL, *end = NULL;
+    DBT *key;
+    DB_KEY_RANGE startrange, endrange;
+    double estimate = 0.0;
+    int dbret, result;
+
+    /* parse parameters */
+    if (!PyArg_ParseTuple (args, "OO!O!", &txn, &PyString_Type, &start, &PyString_Type, &end))
+        return NULL;
+    if ((PyObject *) txn == Py_None)
+        txn = NULL;
+    if (txn && txn->ob_type != &terane_TxnType)
+        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
+
+    /* estimate start key range */
+    key = _Segment_make_doc_key (start);
+    if (key == NULL)
+        return NULL;
+    dbret = self->documents->key_range (self->documents, txn? txn->txn : NULL, key, &startrange, 0);
+    _Segment_free_doc_key (key);
+    if (dbret != 0) 
+        return PyErr_Format (terane_Exc_Error, "Failed to estimate start key range: %s",
+            db_strerror (dbret));
+
+    /* estimate end key range */
+    key = _Segment_make_doc_key (end);
+    if (key == NULL)
+        return NULL;
+    dbret = self->documents->key_range (self->documents, txn? txn->txn : NULL, key, &endrange, 0);
+    _Segment_free_doc_key (key);
+    if (dbret != 0) 
+        return PyErr_Format (terane_Exc_Error, "Failed to estimate end key range: %s",
+            db_strerror (dbret));
+
+    if (PyObject_Cmp (start, end, &result) < 0)
+        return PyErr_Format (terane_Exc_Error, "key comparison failed");
+    if (result > 0)
+        estimate = 1.0 - (endrange.less + startrange.greater);
+    else
+        estimate = 1.0 - (startrange.less + endrange.greater);
+    return PyFloat_FromDouble (estimate);
+}
+/*
  * _Segment_next_doc: build a (evid,document) tuple from the current cursor item
  */
 static PyObject *
 _Segment_next_doc (terane_Iter *iter, DBT *key, DBT *data)
 {
-    PyObject *id, *document, *tuple;
+    PyObject *id, *tuple;
 
-    /* get the document id */
+    /* get the event id */
     id = PyString_FromString ((char *) key->data);
-    /* get the document */
-    document = PyString_FromString ((char *) data->data);
-    /* build the (docnum,document) tuple */
-    tuple = PyTuple_Pack (2, id, document);
+    /* build the (evid,None) tuple */
+    tuple = PyTuple_Pack (2, id, Py_None);
     Py_XDECREF (id);
-    Py_XDECREF (document);
     return tuple;
 }
 
 /*
- * terane_Segment_iter_docs: Iterate through all documents.
+ * terane_Segment_iter_docs_within: Iterate through all documents between the
+ * specified start and end IDs.
  *
  * callspec: Segment.iter_docs(txn)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
+ *   start (str): The starting document ID, inclusive
+ *   end (str): The ending document ID, inclusive
  * returns: a new Iterator object.  Each iteration returns a tuple consisting
  *  of (evid,document).
  * exceptions:
  *   Exception: A db error occurred when trying to get the record
  */
 PyObject *
-terane_Segment_iter_docs (terane_Segment *self, PyObject *args)
+terane_Segment_iter_docs_within (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
+    PyObject *start = NULL, *end = NULL;
     DBC *cursor = NULL;
+    DBT *start_key = NULL, *end_key = NULL;
     PyObject *iter = NULL;
+    int dbret, reverse = 0;
     terane_Iter_ops ops = { .next = _Segment_next_doc };
-    int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O", &txn))
+    if (!PyArg_ParseTuple (args, "OO!O!", &txn, &PyString_Type, &start, &PyString_Type, &end))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-    
+
+    /* determine whether ordering is reversed */
+    if (PyObject_Cmp (start, end, &reverse) < 0)
+        return PyErr_Format (terane_Exc_Error, "comparison of start and end failed");
+    if (reverse < 0)
+        reverse = 0;
+
+    /* build the start and end keys */
+    start_key = _Segment_make_doc_key (start);
+    if (start_key == NULL)
+        goto error;
+    end_key = _Segment_make_doc_key (end);
+    if (end_key == NULL)
+        goto error;
+
     /* create a new cursor */
     dbret = self->documents->cursor (self->documents, txn? txn->txn : NULL, &cursor, 0);
     /* if cursor allocation failed, return Error */
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to allocate document cursor: %s",
             db_strerror (dbret));
-        return NULL;
+        goto error;
     }
-    iter = terane_Iter_new ((PyObject *) self, cursor, &ops, 0);
+
+    /* allocate a new Iter object */
+    iter = terane_Iter_new_within ((PyObject *) self, cursor, &ops, start_key, end_key, reverse);
     if (iter == NULL)
-        cursor->close (cursor);
+        goto error;
+
+    /* clean up and return the Iter */
+    _Segment_free_doc_key (start_key);
+    _Segment_free_doc_key (end_key);
     return iter;
+
+error:
+    if (start_key)
+        _Segment_free_doc_key (start_key);
+    if (end_key)
+        _Segment_free_doc_key (end_key);
+    if (cursor)
+        cursor->close (cursor);
+    return NULL;
 }

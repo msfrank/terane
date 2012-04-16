@@ -161,6 +161,9 @@ def searchIndices(indices, query, period, lastId=None, reverse=False, fields=Non
                 event = dict([(k,v) for k,v in event.items() if k in fields])
             results.append((str(evid), event))
         return results, foundfields
+    except Exception, e:
+        logger.exception(e)
+        raise
     # free any resources the searchers may be holding
     finally:
         for searcher in searchers: searcher.close()

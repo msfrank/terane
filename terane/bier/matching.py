@@ -77,8 +77,6 @@ class Term(object):
 
         :param searcher: A handle to the index we are searching.
         :type searcher: An object implementing :class:`terane.bier.ISearcher`
-        :param period: The period within which the search query is constrained.
-        :type period: :class:`terane.bier.searching.Period`
         :returns: The postings length estimate.
         :rtype: int
         """
@@ -92,9 +90,6 @@ class Term(object):
 
         :param searcher: A handle to the index we are searching.
         :type searcher: An object implementing :class:`terane.bier.ISearcher`
-        :param period: The period within which the search query is constrained.
-        :type period: :class:`terane.bier.searching.Period`
-          
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.IPostingList`
         """
@@ -130,6 +125,43 @@ class Term(object):
     def close(self):
         self._postings.close()
         self._postings = None
+
+class Every(Term):
+    def __init__(self):
+        pass
+    def __str__(self):
+        return "<Every>"
+
+    def optimizeMatcher(self, index):
+        """
+        The Every matcher cannot be optimized, so it just returns itself.
+        """
+        return self
+
+    def matchesLength(self, searcher, startId, endId):
+        """
+        Returns an estimate of the approximate number of matching postings which will
+        be returned using the specified searcher within the specified period.
+
+        :param searcher: A handle to the index we are searching.
+        :type searcher: An object implementing :class:`terane.bier.ISearcher`
+        :returns: The postings length estimate.
+        :rtype: int
+        """
+        length = searcher.postingsLength(None, None, startId, endId)
+        logger.trace("%s: postingsLength() => %i" % (self, length))
+        return length
+
+
+    def iterMatches(self, searcher, startId, endId):
+        """
+        :param searcher: A handle to the index we are searching.
+        :type searcher: An object implementing :class:`terane.bier.ISearcher`
+        :returns: An object for iterating through events matching the query.
+        :rtype: An object implementing :class:`terane.bier.IPostingList`
+        """
+        self._postings = searcher.iterPostings(None, None, startId, endId)
+        return self
 
 class AND(object):
     """
