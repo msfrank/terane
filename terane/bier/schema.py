@@ -31,13 +31,19 @@ class IdentityField(BaseField):
     def terms(self, value):
         if not isinstance(value, list) and not isinstance(value, tuple):
             raise Exception("value '%s' is not of type list or tuple" % value)
-        return iter([(unicode(t.strip()),None) for t in value])
+        terms = [unicode(t.strip()) for t in value if len(t.strip()) > 0]
+        for position in range(len(terms)):
+            yield (terms[position], {'pos': position})
+            position += 1
 
 class TextField(BaseField):
     def terms(self, value):
         if not isinstance(value, unicode) and not isinstance(value, str):
             raise Exception("value '%s' is not of type unicode or str" % value)
-        return iter([(unicode(t),None) for t in value.split() if len(t) > 0])
+        terms = [unicode(t.strip()) for t in value.split() if len(t.strip()) > 0]
+        for position in range(len(terms)):
+            yield (terms[position], {'pos': position})
+            position += 1
 
 class DatetimeField(BaseField):
     def terms(self, value):
@@ -49,7 +55,7 @@ class DatetimeField(BaseField):
         ts = struct.pack(">I", ts)
         # convert the packed int to base64   
         ts = unicode(base64.standard_b64encode(ts))
-        return iter([(ts, None)])
+        yield (ts, None)
 
 def fieldFactory(evalue, **options):
     if isinstance(evalue, str) or isinstance(evalue, unicode):
