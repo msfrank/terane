@@ -81,7 +81,7 @@ def writeEventToIndex(event, index):
             field = schema.getField(fieldname)
             # update the field with the event value
             evalue = event.get(fieldname)
-            for term,tvalue in field.terms(evalue):
+            for term,tvalue in field.parse(evalue):
                 writer.newPosting(fieldname, term, evid, tvalue)
             # add the event value to the document
             document[fieldname] = evalue

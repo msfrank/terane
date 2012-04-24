@@ -27,23 +27,40 @@ class BaseField(object):
     def terms(self, value):
         raise NotImplemented()
 
+    def parse(self, value):
+        raise NotImplemented()
+
 class IdentityField(BaseField):
     def terms(self, value):
         if not isinstance(value, list) and not isinstance(value, tuple):
             raise Exception("value '%s' is not of type list or tuple" % value)
-        terms = [unicode(t.strip()) for t in value if len(t.strip()) > 0]
+        return [unicode(t.strip()) for t in value if len(t.strip()) > 0]
+    def parse(self, value):
+        terms = self.terms(value)
+        positions = {}
         for position in range(len(terms)):
-            yield (terms[position], {'pos': position})
-            position += 1
+            term = terms[position]
+            if term in positions:
+                positions[term]['pos'].append(position)
+            else:
+                positions[term] = {'pos': [position]}
+        return positions.items()
 
 class TextField(BaseField):
     def terms(self, value):
         if not isinstance(value, unicode) and not isinstance(value, str):
             raise Exception("value '%s' is not of type unicode or str" % value)
-        terms = [unicode(t.strip()) for t in value.split() if len(t.strip()) > 0]
+        return [unicode(t.strip()) for t in value.split() if len(t.strip()) > 0]
+    def parse(self, value):
+        terms = self.terms(value)
+        positions = {}
         for position in range(len(terms)):
-            yield (terms[position], {'pos': position})
-            position += 1
+            term = terms[position]
+            if term in positions:
+                positions[term]['pos'].append(position)
+            else:
+                positions[term] = {'pos': [position]}
+        return positions.items()
 
 class DatetimeField(BaseField):
     def terms(self, value):
@@ -55,7 +72,9 @@ class DatetimeField(BaseField):
         ts = struct.pack(">I", ts)
         # convert the packed int to base64   
         ts = unicode(base64.standard_b64encode(ts))
-        yield (ts, None)
+        return [(ts, None)]
+    def parse(self, value):
+        return self.terms(value)
 
 def fieldFactory(evalue, **options):
     if isinstance(evalue, str) or isinstance(evalue, unicode):
