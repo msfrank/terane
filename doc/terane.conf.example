@@ -2,10 +2,6 @@
 # Server configuration
 # ---------------------------------------------------------------------
 [server]
-# the address of the interface to listen on for xmlrpc requests.
-listen address = 127.0.0.1
-# the port to listen on for xmlrpc events.
-listen port = 45565
 # log server messages.  make sure terane-server has permission to write
 # to this file.
 log file = /var/log/terane.log
@@ -21,16 +17,14 @@ stats file = /var/lib/terane/statistics
 stats sync interval = 1
 
 # ---------------------------------------------------------------------
-# Database configuration
-# ---------------------------------------------------------------------
-[database]
-# store database in the specified directory.  make sure this directory
-# exists and terane-server has permission to write there.
-data directory = /var/lib/terane/db
-
-# ---------------------------------------------------------------------
 # Plugins configuration
 # ---------------------------------------------------------------------
+[plugin:protocol:xmlrpc]
+# the address of the interface to listen on for xmlrpc requests.
+listen address = 127.0.0.1
+# the port to listen on for xmlrpc requests.
+listen port = 45565
+
 [plugin:input:file]
 
 [plugin:input:syslog]
@@ -52,6 +46,9 @@ data directory = /var/lib/terane/db
 [plugin:filter:nagios]
 
 [plugin:output:store]
+# store database in the specified directory.  make sure this directory
+# exists and terane-server has permission to write there.
+data directory = /var/lib/terane/db
 
 [plugin:output:forward]
 
