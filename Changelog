@@ -1,4 +1,18 @@
-Release 0.1.3
+Release 0.2.0
+-------------
+
+Note: This release includes backwards-incompatible DB changes!
+
+ * completely rewrote the indexing and searching system, removing the
+   dependency on Whoosh.
+ * enabled MVCC in the store output plugin.
+ * added 'max transactions' option to store output plugin configuration.
+ * (#38) added 'iter' XMLRPC method.
+ * 'show-index' XMLRPC method shows more information.
+ * (#41) added Every matcher for iterating through all events in a date range.
+ * (#42) implemented phrase search for Text and Identity fields.
+
+ Release 0.1.3
 -------------
 
 Note: This release includes a backwards-incompatible DB change!
