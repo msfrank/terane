@@ -69,8 +69,14 @@ class Period(object):
         return True
 
     def __str__(self):
-        start = time.strftime("%a, %d %b %Y %H:%M:%S UTC", time.gmtime(self.start.ts))
-        end = time.strftime("%a, %d %b %Y %H:%M:%S UTC", time.gmtime(self.end.ts))
+        if self.start.ts >= 0 and self.start.ts < 2**31:
+            start = time.strftime("%a, %d %b %Y %H:%M:%S UTC", time.gmtime(self.start.ts))
+        else:
+            start = "0x%x" % self.start.ts
+        if self.end.ts >= 0 and self.end.ts < 2**31:
+            end = time.strftime("%a, %d %b %Y %H:%M:%S UTC", time.gmtime(self.end.ts))
+        else:
+            end = "0x%x" % self.end.ts
         return "<Period from %s to %s>" % (start, end)
 
     def getRange(self):
