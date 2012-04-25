@@ -62,11 +62,11 @@ class Term(object):
         if not schema.hasField(self.fieldname):
             return None
         field = schema.getField(self.fieldname)
-        terms = list([term for term,_ in field.terms(self.value)])
+        terms = field.terms(self.value)
         if len(terms) == 0:
             return None
         elif len(terms) > 1:
-            return OR([Term(self.fieldname,t).optimizeMatcher(index) for t in terms])
+            return Phrase(self.fieldname, terms).optimizeMatcher(index)
         self.value = terms[0]
         return self
 
@@ -648,3 +648,162 @@ class Sieve(object):
         self._filterIter.close()
         self._filterIter = None
         self._sourceIter = None
+
+class Phrase(object):
+    """
+    The phrase query matcher.  In order for an event to match, it must match all
+    child term matchers, and each term must appear in the appropriate position.
+    """
+
+    implements(IMatcher, IPostingList)
+
+    def __init__(self, fieldname, value):
+        """
+        :param phrase: A list of child term matchers.
+        :type phrase: list of strings
+        """
+        if fieldname == None:
+            self.fieldname = 'default'
+        else:
+            self.fieldname = fieldname
+        self.value = value
+        self._lengths = None
+        self._iters = None
+
+    def __str__(self):
+        return "<Phrase %s>" % self.value
+
+    def optimizeMatcher(self, index):
+        """
+        Optimize the matcher.  If the field doesn't exist in the schema, then toss the matcher.
+
+        :param index: The index we will be running the query on.
+        :type index: Object implementing :class:`terane.bier.IIndex`
+        :returns: The optimized matcher.
+        :rtype: An object implementing :class:`terane.bier.IMatcher`
+        """
+        schema = index.schema()
+        if not schema.hasField(self.fieldname):
+            return None
+        field = schema.getField(self.fieldname)
+        if isinstance(self.value, unicode):
+            self.terms = field.terms(self.value)
+        else:
+            self.terms = self.value
+        if len(self.terms) == 1:
+            return Term(self.fieldname, self.terms[0]).optimizeMatcher(index)
+        return self
+
+    def matchesLength(self, searcher, startId, endId):
+        """
+        Returns an estimate of the approximate number of postings which will be returned
+        for the query using the specified searcher within the specified period.  The estimate
+        for an AND operator is the minimum estimate of its child queries.
+
+        :param searcher: A handle to the index we are searching.
+        :type searcher: An object implementing :class:`terane.bier.searching.ISearcher`
+        :param period: The period within which the search query is constrained.
+        :type period: :class:`terane.bier.searching.Period`
+        :returns: The postings length estimate.
+        :rtype: int
+        """
+        self._lengths = []
+        for position in range(len(self.terms)):
+            term = self.terms[position]
+            length = searcher.postingsLength(self.fieldname, term, startId, endId)
+            bisect.insort_right(self._lengths, (length,term,position))
+        length = self._lengths[0][0]
+        logger.trace("%s: matchesLength() => %i" % (self, length))
+        return length
+
+    def iterMatches(self, searcher, startId, endId):
+        """
+        Returns an object for iterating through events matching the query.
+
+        :param searcher: A handle to the index we are searching.
+        :type searcher: An object implementing :class:`terane.bier.searching.ISearcher`
+        :param period: The period within which the search query is constrained.
+        :type period: :class:`terane.bier.searching.Period`
+        :returns: An object for iterating through events matching the query.
+        :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
+        """
+        if self._lengths == None:
+            self.matchesLength(searcher, startId, endId)
+        self._iters = [searcher.iterPostings(self.fieldname, v[1], startId, endId) for v in self._lengths]
+        return self
+
+    def nextPosting(self):
+        """
+        Returns the event identifier of the next event matching the query, or None if there are no
+        more events which match the query.
+
+        :returns: The event identifier of the next matching event, or None.
+        :rtype: :class:`terane.bier.evid.EVID`
+        """
+        def _get():
+            while True:
+                postings = []
+                smallest = 0
+                posting = self._iters[0].nextPosting()
+                if posting == (None, None, None):
+                    return posting
+                postings.append(posting)
+                for i in range(len(self._iters))[1:]:
+                    posting = self._iters[i].skipPosting(postings[0][0])
+                    if posting == (None, None, None):
+                        break
+                    postings.append(posting)
+                if len(postings) != len(self._iters):
+                    continue
+                if self._positionsMatch(postings) == True:
+                    return posting
+        posting = _get()
+        logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
+        return posting
+
+    def skipPosting(self, targetId):
+        """
+        Returns the event identifier matching targetId if the query contains the specified targetId,
+        or None if the targetId is not present.
+
+        :returns: The event identifier matching the targetId, or None.
+        :rtype: :class:`terane.bier.evid.EVID`
+        """
+        def _skip():
+            postings = []
+            smallest = 0
+            for i in range(len(self._iters)):
+                posting = self._iters[i].skipPosting(targetId)
+                if posting[0] == None:
+                    return (None, None, None)
+                postings.append(posting)
+            if self._positionsMatch(postings) == True:
+                return posting[0]
+            return (None, None, None)
+        posting = _skip()
+        logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
+        return posting
+
+    def _positionsMatch(self, postings):
+        """
+        Returns True if the posting positions line up, otherwise False.
+        """
+        positions = []
+        for i in range(len(postings)):
+            positions.append((self._lengths[i][2], postings[i][1]['pos']))
+        positions = map(lambda x: x[1], sorted(positions))
+        logger.trace("%s: _positionsMatch(%s): positions=%s" % (self, postings[0][0], positions))
+        for firstPos in positions[0]:
+            positionsMatch = True
+            for i in range(1, len(positions)):
+                if (firstPos + i) not in positions[i]:
+                    positionsMatch = False
+                    break
+            if positionsMatch == True:
+                return True
+        return False
+
+    def close(self):
+        self._lengths = None
+        for i in self._iters: i.close()
+        self._iters = None

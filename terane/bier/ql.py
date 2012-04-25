@@ -77,7 +77,7 @@ Query Grammar
 
 import datetime, dateutil.tz
 import pyparsing as pp
-from terane.bier.matching import Term, Every, AND, OR, NOT
+from terane.bier.matching import Term, Phrase, Every, AND, OR, NOT
 from terane.bier.searching import Period
 
 class QuerySyntaxError(BaseException):
@@ -131,8 +131,14 @@ subjectTerm = ( pp.Word(unreservedChars) + fieldSeparator + subjectWord ) | subj
 def parseSubjectTerm(tokens):
     "Parse a subject term."
     if len(tokens) == 1:
-        return Term(None, unicode(tokens[0]))
-    return Term(str(tokens[0]), unicode(tokens[1]))
+        fieldname,term = None, unicode(tokens[0])
+    else:
+        fieldname,term = str(tokens[0]), unicode(tokens[1])
+    if term[0] == '\"' and term[-1] == '\"':
+        return Phrase(fieldname, term[1:-1])
+    if term[0] == '\'' and term[-1] == '\'':
+        return Term(fieldname, term[1:-1])
+    return Term(fieldname, term)
 subjectTerm.setParseAction(parseSubjectTerm)
 
 def makeUTC(dt):
