@@ -15,27 +15,41 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import datetime, calendar, struct, base64
+import datetime, calendar, struct, base64, re
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier.schema')
 
-class BaseField(object):
-    def __init__(self, options):
-        self.options = options
+class IdentityField(object):
+    """
+    IdentityField stores data as-is, without any linguistic processing.
+    """
 
     def terms(self, value):
-        raise NotImplemented()
+        """
+        The IdentityField tokenizer just converts each item in value to unicode,
+        if necessary.
 
-    def parse(self, value):
-        raise NotImplemented()
-
-class IdentityField(BaseField):
-    def terms(self, value):
+        :param value: The list or tuple value to tokenize.
+        :type value: list or tuple
+        :returns: A list of tokenized terms.
+        :rtype: list
+        """
         if not isinstance(value, list) and not isinstance(value, tuple):
             raise Exception("value '%s' is not of type list or tuple" % value)
-        return [unicode(t.strip()) for t in value if len(t.strip()) > 0]
+        return [unicode(t) for t in value if t != '']
+
     def parse(self, value):
+        """
+        Return a list of tuples, each containing a tokenized term and a dict
+        containing term metadata.  The metadata for an IdentityField term is the
+        'pos' item which is a list of term positions.
+
+        :param value: The list or tuple value to parse.
+        :type value: list or tuple
+        :returns: A list of (term, metadata) tuples.
+        :rtype: list
+        """
         terms = self.terms(value)
         positions = {}
         for position in range(len(terms)):
@@ -46,12 +60,42 @@ class IdentityField(BaseField):
                 positions[term] = {'pos': [position]}
         return positions.items()
 
-class TextField(BaseField):
+class TextField(object):
+    """
+    TextField stores input by breaking it into tokens separated by whitespace or
+    any character other than an underscore, numeral, or alphanumeric character
+    (as designated by the unicode properties database).  Tokens in a TextField are
+    always lowercased, so queries on a TextField are case-insensitive.
+    """
+
     def terms(self, value):
+        """
+        Process the specified unicode or string value, breaking it up into tokens.
+        Tokens are separated by any run of one or more characters which are not in
+        [0-9_] and not alphanumeric as defined by the unicode properties database.
+        Further, each token is converted to all lowercase if necessary.
+
+        :param value: The string value to tokenize.
+        :type value: unicode or str
+        :returns: A list of tokenized terms.
+        :rtype: list
+        """
         if not isinstance(value, unicode) and not isinstance(value, str):
             raise Exception("value '%s' is not of type unicode or str" % value)
-        return [unicode(t.strip()) for t in value.split() if len(t.strip()) > 0]
+        return [unicode(t.lower()) for t in re.split(r'\W+', value, re.UNICODE) if t != '']
+
     def parse(self, value):
+        """
+        Process the specified unicode or string value, breaking it up into tokens,
+        and return a list of tuples, each containing a tokenized term and a dict
+        containing term metadata.  The metadata for a TextField term is the 'pos'
+        item which is a list of term positions.
+
+        :param value: The string value to parse.
+        :type value: unicode or str
+        :returns: A list of (term, metadata) tuples.
+        :rtype: list
+        """
         terms = self.terms(value)
         positions = {}
         for position in range(len(terms)):
@@ -62,7 +106,11 @@ class TextField(BaseField):
                 positions[term] = {'pos': [position]}
         return positions.items()
 
-class DatetimeField(BaseField):
+class DatetimeField(object):
+    """
+    DatetimeField stores a python datetime.datetime.
+    """
+
     def terms(self, value):
         if not isinstance(value, datetime.datetime):
             raise Exception("value '%s' is not of type datetime.datetime" % value)
@@ -72,15 +120,24 @@ class DatetimeField(BaseField):
         ts = struct.pack(">I", ts)
         # convert the packed int to base64   
         ts = unicode(base64.standard_b64encode(ts))
-        return [(ts, None)]
-    def parse(self, value):
-        return self.terms(value)
+        return [ts,]
 
-def fieldFactory(evalue, **options):
-    if isinstance(evalue, str) or isinstance(evalue, unicode):
-        return TextField(options)
-    if isinstance(evalue, datetime.datetime):
-        return DatetimeField(options)
-    if isinstance(evalue, list) or isinstance(evalue, tuple):
-        return IdentityField(options)
-    raise TypeError("unknown event value type '%s'" % str(type(evalue)))
+    def parse(self, value):
+        return [(self.terms(value)[0], None)]
+
+def fieldFactory(value):
+    """
+    Given a value, return a new field instance of the appropriate type for the value.
+
+    :param value: The object to instantiate a new field for.
+    :type value: object
+    :returns: A new field instance.
+    :rtype: An object implementing :class:`terane.bier.IField`
+    """
+    if isinstance(value, str) or isinstance(value, unicode):
+        return TextField()
+    if isinstance(value, datetime.datetime):
+        return DatetimeField()
+    if isinstance(value, list) or isinstance(value, tuple):
+        return IdentityField()
+    raise TypeError("unknown event value type '%s'" % str(type(value)))
