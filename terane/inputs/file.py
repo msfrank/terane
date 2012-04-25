@@ -201,7 +201,7 @@ class FileInput(Input):
         # filters aren't able to add it
         ts = datetime.datetime.now(tzutc())
         hostname = socket.getfqdn()
-        fields = {'input':self.name, '_raw':line, 'ts':ts, 'hostname':hostname}
+        fields = {'_raw':line, 'default':line, 'input':self.name, 'ts':ts, 'hostname':hostname}
         self.on_received_event.signal(fields)
 
     def _error(self, failure):
