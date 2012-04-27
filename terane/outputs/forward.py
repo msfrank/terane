@@ -24,8 +24,8 @@ from twisted.python.failure import Failure
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
 from terane.outputs import Output, IOutput
-from terane.stats import stats
 from terane.loggers import getLogger
+from terane.stats import getStat
 
 logger = getLogger('terane.outputs.forward')
 
@@ -37,8 +37,8 @@ class ForwardOutput(Output):
         self.forwardserver = section.getString('forwarding address', None)
         self.forwardport = section.getInt('forwarding port', None)
         self.retryinterval = section.getInt('retry interval', 10)
-        self.forwardedevents = stats.get("terane.output.%s.forwardedevents" % self.name, 0, int)
-        self.stalerefs = stats.get("terane.output.%s.stalerefs" % self.name, 0, int)
+        self.forwardedevents = getStat("terane.output.%s.forwardedevents" % self.name, 0, int)
+        self.stalerefs = getStat("terane.output.%s.stalerefs" % self.name, 0, int)
         
     def startService(self):
         Output.startService(self)

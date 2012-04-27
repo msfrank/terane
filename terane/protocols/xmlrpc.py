@@ -24,17 +24,17 @@ from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
 from terane.queries import queries, QueryExecutionError
 from terane.bier.ql import QuerySyntaxError
-from terane.stats import stats
 from terane.loggers import getLogger
+from terane.stats import getStat, stats
 
 logger = getLogger('terane.protocols.xmlrpc')
 
-searches = stats.get('terane.protocols.xmlrpc.search.count', 0, int)
-iters = stats.get('terane.protocols.xmlrpc.iter.count', 0, int)
-tails = stats.get('terane.protocols.xmlrpc.tail.count', 0, int)
-totalsearchtime = stats.get('terane.protocols.xmlrpc.search.totaltime', 0.0, float)
-totalitertime = stats.get('terane.protocols.xmlrpc.iter.totaltime', 0.0, float)
-totaltailtime = stats.get('terane.protocols.xmlrpc.tail.totaltime', 0.0, float)
+searches = getStat('terane.protocols.xmlrpc.search.count', 0, int)
+iters = getStat('terane.protocols.xmlrpc.iter.count', 0, int)
+tails = getStat('terane.protocols.xmlrpc.tail.count', 0, int)
+totalsearchtime = getStat('terane.protocols.xmlrpc.search.totaltime', 0.0, float)
+totalitertime = getStat('terane.protocols.xmlrpc.iter.totaltime', 0.0, float)
+totaltailtime = getStat('terane.protocols.xmlrpc.tail.totaltime', 0.0, float)
 
 class FaultInternalError(xmlrpclib.Fault):
     def __init__(self):
