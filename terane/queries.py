@@ -139,7 +139,7 @@ class QueryManager(Service):
         logger.trace("tail period: %s" % period)
         # query each index, and return the results
         runtime = time.time()
-        results,fields = searchIndices(indices, query, period, None, True, fields, limit)
+        results,fields = searchIndices(indices, query, period, None, False, fields, limit)
         runtime = time.time() - runtime
         try:
             lastId = results[-1][0]
