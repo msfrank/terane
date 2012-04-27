@@ -2,6 +2,9 @@
 # Server configuration
 # ---------------------------------------------------------------------
 [server]
+# drop privileges, using the specified user and group
+runtime user = terane
+runtime group = terane
 # log server messages.  make sure terane-server has permission to write
 # to this file.
 log file = /var/log/terane.log
