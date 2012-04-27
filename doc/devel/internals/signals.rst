@@ -1,5 +1,5 @@
-==================
-``signals`` module
-==================
+=========================
+``terane.signals`` module
+=========================
 
 .. automodule:: terane.signals

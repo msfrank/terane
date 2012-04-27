@@ -1,8 +1,10 @@
-=====================
-``db.writing`` module
-=====================
+=======================================
+``terane.outputs.store.writing`` module
+=======================================
 
-.. automodule:: terane.db.writing
+.. automodule:: terane.outputs.store.writing
+
+.. autoexception:: WriterExpired
 
 .. autoclass:: IndexWriter
     :members:

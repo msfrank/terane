@@ -1,5 +1,5 @@
-================
-``stats`` module
-================
+=======================
+``terane.stats`` module
+=======================
 
 .. automodule:: terane.stats

@@ -1,8 +1,8 @@
-===================
-``db.index`` module
-===================
+=====================================
+``terane.outputs.store.index`` module
+=====================================
 
-.. automodule:: terane.db.index
+.. automodule:: terane.outputs.store.index
 
 .. autoclass:: Index
     :members:

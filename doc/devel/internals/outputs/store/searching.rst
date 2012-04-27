@@ -1,14 +1,17 @@
-=====================
-``db.reading`` module
-=====================
+=========================================
+``terane.outputs.store.searching`` module
+=========================================
 
-.. automodule:: terane.db.reading
+.. automodule:: terane.outputs.store.searching
 
-.. autoclass:: SegmentReader
+.. autoclass:: IndexSearcher
     :members:
 
-.. autoclass:: PostingReader
+.. autoclass:: MergedPostingList
     :members:
 
-.. autoclass:: MultiReader
+.. autoclass:: SegmentSearcher
+    :members:
+
+.. autoclass:: PostingList
     :members:

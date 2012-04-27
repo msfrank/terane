@@ -1,6 +1,6 @@
-==================
-``loggers`` module
-==================
+=========================
+``terane.loggers`` module
+=========================
 
 .. automodule:: terane.loggers
 
