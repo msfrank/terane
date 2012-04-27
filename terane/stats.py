@@ -25,17 +25,20 @@ logger = getLogger('terane.stats')
 
 class Stat(object):
 
-    def __init__(self, name, ivalue, itype):
+    def __init__(self, name, ivalue, itype, volatile):
         self.name = name
-        self._value = itype(ivalue)
+        self._volatile = volatile
+        self._ivalue = ivalue
         self._itype = itype
+        self._value = itype(ivalue)
 
     def _getvalue(self):
         return self._value
 
     def _setvalue(self, v):
         self._value = self._itype(v)
-        stats._dirty = True
+        if self._volatile == False:
+            stats._dirty = True
 
     value = property(_getvalue,_setvalue)
  
@@ -69,7 +72,7 @@ class StatsManager(Service):
             self._saveStats()
         Service.stopService(self)
 
-    def getStat(self, name, ivalue, itype):
+    def getStat(self, name, ivalue, itype, volatile):
         """
         """
         for c in name.split('.'):
@@ -80,7 +83,7 @@ class StatsManager(Service):
             if not s._itype == itype:
                 raise TypeError("%s already has type %s" % (name,s._itype.__name__))
         else:
-            s = Stat(name, ivalue, itype)
+            s = Stat(name, ivalue, itype, volatile)
             self._stats[name] = s
         return s
 
@@ -99,7 +102,8 @@ class StatsManager(Service):
         try:
             with open(self.statsfile, 'w') as f:
                 for name,s in sorted(self._stats.items(), lambda x,y: cmp(x[0],y[0])):
-                    f.write("%s %s\n" % (name,str(s.value)))
+                    if s._volatile == False:
+                        f.write("%s %s\n" % (name,str(s.value)))
             self._dirty = False
         except (IOError,OSError), e:
             logger.warning("failed to save statistics: %s" % e.strerror)
@@ -112,4 +116,7 @@ stats = StatsManager()
 """
 
 def getStat(name, ivalue, itype):
-    return stats.getStat(name, ivalue, itype)
+    return stats.getStat(name, ivalue, itype, False)
+
+def getVolatileStat(name, ivalue, itype):
+    return stats.getStat(name, ivalue, itype, True)
