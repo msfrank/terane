@@ -54,7 +54,24 @@ Developer Documentation
 -----------------------
 
 .. toctree::
-   :maxdepth: 2
 
    devel/architecture
-   devel/internals
+   devel/internals/__init__
+   devel/internals/commands/__init__
+   devel/internals/bier/__init__
+   devel/internals/bier/evid
+   devel/internals/bier/matching
+   devel/internals/bier/schema
+   devel/internals/bier/searching
+   devel/internals/bier/writing
+   devel/internals/loggers
+   devel/internals/plugins
+   devel/internals/routes
+   devel/internals/settings
+   devel/internals/signals
+   devel/internals/stats
+   devel/internals/protocols/xmlrpc
+   devel/internals/outputs/store/backend
+   devel/internals/outputs/store/index
+   devel/internals/outputs/store/searching
+   devel/internals/outputs/store/writing
