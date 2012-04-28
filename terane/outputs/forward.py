@@ -95,13 +95,13 @@ class ForwardOutput(Output):
         except DeadReferenceError:
             # if we are not already in the process of reconnecting, then reconnect
             if not isinstance(self._remote, Deferred):
-                self.stalerefs.value += 1
+                self.stalerefs += 1
                 logger.debug("[output:%s] lost reference to collector at %s:%i" %
                 (self.name, self.forwardserver, self.forwardport))
                 self._reconnect()
 
     def _collected(self, unused):
-        self.forwardedevents.value += 1
+        self.forwardedevents += 1
 
     def _collectFailed(self, reason):
         logger.debug("[output:%s] failed to forward event to %s:%i: %s" %
