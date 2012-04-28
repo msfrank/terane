@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os
+import os, json
 from twisted.application.service import Service
 from twisted.internet import task
 from terane.settings import ConfigureError
@@ -39,9 +39,15 @@ class Stat(object):
         self._value = self._itype(v)
         if self._volatile == False:
             stats._dirty = True
+ 
+    def __add__(self, other):
+        self.value = self.value + self._itype(other)
+
+    def __lshift__(self, other):
+        self.value = other
 
     value = property(_getvalue,_setvalue)
- 
+
 class StatsManager(Service):
 
     def __init__(self):
@@ -58,6 +64,7 @@ class StatsManager(Service):
     def startService(self):
         Service.startService(self)
         if self.statsfile != '':
+            self._loadStats()
             self._syncstats = task.LoopingCall(self._saveStats)
             self._syncstats.start(self.syncinterval, False)
             logger.debug("logging statistics to %s every %i seconds" % (self.statsfile,self.syncinterval)) 
@@ -75,6 +82,8 @@ class StatsManager(Service):
     def getStat(self, name, ivalue, itype, volatile):
         """
         """
+        if name.startswith('.') or name.endswith('.'):
+            raise ValueError("'name' cannot start or end with a '.'")
         for c in name.split('.'):
             if not c.isalnum():
                 raise ValueError("'name' must consist of only letters, numbers, and periods")
@@ -90,9 +99,39 @@ class StatsManager(Service):
     def showStats(self, name, recursive=False):
         """
         """
+        name = name.strip('.')
+        for c in name.split('.'):
+            if not c.isalnum():
+                raise ValueError("'name' must consist of only letters, numbers, and periods")
         if recursive == False:
-            return [(name, self._stats[name].value)]
-        return [(k,v.value) for k,v in self._stats.items() if k == name or k.startswith("%s."%k)]
+            try:
+                return [(name, self._stats[name].value)]
+            except:
+                return []
+        if name == '':
+            return sorted([(k,v.value) for k,v in self._stats.items()])
+        return sorted([(k,v.value) for k,v in self._stats.items()
+            if k == name or k.startswith("%s." % name)])
+
+    def _loadStats(self):
+        """
+        """
+        if self.statsfile == None:
+            return
+        try:
+            with open(self.statsfile, 'r') as f:
+                for line in f.readlines():
+                    try:
+                        name,v = line.split(' ', 1)
+                        value = json.loads(v)
+                        stat = self.getStat(name, value, type(value), False)
+                        stat.value = value
+                    except Exception, e:
+                        logger.warning("failed to load statistic %s: %s" % (name,e))
+        except (IOError,OSError), e:
+            logger.warning("failed to load statistics: %s" % e.strerror)
+        except Exception, e:
+            logger.warning("failed to load statistics: %s" % str(e))
 
     def _saveStats(self):
         """
@@ -103,12 +142,17 @@ class StatsManager(Service):
             with open(self.statsfile, 'w') as f:
                 for name,s in sorted(self._stats.items(), lambda x,y: cmp(x[0],y[0])):
                     if s._volatile == False:
-                        f.write("%s %s\n" % (name,str(s.value)))
+                        f.write("%s %s\n" % (name,json.dumps(s.value)))
             self._dirty = False
         except (IOError,OSError), e:
             logger.warning("failed to save statistics: %s" % e.strerror)
         except Exception, e:
             logger.warning("failed to save statistics: %s" % str(e))
+
+    def flushStats(self, flushAll=False):
+        """
+        """
+        pass
 
 
 stats = StatsManager()
