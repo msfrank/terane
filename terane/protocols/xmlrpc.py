@@ -29,12 +29,6 @@ from terane.stats import getStat, stats
 
 logger = getLogger('terane.protocols.xmlrpc')
 
-searches = getStat('terane.protocols.xmlrpc.search.count', 0, int)
-iters = getStat('terane.protocols.xmlrpc.iter.count', 0, int)
-tails = getStat('terane.protocols.xmlrpc.tail.count', 0, int)
-totalsearchtime = getStat('terane.protocols.xmlrpc.search.totaltime', 0.0, float)
-totalitertime = getStat('terane.protocols.xmlrpc.iter.totaltime', 0.0, float)
-totaltailtime = getStat('terane.protocols.xmlrpc.tail.totaltime', 0.0, float)
 
 class FaultInternalError(xmlrpclib.Fault):
     def __init__(self):
@@ -57,13 +51,17 @@ class XMLRPCDispatcher(XMLRPC):
 
     def __init__(self):
         XMLRPC.__init__(self)
+        self.iters = getStat('terane.protocols.xmlrpc.iter.count', 0, int)
+        self.tails = getStat('terane.protocols.xmlrpc.tail.count', 0, int)
+        self.totalitertime = getStat('terane.protocols.xmlrpc.iter.totaltime', 0.0, float)
+        self.totaltailtime = getStat('terane.protocols.xmlrpc.tail.totaltime', 0.0, float)
 
     @useThread
     def xmlrpc_iter(self, query, last=None, indices=None, limit=100, reverse=False, fields=None):
         try:
-            iters.value += 1
+            self.iters += 1
             results,meta = queries.iter(unicode(query), last, indices, limit, reverse, fields)
-            totalitertime.value += float(meta['runtime'])
+            self.totalitertime += float(meta['runtime'])
             return [meta] + list(results)
         except (QuerySyntaxError, QueryExecutionError), e:
             raise FaultBadRequest(e)
@@ -74,9 +72,9 @@ class XMLRPCDispatcher(XMLRPC):
     @useThread
     def xmlrpc_tail(self, query, last=None, indices=None, limit=100, fields=None):
         try:
-            tails.value += 1
+            self.tails += 1
             results,meta = queries.tail(unicode(query), last, indices, limit, fields)
-            totaltailtime.value += float(meta['runtime'])
+            self.totaltailtime += float(meta['runtime'])
             return [meta] + list(results)
         except (QuerySyntaxError, QueryExecutionError), e:
             raise FaultBadRequest(e)
@@ -102,6 +100,23 @@ class XMLRPCDispatcher(XMLRPC):
             return [stats] + fields
         except (QuerySyntaxError, QueryExecutionError), e:
             raise FaultBadRequest(e)
+        except BaseException, e:
+            logger.exception(e)
+            raise FaultInternalError()
+
+    @useThread
+    def xmlrpc_showStats(self, name, recursive=False):
+        try:
+            return stats.showStats(name, recursive)
+        except BaseException, e:
+            logger.exception(e)
+            raise FaultInternalError()
+
+    @useThread
+    def xmlrpc_flushStats(self, flushAll=False):
+        try:
+            stats.flushStats(flushAll)
+            return []
         except BaseException, e:
             logger.exception(e)
             raise FaultInternalError()
