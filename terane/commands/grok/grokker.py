@@ -28,6 +28,8 @@ class Grokker(object):
             'list-indices': ('listIndices', self.listIndicesResult),
             'show-index': ('showIndex', self.showIndexResult),
             'explain-query': ('explainQuery', self.explainQueryResult),
+            'show-stats': ('showStats', self.showStatsResult),
+            'flush-stats': ('flushStats', self.flushStatsResult),
             }
 
     def configure(self, settings):
@@ -67,6 +69,14 @@ class Grokker(object):
         for key,value in sorted(meta.items()):
             print "%s: %s" % (key,value)
         print "fields: %s" % ', '.join(results)
+        reactor.stop()
+
+    def showStatsResult(self, results):
+        for key,value in results:
+            print "%s: %s" % (key,value)
+        reactor.stop()
+
+    def flushStatsResult(self, results):
         reactor.stop()
 
     def explainQueryResult(self, results):
