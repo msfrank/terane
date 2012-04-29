@@ -15,10 +15,8 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os
-from os.path import normpath, join
-from ConfigParser import SafeConfigParser
-from optparse import OptionParser, OptionError
+import os, sys, getopt
+from ConfigParser import RawConfigParser
 from terane.loggers import getLogger
 from terane import versionstring
 
@@ -30,37 +28,26 @@ class ConfigureError(Exception):
     """
     pass
 
-class Settings(object):
-    """
-    Contains configuration loaded from the configuration file and
-    parsed from command-line arguments.
+class Parser(object):
+    def __init__(self, name, usage, description, parent=None, handler=None):
+        self.name = name
+        self.usage = usage
+        self.description = description
+        self._parent = parent
+        self._handler = handler
+        self._subcommands = {}
+        self._options = {}
+        self._shortnames = ''
+        self._longnames = ['help']
 
-    :param usage: The usage string, displayed in --help output
-    :type usage: str
-    :param description: A short application description, displayed in --help output
-    :type description: str
-    """
+    def addSubcommand(self, name, usage, description, handler=None):
+        if name in self._subcommands:
+            raise ConfigureError("subcommand '%s' is already defined" % name)
+        subcommand = Parser(name, usage, description, self, handler)
+        self._subcommands[name] = subcommand
+        return subcommand
 
-    def __init__(self, usage=None, description=None):
-        self._parser = OptionParser(version="%prog " + versionstring(),
-            usage=usage, description=description)
-        self.appname = self._parser.get_prog_name()
-        self._parser.add_option("-c","--config-file",
-            dest="config_file",
-            help="use global configuration file FILE",
-            metavar="FILE",
-            default="/etc/terane/%s.conf" % self.appname
-            )
-        self._config = SafeConfigParser()
-        self._overrides = SafeConfigParser()
-        self._cwd = os.getcwd()
-
-    def _optionCallback(self, option, opt, value, parser, override):
-        if not self._overrides.has_section(override[0]):
-            self._overrides.add_section(override[0])
-        self._overrides.set(override[0], override[1], value)
-
-    def addOption(self, shortname, longname, override, help=None, metavar=None):
+    def addOption(self, shortname, longname, section, override, help=None, metavar=None):
         """
         Add a command-line option to be parsed.  An option (as opposed to a switch)
         is required to have an argument.
@@ -76,20 +63,18 @@ class Settings(object):
         :param metavar: The variable displayed in the help string
         :type metavar: str
         """
-        self._parser.add_option(shortname, longname,
-            help=help, metavar=metavar, type=str,
-            action="callback", callback=self._optionCallback, callback_args=(override,)
-            )
+        if shortname in self._options:
+            raise ConfigureError("-%s is already defined" % shortname)
+        if longname in self._options:
+            raise ConfigureError("--%s is already defined" % longname)
+        o = dict(type='option', shortname=shortname, longname=longname,
+                 section=section, override=override, help=help, metavar=metavar)
+        self._options[shortname] = o
+        self._shortnames += "%s:" % shortname
+        self._options[longname] = o
+        self._longnames.append("%s=" % longname)
 
-    def _switchCallback(self, option, opt, value, parser, override, reverse):
-        if not self._overrides.has_section(override[0]):
-            self._overrides.add_section(override[0])
-        if reverse:
-            self._overrides.set(override[0], override[1], "false")
-        else:
-            self._overrides.set(override[0], override[1], "true")
-
-    def addSwitch(self, shortname, longname, override, reverse=False, help=None):
+    def addSwitch(self, shortname, longname, section, override, reverse=False, help=None):
         """
         Add a command-line switch to be parsed.  A switch (as opposed to an option)
         has no argument.
@@ -105,10 +90,93 @@ class Settings(object):
         :param help: The help string, displayed in --help output.
         :type help: str
         """
-        self._parser.add_option(shortname, longname,
-            help=help, type=None,
-            action="callback", callback=self._switchCallback, callback_args=(override,reverse)
-            )
+        if shortname in self._options:
+            raise ConfigureError("-%s is already defined" % shortname)
+        if longname in self._options:
+            raise ConfigureError("--%s is already defined" % longname)
+        s = dict(type='switch', shortname=shortname, longname=longname,
+                 section=section, override=override, reverse=reverse, help=help)
+        self._options[shortname] = s
+        self._shortnames += shortname
+        self._options[longname] = s
+        self._longnames.append(longname)
+
+    def _parse(self, argv, store):
+        """
+        Parse the command line specified by argv, and store the options
+        in store.
+        """
+        if len(self._subcommands) == 0:
+            opts,args = getopt.gnu_getopt(argv, self._shortnames, self._longnames)
+        else:
+            opts,args = getopt.getopt(argv, self._shortnames, self._longnames)
+        for opt,value in opts:
+            if opt == '--help': self._usage()
+            o = self._options[opt]
+            if not store.has_section(o['section']):
+                store.add_section(o['section'])
+            if o['type'] == 'switch':
+                if o['reverse'] == True:
+                    store.set(o['section'], o['override'], 'false')
+                else:
+                    store.set(o['section'], o['override'], 'true')
+            else:
+                store.set(o['section'], o['override'], value)
+        if len(self._subcommands) > 0:
+            if len(args) == 0:
+                raise ConfigureError("no subcommand specified")
+            if not args[0] in self._subcommands:
+                raise ConfigureError("no subcommand named '%s'" % args[0])
+            return self._subcommands[args[0]]._parse(args[1:], store)
+        return self, args
+
+    def _usage(self):
+        """
+        Display a usage message and exit.
+        """
+        commands = []
+        c = self
+        while c != None:
+            commands = [c.name] + commands
+            c = c._parent
+        print "Usage: %s %s" % (' '.join(commands), self.usage)
+        print 
+        # display the description, if it was specified
+        if self.description != None and self.description != '':
+            print self.description
+            print
+        # display options
+        # display subcommands, if there are any
+        if len(self._subcommands) > 0:
+            print "Available Sub-commands:"
+            print
+            for name,parser in sorted(self._subcommands.items()):
+                print " %s" % name
+            print
+        sys.exit(0)
+
+class Settings(Parser):
+    """
+    Contains configuration loaded from the configuration file and
+    parsed from command-line arguments.
+    """
+
+    def __init__(self, usage='', description=''):
+        """
+        :param usage: The usage string, displayed in --help output
+        :type usage: str
+        :param description: A short application description, displayed in --help output
+        :type description: str
+        """
+        self.appname = os.path.basename(sys.argv[0])
+        Parser.__init__(self, self.appname, usage, description)
+        self._config = RawConfigParser()
+        self._overrides = RawConfigParser()
+        self._cwd = os.getcwd()
+        self._overrides.add_section('settings')
+        self._overrides.set('settings', 'config file', "/etc/terane/%s.conf" % self.appname)
+        self.addOption('c', 'config-file', 'settings', 'config file',
+            help="Load configuration from FILE", metavar="FILE")
 
     def load(self, needsconfig=False):
         """
@@ -118,10 +186,11 @@ class Settings(object):
         :type needsconfig: bool
         """
         # parse command line arguments
-        opts,self._args = self._parser.parse_args()
+        self._parser,self._args = self._parse(sys.argv[1:], self._overrides)
         try:
             # load configuration file
-            path = normpath(join(self._cwd, opts.config_file))
+            config_file = self._overrides.get('settings', 'config file')
+            path = os.path.normpath(os.path.join(self._cwd, config_file))
             with open(path, 'r') as f:
                 self._config.readfp(f, path)
             logger.debug("loaded settings from %s" % path)
@@ -135,6 +204,11 @@ class Settings(object):
                 if not self._config.has_section(section):
                     self._config.add_section(section)
                 self._config.set(section, name, str(value))
+
+    def getHandler(self):
+        """
+        """
+        return self._parser._handler
 
     def args(self):
         """
@@ -298,7 +372,7 @@ class Section(object):
         if not self._settings._config.has_option(self.name, name):
             return default
         path = self._settings._config.get(self.name, name)
-        return normpath(join(self._settings._cwd, path))
+        return os.path.normpath(os.path.join(self._settings._cwd, path))
 
     def getList(self, etype, name, default=None, delimiter=','):
         """

@@ -22,15 +22,11 @@ from twisted.internet import reactor
 from terane.settings import ConfigureError
 from terane.loggers import startLogging, StdoutHandler, DEBUG
 
-class Grokker(object):
-    def __init__(self):
-        self.methods = {
-            'list-indices': ('listIndices', self.listIndicesResult),
-            'show-index': ('showIndex', self.showIndexResult),
-            'explain-query': ('explainQuery', self.explainQueryResult),
-            'show-stats': ('showStats', self.showStatsResult),
-            'flush-stats': ('flushStats', self.flushStatsResult),
-            }
+class Command(object):
+    """
+    Base command class which commands inherit from.  This class contains global
+    settings parsing, and sets up the XMLRPC proxy.
+    """
 
     def configure(self, settings):
         # load configuration
@@ -42,51 +38,76 @@ class Grokker(object):
             startLogging(StdoutHandler(), DEBUG, logconfigfile)
         else:
             startLogging(None)
-        try:
-            self.methodname,self.resultfn = self.methods[settings.args()[0]]
-        except IndexError:
-            raise ConfigureError("missing required command argument")
-        except KeyError, e:
-            raise ConfigureError("unknown command '%s'" % str(e))
-        self.args = settings.args()[1:]
 
-    def run(self):
+    def _callRemote(self, method, *args, **kwds):
         proxy = Proxy("http://%s/XMLRPC" % self.host, allowNone=True)
-        deferred = proxy.callRemote(self.methodname, *self.args)
-        deferred.addCallback(self.resultfn)
-        deferred.addErrback(self.printError)
+        deferred = proxy.callRemote(method, *args, **kwds)
+        deferred.addCallbacks(self.onResult, self.onError)
+        deferred.addCallbacks(self._stopReactor, self._stopReactor)
         reactor.run()
         return 0
 
-    def listIndicesResult(self, results):
-        meta = results.pop(0)
-        if len(results) > 0:
-            for row in results: print "%s" % row
-        reactor.stop()
- 
-    def showIndexResult(self, results):
-        meta = results.pop(0)
-        for key,value in sorted(meta.items()):
-            print "%s: %s" % (key,value)
-        print "fields: %s" % ', '.join(results)
-        reactor.stop()
-
-    def showStatsResult(self, results):
-        for key,value in results:
-            print "%s: %s" % (key,value)
-        reactor.stop()
-
-    def flushStatsResult(self, results):
-        reactor.stop()
-
-    def explainQueryResult(self, results):
+    def onResult(self, results):
         pass
 
-    def printError(self, failure):
+    def onError(self, failure):
         try:
             raise failure.value
         except xmlrpclib.Fault, e:
             print "Command failed: %s (code %i)" % (e.faultString,e.faultCode)
         except BaseException, e:
             print "Command failed: %s" % str(e)
+
+    def _stopReactor(self, unused):
         reactor.stop()
+
+class ListIndices(Command):
+
+    def run(self):
+        self._callRemote("listIndices")
+
+    def onResult(self, results):
+        meta = results.pop(0)
+        if len(results) > 0:
+            for row in results: print "%s" % row
+ 
+class ShowIndex(Command):
+
+    def configure(self, settings):
+        args = settings.args()
+        if len(args) != 1:
+            raise ConfigureError("must specify an index")
+        self.index = args[0]
+
+    def run(self):
+        self._callRemote("showIndex", self.index)
+
+    def onResult(self, results):
+        meta = results.pop(0)
+        for key,value in sorted(meta.items()):
+            print "%s: %s" % (key,value)
+        print "fields: %s" % ', '.join(results)
+
+class ShowStats(Command):
+
+    def configure(self, settings):
+        self.recursive = settings.getBoolean("show-stats", "recursive", False)
+        args = settings.args()
+        if len(args) != 1:
+            raise ConfigureError("must specify a statistic name")
+        self.stat = args[0]
+
+    def run(self):
+        self._callRemote("showStats", self.stat, self.recursive)
+
+    def onResults(self, results):
+        for key,value in results:
+            print "%s: %s" % (key,value)
+
+class FlushStats(Command):
+    
+    def configure(self, settings):
+        self.flushAll = settings.getBoolean("flush-stats", "flush all", False)
+
+    def run(self):
+        self._callRemote("showStats", self.stat, self.recursive)

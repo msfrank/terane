@@ -21,32 +21,32 @@ from terane.settings import Settings, ConfigureError
 
 def search_main():
     try:
-        settings = Settings(usage="%prog [options...] query")
-        settings.addOption("-H","--host", ("search","host"),
+        settings = Settings(usage="[OPTIONS...] QUERY")
+        settings.addOption("H", "host", "search", "host",
             help="Connect to terane server HOST", metavar="HOST"
             )
-        settings.addOption("-i","--use-indices", ("search","use indices"),
+        settings.addOption("i", "use-indices", "search", "use indices",
             help="Search only the specified INDICES (comma-separated)", metavar="INDICES"
             )
-        settings.addSwitch("-v","--verbose", ("search","long format"),
+        settings.addSwitch("v", "verbose", "search", "long format",
             help="Display more information about each event"
             )
-        settings.addSwitch("-r","--reverse", ("search","display reverse"),
+        settings.addSwitch("r", "reverse", "search", "display reverse",
             help="Display events in reverse order (newest first)"
             )
-        settings.addOption("-l","--limit", ("search","limit"),
+        settings.addOption("l", "limit", "search", "limit",
             help="Display the first LIMIT results", metavar="LIMIT"
             )
-        settings.addOption("-f","--fields", ("search","display fields"),
+        settings.addOption("f", "fields", "search", "display fields",
             help="Display only the specified FIELDS (comma-separated)", metavar="FIELDS"
             )
-        settings.addOption("-t","--timezone", ("search","timezone"),
+        settings.addOption("t", "timezone", "search", "timezone",
             help="Convert timestamps to specified timezone", metavar="TZ"
             )
-        settings.addOption('',"--log-config", ("search","log config file"),
+        settings.addOption('', "log-config", "search", "log config file",
             help="use logging configuration file FILE", metavar="FILE"
             )
-        settings.addSwitch("-d","--debug", ("search","debug"),
+        settings.addSwitch("d", "debug", "search", "debug",
             help="Print debugging information"
             )
         # load configuration

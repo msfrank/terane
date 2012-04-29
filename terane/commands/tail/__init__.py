@@ -22,32 +22,32 @@ from terane import versionstring
 
 def tail_main():
     try:
-        settings = Settings(usage="usage: %prog [options] query")
-        settings.addOption("-H","--host", ("tail","host"),
+        settings = Settings(usage="[OPTIONS...] QUERY")
+        settings.addOption("H", "host", "tail", "host",
             help="Connect to terane server HOST"
             )
-        settings.addOption("-i","--use-indices", ("tail","use indices"),
+        settings.addOption("i", "use-indices", "tail", "use indices",
             help="Search only the specified INDICES (comma-separated)", metavar="INDICES"
             )
-        settings.addSwitch("-v","--verbose", ("tail", "long format"),
+        settings.addSwitch("v", "verbose", "tail", "long format",
             help="Display more information about each event"
             )
-        settings.addOption("-R","--refresh", ("tail", "refresh"),
+        settings.addOption("R", "refresh", "tail", "refresh",
             help="Request new data every INTERVAL seconds"
             )
-        settings.addOption("-l","--limit", ("tail","limit"),
+        settings.addOption("l", "limit", "tail", "limit",
             help="Display the first LIMIT results", metavar="LIMIT"
             )
-        settings.addOption("-f","--fields", ("tail","display fields"),
+        settings.addOption("f", "fields", "tail", "display fields",
             help="Display only the specified FIELDS (comma-separated)", metavar="FIELDS"
             )
-        settings.addOption("-t","--timezone", ("tail","timezone"),
+        settings.addOption("t", "timezone", "tail", "timezone",
             help="Convert timestamps to specified timezone", metavar="TZ"
             )
-        settings.addOption('',"--log-config", ("tail","log config file"),
+        settings.addOption('', "log-config", "tail", "log config file",
             help="use logging configuration file FILE", metavar="FILE"
             )
-        settings.addSwitch("-d","--debug", ("tail", "debug"),
+        settings.addSwitch("d", "debug", "tail", "debug",
             help="Print debugging information"
             )
         # load configuration

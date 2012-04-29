@@ -21,17 +21,17 @@ from terane.settings import Settings, ConfigureError
 
 def console_main():
     try:
-        settings = Settings(usage="%prog [options...] [query]")
-        settings.addOption("-H","--host", ("console","host"),
+        settings = Settings(usage="[OPTIONS...] [QUERY]")
+        settings.addOption("H", "--host", "console", "host",
             help="Connect to terane server HOST", metavar="HOST"
             )
-        settings.addOption("-e","--execute", ("console","execute command"),
+        settings.addOption("e","execute", "console", "execute command",
             help="Execute CMD after startup", metavar="CMD"
             )
-        settings.addOption('',"--log-config", ("console","log config file"),
+        settings.addOption('', "log-config", "console", "log config file",
             help="use logging configuration file FILE", metavar="FILE"
             )
-        settings.addSwitch("-d","--debug", ("console","debug"),
+        settings.addSwitch("d", "debug", "console", "debug",
             help="Print debugging information"
             )
         settings.load()
