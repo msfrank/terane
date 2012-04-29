@@ -44,14 +44,14 @@ def grok_main():
         subcommand = settings.addSubcommand("show-stats", usage="[OPTIONS...] STAT",
             description="Display server statistics", handler=commands.ShowStats
             )
-        subcommand.addSwitch("r", "recursive", "list-indices", "recursive",
+        subcommand.addSwitch("r", "recursive", "show-stats", "recursive",
             help="Recursively display all stats"
             )
         # declare flush-stats command
         subcommand = settings.addSubcommand("flush-stats", usage="[OPTIONS...]",
             description="Reset server statistics", handler=commands.FlushStats
             )
-        subcommand.addSwitch("a", "all", "list-indices", "flush all",
+        subcommand.addSwitch("a", "all", "flush-stats", "flush all",
             help="Reset persistent statistics as well"
             )
         # load configuration

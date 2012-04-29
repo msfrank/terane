@@ -74,6 +74,7 @@ class ListIndices(Command):
 class ShowIndex(Command):
 
     def configure(self, settings):
+        Command.configure(self, settings)
         args = settings.args()
         if len(args) != 1:
             raise ConfigureError("must specify an index")
@@ -91,7 +92,9 @@ class ShowIndex(Command):
 class ShowStats(Command):
 
     def configure(self, settings):
-        self.recursive = settings.getBoolean("show-stats", "recursive", False)
+        Command.configure(self, settings)
+        section = settings.section("show-stats")
+        self.recursive = section.getBoolean("recursive", False)
         args = settings.args()
         if len(args) != 1:
             raise ConfigureError("must specify a statistic name")
@@ -100,14 +103,16 @@ class ShowStats(Command):
     def run(self):
         self._callRemote("showStats", self.stat, self.recursive)
 
-    def onResults(self, results):
+    def onResult(self, results):
         for key,value in results:
             print "%s: %s" % (key,value)
 
 class FlushStats(Command):
     
     def configure(self, settings):
-        self.flushAll = settings.getBoolean("flush-stats", "flush all", False)
+        Command.configure(self, settings)
+        section = settings.section("flush-stats")
+        self.flushAll = section.getBoolean("flush all", False)
 
     def run(self):
         self._callRemote("showStats", self.stat, self.recursive)
