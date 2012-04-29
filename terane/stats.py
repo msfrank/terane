@@ -41,10 +41,18 @@ class Stat(object):
             stats._dirty = True
  
     def __add__(self, other):
-        self.value = self.value + self._itype(other)
+        return self._getvalue() + self._itype(other)
+
+    def __iadd__(self, other):
+        self._value = self._getvalue() + self._itype(other)
+        return self
 
     def __lshift__(self, other):
-        self.value = other
+        return other
+
+    def __ilshift__(self, other):
+        self._value = other
+        return self
 
     value = property(_getvalue,_setvalue)
 
@@ -100,9 +108,10 @@ class StatsManager(Service):
         """
         """
         name = name.strip('.')
-        for c in name.split('.'):
-            if not c.isalnum():
-                raise ValueError("'name' must consist of only letters, numbers, and periods")
+        if name != '':
+            for c in name.split('.'):
+                if not c.isalnum():
+                    raise ValueError("'name' must consist of only letters, numbers, and periods")
         if recursive == False:
             try:
                 return [(name, self._stats[name].value)]
