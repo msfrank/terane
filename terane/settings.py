@@ -28,6 +28,24 @@ class ConfigureError(Exception):
     """
     pass
 
+class Option(object):
+    def __init__(self, shortname, longname, section, override, help=None, metavar=None):
+        self.shortname = shortname
+        self.shortident = "%s:" % shortname
+        self.longname = longname
+        self.longident = "%s=" % longname
+        self.section = section
+        self.override = override
+        self.help = help
+        self.metavar = metavar
+
+class Switch(Option):
+    def __init__(self, shortname, longname, section, override, reverse=False, help=None):
+        Option.__init__(self, shortname, longname, section, override, help)
+        self.shortident = shortname
+        self.longident = longname
+        self.reverse = reverse
+
 class Parser(object):
     def __init__(self, name, usage, description, parent=None, handler=None):
         self.name = name
@@ -37,8 +55,7 @@ class Parser(object):
         self._handler = handler
         self._subcommands = {}
         self._options = {}
-        self._shortnames = ''
-        self._longnames = ['help']
+        self._optslist = []
 
     def addSubcommand(self, name, usage, description, handler=None):
         if name in self._subcommands:
@@ -67,12 +84,10 @@ class Parser(object):
             raise ConfigureError("-%s is already defined" % shortname)
         if longname in self._options:
             raise ConfigureError("--%s is already defined" % longname)
-        o = dict(type='option', shortname=shortname, longname=longname,
-                 section=section, override=override, help=help, metavar=metavar)
-        self._options[shortname] = o
-        self._shortnames += "%s:" % shortname
-        self._options[longname] = o
-        self._longnames.append("%s=" % longname)
+        o = Option(shortname, longname, section, override, help, metavar)
+        self._options["-%s" % shortname] = o
+        self._options["--%s" % longname] = o
+        self._optslist.append(o)
 
     def addSwitch(self, shortname, longname, section, override, reverse=False, help=None):
         """
@@ -94,34 +109,36 @@ class Parser(object):
             raise ConfigureError("-%s is already defined" % shortname)
         if longname in self._options:
             raise ConfigureError("--%s is already defined" % longname)
-        s = dict(type='switch', shortname=shortname, longname=longname,
-                 section=section, override=override, reverse=reverse, help=help)
-        self._options[shortname] = s
-        self._shortnames += shortname
-        self._options[longname] = s
-        self._longnames.append(longname)
+        s = Switch(shortname, longname, section, override, reverse, help)
+        self._options["-%s" % shortname] = s
+        self._options["--%s" % longname] = s
+        self._optslist.append(s)
 
     def _parse(self, argv, store):
         """
         Parse the command line specified by argv, and store the options
         in store.
         """
+        shortnames = ''.join([o.shortident for o in self._optslist if o.shortname != ''])
+        longnames = [o.longident for o in self._optslist if o.longname != '']
+        longnames += ['help', 'version']
         if len(self._subcommands) == 0:
-            opts,args = getopt.gnu_getopt(argv, self._shortnames, self._longnames)
+            opts,args = getopt.gnu_getopt(argv, shortnames, longnames)
         else:
-            opts,args = getopt.getopt(argv, self._shortnames, self._longnames)
+            opts,args = getopt.getopt(argv, shortnames, longnames)
         for opt,value in opts:
             if opt == '--help': self._usage()
+            if opt == '--version': self._version()
             o = self._options[opt]
-            if not store.has_section(o['section']):
-                store.add_section(o['section'])
-            if o['type'] == 'switch':
-                if o['reverse'] == True:
-                    store.set(o['section'], o['override'], 'false')
+            if not store.has_section(o.section):
+                store.add_section(o.section)
+            if isinstance(o, Switch):
+                if o.reverse == True:
+                    store.set(o.section, o.override, 'false')
                 else:
-                    store.set(o['section'], o['override'], 'true')
-            else:
-                store.set(o['section'], o['override'], value)
+                    store.set(o.section, o.override, 'true')
+            elif isinstance(o, Option):
+                store.set(o.section, o.override, value)
         if len(self._subcommands) > 0:
             if len(args) == 0:
                 raise ConfigureError("no subcommand specified")
@@ -146,6 +163,25 @@ class Parser(object):
             print self.description
             print
         # display options
+        if len(self._optslist) > 0:
+            options = []
+            maxlength = 0
+            for o in self._optslist:
+                spec = []
+                if o.shortname != '':
+                    spec.append("-%s" % o.shortname)
+                if o.longname != '':
+                    spec.append("--%s" % o.longname)
+                if isinstance(o, Switch):
+                    spec = ','.join(spec)
+                elif isinstance(o, Option):
+                    spec = ','.join(spec) + ' ' + o.metavar
+                options.append((spec, o.help))
+                if len(spec) > maxlength:
+                    maxlength = len(spec)
+            for spec,help in options: 
+                print " %s%s" % (spec.ljust(maxlength + 4), help)
+            print
         # display subcommands, if there are any
         if len(self._subcommands) > 0:
             print "Available Sub-commands:"
@@ -153,6 +189,12 @@ class Parser(object):
             for name,parser in sorted(self._subcommands.items()):
                 print " %s" % name
             print
+        sys.exit(0)
+
+    def _version(self):
+        c = self
+        while c._parent != None: c = c._parent
+        print "%s %s" % (c.name, versionstring())
         sys.exit(0)
 
 class Settings(Parser):
@@ -185,15 +227,17 @@ class Settings(Parser):
         :param needsconfig: True if the config file must be present for the application to function.
         :type needsconfig: bool
         """
-        # parse command line arguments
-        self._parser,self._args = self._parse(sys.argv[1:], self._overrides)
         try:
+            # parse command line arguments
+            self._parser,self._args = self._parse(sys.argv[1:], self._overrides)
             # load configuration file
             config_file = self._overrides.get('settings', 'config file')
             path = os.path.normpath(os.path.join(self._cwd, config_file))
             with open(path, 'r') as f:
                 self._config.readfp(f, path)
             logger.debug("loaded settings from %s" % path)
+        except getopt.GetoptError, e:
+            raise ConfigureError(str(e))
         except EnvironmentError, e:
             if needsconfig:
                 raise ConfigureError("failed to read configuration %s: %s" % (path,e.strerror))
