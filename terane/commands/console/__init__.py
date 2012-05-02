@@ -38,7 +38,7 @@ def console_main():
         console.configure(settings)
         return console.run()
     except ConfigureError, e:
-        print e
+        print >> sys.stderr, "%s: %s" % (settings.appname, e)
     except Exception, e:
-        print "\nUnhandled Exception:\n%s\n---\n%s" % (e,traceback.format_exc())
+        print >> sys.stderr, "\nUnhandled Exception:\n%s\n---\n%s" % (e,traceback.format_exc())
     sys.exit(1)
