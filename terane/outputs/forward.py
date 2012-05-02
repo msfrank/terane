@@ -37,8 +37,8 @@ class ForwardOutput(Output):
         self.forwardserver = section.getString('forwarding address', None)
         self.forwardport = section.getInt('forwarding port', None)
         self.retryinterval = section.getInt('retry interval', 10)
-        self.forwardedevents = getStat("terane.output.%s.forwardedevents" % self.name, 0, int)
-        self.stalerefs = getStat("terane.output.%s.stalerefs" % self.name, 0, int)
+        self.forwardedevents = getStat("terane.output.%s.forwardedevents" % self.name, 0)
+        self.stalerefs = getStat("terane.output.%s.stalerefs" % self.name, 0)
         
     def startService(self):
         Output.startService(self)

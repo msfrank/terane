@@ -51,10 +51,10 @@ class XMLRPCDispatcher(XMLRPC):
 
     def __init__(self):
         XMLRPC.__init__(self)
-        self.iters = getStat('terane.protocols.xmlrpc.iter.count', 0, int)
-        self.tails = getStat('terane.protocols.xmlrpc.tail.count', 0, int)
-        self.totalitertime = getStat('terane.protocols.xmlrpc.iter.totaltime', 0.0, float)
-        self.totaltailtime = getStat('terane.protocols.xmlrpc.tail.totaltime', 0.0, float)
+        self.iters = getStat('terane.protocols.xmlrpc.iter.count', 0)
+        self.totalitertime = getStat('terane.protocols.xmlrpc.iter.totaltime', 0.0)
+        self.tails = getStat('terane.protocols.xmlrpc.tail.count', 0)
+        self.totaltailtime = getStat('terane.protocols.xmlrpc.tail.totaltime', 0.0)
 
     @useThread
     def xmlrpc_iter(self, query, last=None, indices=None, limit=100, reverse=False, fields=None):

@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, json
+import os, errno
 from twisted.application.service import Service
 from twisted.internet import task
 from terane.settings import ConfigureError
@@ -44,14 +44,14 @@ class Stat(object):
         return self._getvalue() + self._itype(other)
 
     def __iadd__(self, other):
-        self._value = self._getvalue() + self._itype(other)
+        self.value = self._getvalue() + self._itype(other)
         return self
 
     def __lshift__(self, other):
         return other
 
     def __ilshift__(self, other):
-        self._value = other
+        self.value = other
         return self
 
     value = property(_getvalue,_setvalue)
@@ -87,9 +87,11 @@ class StatsManager(Service):
             self._saveStats()
         Service.stopService(self)
 
-    def getStat(self, name, ivalue, itype, volatile):
+    def getStat(self, name, itype, ivalue, volatile):
         """
         """
+        if not itype == float and not itype == long and not itype == int:
+            raise ValueError("%s is an unsupported type %s" % (name, itype.__name))
         if name.startswith('.') or name.endswith('.'):
             raise ValueError("'name' cannot start or end with a '.'")
         for c in name.split('.'):
@@ -124,6 +126,7 @@ class StatsManager(Service):
 
     def _loadStats(self):
         """
+        Load all stats from the statistics file.
         """
         if self.statsfile == None:
             return
@@ -131,19 +134,24 @@ class StatsManager(Service):
             with open(self.statsfile, 'r') as f:
                 for line in f.readlines():
                     try:
-                        name,v = line.split(' ', 1)
-                        value = json.loads(v)
-                        stat = self.getStat(name, value, type(value), False)
-                        stat.value = value
+                        name,ivalue,value = line.split(' ', 2)
+                        if ivalue.isdigit():
+                            itype = long
+                        else:
+                            itype = float
+                        stat = self.getStat(name, itype, itype(ivalue), False)
+                        stat.value = itype(value)
                     except Exception, e:
                         logger.warning("failed to load statistic %s: %s" % (name,e))
         except (IOError,OSError), e:
-            logger.warning("failed to load statistics: %s" % e.strerror)
+            if e.errno != errno.ENOENT:
+                logger.warning("failed to load statistics: %s" % e.strerror)
         except Exception, e:
             logger.warning("failed to load statistics: %s" % str(e))
 
     def _saveStats(self):
         """
+        Write all statistics to the statistics file.
         """
         if self.statsfile == None or self._dirty == False:
             return
@@ -151,7 +159,7 @@ class StatsManager(Service):
             with open(self.statsfile, 'w') as f:
                 for name,s in sorted(self._stats.items(), lambda x,y: cmp(x[0],y[0])):
                     if s._volatile == False:
-                        f.write("%s %s\n" % (name,json.dumps(s.value)))
+                        f.write("%s %s %s\n" % (name,s._ivalue,s._value))
             self._dirty = False
         except (IOError,OSError), e:
             logger.warning("failed to save statistics: %s" % e.strerror)
@@ -168,8 +176,8 @@ stats = StatsManager()
 """
 """
 
-def getStat(name, ivalue, itype):
-    return stats.getStat(name, ivalue, itype, False)
+def getStat(name, ivalue):
+    return stats.getStat(name, type(ivalue), ivalue, False)
 
-def getVolatileStat(name, ivalue, itype):
-    return stats.getStat(name, ivalue, itype, True)
+def getVolatileStat(name, ivalue):
+    return stats.getStat(name, type(ivalue), ivalue, True)
