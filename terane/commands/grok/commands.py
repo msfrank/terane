@@ -64,7 +64,7 @@ class Command(object):
 class ListIndices(Command):
 
     def run(self):
-        self._callRemote("listIndices")
+        return self._callRemote("listIndices")
 
     def onResult(self, results):
         meta = results.pop(0)
@@ -81,7 +81,7 @@ class ShowIndex(Command):
         self.index = args[0]
 
     def run(self):
-        self._callRemote("showIndex", self.index)
+        return self._callRemote("showIndex", self.index)
 
     def onResult(self, results):
         meta = results.pop(0)
@@ -101,7 +101,7 @@ class ShowStats(Command):
         self.stat = args[0]
 
     def run(self):
-        self._callRemote("showStats", self.stat, self.recursive)
+        return self._callRemote("showStats", self.stat, self.recursive)
 
     def onResult(self, results):
         for key,value in results:
@@ -115,4 +115,4 @@ class FlushStats(Command):
         self.flushAll = section.getBoolean("flush all", False)
 
     def run(self):
-        self._callRemote("showStats", self.stat, self.recursive)
+        return self._callRemote("showStats", self.stat, self.recursive)
