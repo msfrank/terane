@@ -90,6 +90,8 @@ class StatsManager(Service):
     def getStat(self, name, itype, ivalue, volatile):
         """
         """
+        if itype == int:
+            itype = long; ivalue = long(ivalue)
         if not itype == float and not itype == long and not itype == int:
             raise ValueError("%s is an unsupported type %s" % (name, itype.__name))
         if name.startswith('.') or name.endswith('.'):
