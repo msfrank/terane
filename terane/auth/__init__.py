@@ -18,6 +18,7 @@
 import time, os
 from twisted.application.service import Service
 from twisted.cred.portal import Portal
+from terane.settings import ConfigureError
 from terane.auth.credentials import PasswdFile, AnonymousOnly
 from terane.auth.acl import ACL, Permission
 from terane.loggers import getLogger
@@ -46,7 +47,7 @@ class AuthManager(Service):
             self._loadRoles(rolesfile)
             # if no _ANONYMOUS role was specified, then create a deny-all ACL
             if not '_ANONYMOUS' in self._roles:
-                self._roles = {'_ANONYMOUS': ACL(Permission('PERM', Permission.DENY))}
+                self._roles['_ANONYMOUS'] = ACL(Permission('PERM', Permission.DENY))
         for user in self._creds:
             logger.debug("user %s => Role (%s)" % (user.name,', '.join(user.roles)))
         for role,acl in self._roles.items():
@@ -55,27 +56,25 @@ class AuthManager(Service):
     def _loadRoles(self, rolesfile):
         logger.debug("loading roles from %s" % rolesfile)
         with open(rolesfile, 'r') as f:
-            lines = [l.strip() for l in f.readlines()]
             lineno = 0
             current = None
             try:
-                for line in lines:
+                for line in f.readlines():
                     lineno += 1
-                    if line.startswith('#') or line == '':
+                    if line == '' or line.isspace() or line.strip().startswith('#'):
                         continue
                     # line is the starting of a declaration
-                    if line[0].isspace():
+                    if not line[0].isspace():
                         role,permissions = [s.strip() for s in line.split(':', 1)]
                         self._parseRole(role, permissions)
-                        current = subject
+                        current = role
                     # otherwise the line is a continuation
                     else:
-                        self._parseRole(current, permissions)
+                        self._parseRole(current, line.strip())
             except ConfigureError, e:
                 raise ConfigureError("error parsing %s (line %i): %s" % (permfile,lineno,e))
 
     def _parseRole(self, role, permissions):
-        logger.debug("parsing role %s: %s" % (role, permissions))
         if not role in ('_ANONYMOUS') and not role.isalnum():
             raise Exception("invalid role name '%s'" % role)
         if role in self._roles:
@@ -83,7 +82,8 @@ class AuthManager(Service):
         else:
             acl = ACL()
         for p in [p.strip() for p in permissions.split() if p.strip() != '']:
-            acl.append(Permission(p))
+            acl.append(Permission.fromSpec(p))
+        self._roles[role] = acl
 
     def startService(self):
         Service.startService(self)
