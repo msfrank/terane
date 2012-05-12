@@ -25,6 +25,15 @@ def search_main():
         settings.addOption("H", "host", "search", "host",
             help="Connect to terane server HOST", metavar="HOST"
             )
+        settings.addOption("u", "username", "search", "username",
+            help="Authenticate with username USER", metavar="USER"
+            )
+        settings.addOption("p", "password", "search", "password",
+            help="Authenticate with password PASS", metavar="PASS"
+            )
+        settings.addSwitch("P", "prompt-password", "search", "prompt password",
+            help="Prompt for a password"
+            )
         settings.addOption("i", "use-indices", "search", "use indices",
             help="Search only the specified INDICES (comma-separated)", metavar="INDICES"
             )

@@ -16,8 +16,10 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import os, sys, datetime, dateutil.tz, xmlrpclib
+from getpass import getpass
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.web.xmlrpc import Proxy
+from twisted.web.error import Error as TwistedWebError
 from twisted.internet import reactor
 from terane.bier.evid import EVID
 from terane.loggers import getLogger, startLogging, StdoutHandler, DEBUG
@@ -29,6 +31,10 @@ class Searcher(object):
         # load configuration
         section = settings.section("search")
         self.host = section.getString("host", 'localhost:45565')
+        self.username = section.getString("username", None)
+        self.password = section.getString("password", None)
+        if section.getBoolean("prompt password", False):
+            self.password = getpass("Password: ")
         self.limit = section.getInt("limit", 100)
         self.reverse = section.getBoolean("display reverse", False)
         self.longfmt = section.getBoolean("long format", False)
@@ -51,7 +57,8 @@ class Searcher(object):
             startLogging(None)
 
     def run(self):
-        proxy = Proxy("http://%s/XMLRPC" % self.host, allowNone=True)
+        proxy = Proxy("http://%s/XMLRPC" % self.host, user=self.username,
+            password=self.password, allowNone=True)
         deferred = proxy.callRemote('iter', self.query, None, self.indices,
             self.limit, self.reverse, self.fields)
         deferred.addCallback(self.printResult)
@@ -86,6 +93,8 @@ class Searcher(object):
             raise failure.value
         except xmlrpclib.Fault, e:
             print "Search failed: %s (code %i)" % (e.faultString,e.faultCode)
+        except ValueError, e:
+            print "Search failed: remote server returned HTTP status %s: %s" % e.args
         except BaseException, e:
             print "Search failed: %s" % str(e)
         reactor.stop()
