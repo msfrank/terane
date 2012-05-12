@@ -56,7 +56,7 @@ class Permission(object):
         # parse the object references
         refs = {}
         if refspec != '':
-            for ref in [o for o in refs.split(',') if o != '']:
+            for ref in [o for o in refspec.split(',') if o != '']:
                 rtype,sep,rname = ref.partition('=')
                 if rtype not in refs:
                     rlist = []
@@ -106,7 +106,7 @@ class ACL(object):
     """
 
     def __init__(self, *perms):
-        self._perms = perms
+        self._perms = list(perms)
 
     def __str__(self):
         return "ACL (%s)" % '; '.join([str(p) for p in self._perms])
