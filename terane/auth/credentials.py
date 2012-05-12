@@ -97,9 +97,9 @@ class PasswdFile(AnonymousOnly):
         if credentials.username in self._users:
             user = self._users[credentials.username]
             if user.passwd == hashlib.sha256(credentials.password).hexdigest():
-                logger.debug("authentication succeeded for user %s" % user.name)
+                logger.debug("authentication succeeded for user %s" % credentials.username)
                 return succeed(user.name)
-        logger.debug("authentication failed for user %s" % user.name)
+        logger.debug("authentication failed for user %s" % credentials.username)
         return fail(UnauthorizedLogin())
 
     def getUser(self, avatarId):
