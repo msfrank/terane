@@ -16,6 +16,7 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import os, sys, dateutil.parser, datetime, xmlrpclib
+from getpass import getpass
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.web.xmlrpc import Proxy
 from twisted.internet import reactor
@@ -32,6 +33,10 @@ class Command(object):
         # load configuration
         section = settings.section("grok")
         self.host = section.getString("host", 'localhost:45565')
+        self.username = section.getString("username", None)
+        self.password = section.getString("password", None)
+        if section.getBoolean("prompt password", False):
+            self.password = getpass("Password: ")
         logconfigfile = section.getString('log config file', "%s.logconfig" % settings.appname)
         # configure server logging
         if section.getBoolean("debug", False):
@@ -40,7 +45,8 @@ class Command(object):
             startLogging(None)
 
     def _callRemote(self, method, *args, **kwds):
-        proxy = Proxy("http://%s/XMLRPC" % self.host, allowNone=True)
+        proxy = Proxy("http://%s/XMLRPC" % self.host, user=self.username,
+            password=self.password, allowNone=True)
         deferred = proxy.callRemote(method, *args, **kwds)
         deferred.addCallbacks(self.onResult, self.onError)
         deferred.addCallbacks(self._stopReactor, self._stopReactor)
@@ -55,6 +61,8 @@ class Command(object):
             raise failure.value
         except xmlrpclib.Fault, e:
             print "Command failed: %s (code %i)" % (e.faultString,e.faultCode)
+        except ValueError, e:
+            print "Command failed: remote server returned HTTP status %s: %s" % e.args
         except BaseException, e:
             print "Command failed: %s" % str(e)
 

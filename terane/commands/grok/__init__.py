@@ -26,6 +26,15 @@ def grok_main():
         settings.addOption("H","host", "grok", "host",
             help="Connect to terane server HOST", metavar="HOST"
             )
+        settings.addOption("u", "username", "grok", "username",
+            help="Authenticate with username USER", metavar="USER"
+            )
+        settings.addOption("p", "password", "grok", "password",
+            help="Authenticate with password PASS", metavar="PASS"
+            )
+        settings.addSwitch("P", "prompt-password", "grok", "prompt password",
+            help="Prompt for a password"
+            )
         settings.addOption('',"log-config", "grok", "log config file",
             help="use logging configuration file FILE", metavar="FILE"
             )
