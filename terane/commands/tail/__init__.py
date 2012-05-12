@@ -24,7 +24,16 @@ def tail_main():
     try:
         settings = Settings(usage="[OPTIONS...] QUERY")
         settings.addOption("H", "host", "tail", "host",
-            help="Connect to terane server HOST"
+            help="Connect to terane server HOST", metavar="HOST"
+            )
+        settings.addOption("u", "username", "tail", "username",
+            help="Authenticate with username USER", metavar="USER"
+            )
+        settings.addOption("p", "password", "tail", "password",
+            help="Authenticate with password PASS", metavar="PASS"
+            )
+        settings.addSwitch("P", "prompt-password", "tail", "prompt password",
+            help="Prompt for a password"
             )
         settings.addOption("i", "use-indices", "tail", "use indices",
             help="Search only the specified INDICES (comma-separated)", metavar="INDICES"
@@ -33,7 +42,7 @@ def tail_main():
             help="Display more information about each event"
             )
         settings.addOption("R", "refresh", "tail", "refresh",
-            help="Request new data every INTERVAL seconds"
+            help="Request new data every INTERVAL seconds", metavar="INTERVAL"
             )
         settings.addOption("l", "limit", "tail", "limit",
             help="Display the first LIMIT results", metavar="LIMIT"
