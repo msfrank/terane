@@ -19,11 +19,11 @@ import hashlib
 from zope.interface import implements
 from twisted.internet.defer import succeed, fail
 from twisted.cred.checkers import ICredentialsChecker, ANONYMOUS
-from twisted.cred.credentials import IUsernamePassword, IAnonymous
+from twisted.cred.credentials import IUsernamePassword, IAnonymous, Anonymous
 from twisted.cred.error import UnauthorizedLogin
 from terane.loggers import getLogger
 
-logger = getLogger('terane.auth.userdb')
+logger = getLogger('terane.auth.credentials')
 
 class User(object):
     def __init__(self, name, passwd, roles):
@@ -43,12 +43,13 @@ class AnonymousOnly(object):
         return iter([anonUser])
 
     def requestAvatarId(self, credentials):
+        logger.debug("authentication succeeded for user _ANONYMOUS")
         return succeed('_ANONYMOUS')
 
     def getUser(self, avatarId):
         return anonUser
 
-class PasswdFile(object):
+class PasswdFile(AnonymousOnly):
     """
     """
     implements(ICredentialsChecker)
@@ -92,12 +93,14 @@ class PasswdFile(object):
 
     def requestAvatarId(self, credentials):
         if isinstance(credentials, Anonymous):
-            return succeed('_ANONYMOUS')
+            return AnonymousOnly.requestAvatarId(self, credentials)
         if credentials.username in self._users:
             user = self._users[credentials.username]
             if user.passwd == hashlib.sha256(credentials.password).hexdigest():
+                logger.debug("authentication succeeded for user %s" % user.name)
                 return succeed(user.name)
-        return failure(UnauthorizedLogin())
+        logger.debug("authentication failed for user %s" % user.name)
+        return fail(UnauthorizedLogin())
 
     def getUser(self, avatarId):
         return self._users[avatarId]
