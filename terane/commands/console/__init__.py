@@ -25,6 +25,15 @@ def console_main():
         settings.addOption("H", "--host", "console", "host",
             help="Connect to terane server HOST", metavar="HOST"
             )
+        settings.addOption("u", "username", "console", "username",
+            help="Authenticate with username USER", metavar="USER"
+            )
+        settings.addOption("p", "password", "console", "password",
+            help="Authenticate with password PASS", metavar="PASS"
+            )
+        settings.addSwitch("P", "prompt-password", "console", "prompt password",
+            help="Prompt for a password"
+            )
         settings.addOption("e","execute", "console", "execute command",
             help="Execute CMD after startup", metavar="CMD"
             )
