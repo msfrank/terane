@@ -24,8 +24,8 @@ from twisted.python.failure import Failure
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
 from terane.outputs import Output, IOutput
-from terane.stats import stats
 from terane.loggers import getLogger
+from terane.stats import getStat
 
 logger = getLogger('terane.outputs.forward')
 
@@ -37,8 +37,8 @@ class ForwardOutput(Output):
         self.forwardserver = section.getString('forwarding address', None)
         self.forwardport = section.getInt('forwarding port', None)
         self.retryinterval = section.getInt('retry interval', 10)
-        self.forwardedevents = stats.get("terane.output.%s.forwardedevents" % self.name, 0, int)
-        self.stalerefs = stats.get("terane.output.%s.stalerefs" % self.name, 0, int)
+        self.forwardedevents = getStat("terane.output.%s.forwardedevents" % self.name, 0)
+        self.stalerefs = getStat("terane.output.%s.stalerefs" % self.name, 0)
         
     def startService(self):
         Output.startService(self)
@@ -95,13 +95,13 @@ class ForwardOutput(Output):
         except DeadReferenceError:
             # if we are not already in the process of reconnecting, then reconnect
             if not isinstance(self._remote, Deferred):
-                self.stalerefs.value += 1
+                self.stalerefs += 1
                 logger.debug("[output:%s] lost reference to collector at %s:%i" %
                 (self.name, self.forwardserver, self.forwardport))
                 self._reconnect()
 
     def _collected(self, unused):
-        self.forwardedevents.value += 1
+        self.forwardedevents += 1
 
     def _collectFailed(self, reason):
         logger.debug("[output:%s] failed to forward event to %s:%i: %s" %

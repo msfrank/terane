@@ -32,78 +32,92 @@ class Tailer(Window):
     def __init__(self, args):
         title = "Tail '%s'" % args
         self._query = args
-        self._lastId = 0
+        self._lastId = None
         self._results = ResultsListbox()
         self.interval = 2
         self._url = "http://%s/XMLRPC" % console.host
+        self._user = console.username
+        self._pass = console.password
+        self._delayed = None
+        self._deferred = None
         logger.debug("using proxy url %s" % self._url)
         Window.__init__(self, title, self._results)
 
     def startService(self):
-        self._proxy = Proxy(self._url, allowNone=True)
-        self._call = None
-        logger.debug("started tail using query '%s'" % self._query)
-        self._doTail()
+        Window.startService(self)
+        logger.debug("started tail: using query '%s'" % self._query)
+        self._proxy = Proxy(self._url, user=self._user, password=self._pass, allowNone=True)
+        self._tail()
 
     def stopService(self):
-        if self._call != None:
-            try:
-                self._call.cancel()
-            except Exception, e:
-                logger.debug("failed to cancel delayed call: %s" % e)
-            self._call = None
+        if self._delayed != None:
+            self._delayed.cancel()
+        self._delayed = None
+        if self._deferred != None:
+            self._deferred.cancel()
+        self._deferred = None
         logger.debug("stopped tail")
+        Window.stopService(self)
 
-    def _doTail(self):
-        d = self._proxy.callRemote('tail', self._query, self._lastId)
-        d.addCallback(self._getResult)
-        d.addErrback(self._getError)
+    def _tail(self):
+        self._deferred = self._proxy.callRemote('tail', self._query, self._lastId)
+        self._deferred.addCallback(self._getResult)
+        self._deferred.addErrback(self._getError)
 
     @useMainThread
     def _getResult(self, results):
         """
         Append each search result into the ResultsListbox.
         """
-        meta = results.pop(0)
-        self._lastId = meta['last']
-        logger.debug("tail returned %i results, last id is %i" % (len(results), self._lastId))
-        if len(results) > 0:
-            for evid,event in results:
-                self._results.append(EVID.fromString(evid), event)
-            console.redraw()
-        from twisted.internet import reactor
-        self._call = reactor.callLater(self.interval, self._doTail)
+        try:
+            meta = results.pop(0)
+            self._lastId = meta['last-id']
+            logger.debug("tail returned %i results, last id is %s" % (len(results), self._lastId))
+            if len(results) > 0:
+                for evid,event in results:
+                    self._results.append(EVID.fromString(evid), event)
+                console.redraw()
+            from twisted.internet import reactor
+            self._delayed = reactor.callLater(self.interval, self._tail)
+        except Exception, e:
+            logger.exception(e)
 
     @useMainThread
     def _getError(self, failure):
         """
         Display the error popup.
         """
-        self._call = None
-        # close the window
-        console.switcher.closeWindow(console.switcher.findWindow(self))
-        # display the error on screen
         try:
+            self._delayed = None
+            # close the window
+            console.switcher.closeWindow(console.switcher.findWindow(self))
+            # display the error on screen
             raise failure.value
         except Fault, e:
-            errtext = "Search failed: %s (code %i)" % (e.faultString,e.faultCode)
-            console.error(errtext)
-            logger.debug(errtext)
+            errtext = "Tail failed: %s (code %i)" % (e.faultString,e.faultCode)
+        except ValueError, e:
+            errtext = "Tail failed: remote server returned HTTP status %s: %s" % e.args
         except BaseException, e:
-            errtext = "Search failed: %s" % str(e)
-            console.error(errtext)
-            logger.debug(errtext)
+            errtext = "Tail failed: %s" % str(e)
+        console.error(errtext)
+        logger.debug(errtext)
 
     def pause(self):
-        if self._call != None:
-            self._call.cancel()
-            self._call = None
-            logger.debug("paused tail")
+        if self._delayed == None and self._deferred == None:
+            return
+        if self._delayed != None:
+            self._delayed.cancel()
+        self._delayed = None
+        if self._deferred != None:
+            self._deferred.cancel()
+        self._deferred = None
+        logger.debug("paused tail")
 
     def resume(self):
-        if self._call == None:
-            self._doTail()
-            logger.debug("resumed tail")
+        if self._delayed != None or self._deferred != None:
+            return
+        self._tail()
+        logger.debug("resumed tail")
 
     def command(self, cmd, args):
         if cmd == 'pause':

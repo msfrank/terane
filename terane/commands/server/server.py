@@ -21,6 +21,7 @@ from twisted.internet import reactor
 from twisted.application.service import MultiService
 from twisted.internet.defer import maybeDeferred
 from terane.plugins import plugins
+from terane.auth import auth
 from terane.routes import routes
 from terane.queries import queries
 from terane.idgen import idgen
@@ -136,6 +137,9 @@ class Server(MultiService):
         # configure the plugin manager
         plugins.setServiceParent(self)
         plugins.configure(self.settings)
+        # configure the auth manager
+        auth.setServiceParent(self)
+        auth.configure(self.settings)
         # configure the route manager
         routes.setServiceParent(self)
         routes.configure(self.settings)

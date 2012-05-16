@@ -19,22 +19,20 @@ import xmlrpclib, functools
 from twisted.internet import threads
 from twisted.web.xmlrpc import XMLRPC
 from twisted.web.server import Site
+from twisted.cred.portal import IRealm
+from twisted.web.resource import IResource
+from twisted.web.guard import HTTPAuthSessionWrapper, BasicCredentialFactory
 from twisted.application.service import Service
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
+from terane.auth import auth
 from terane.queries import queries, QueryExecutionError
 from terane.bier.ql import QuerySyntaxError
-from terane.stats import stats
 from terane.loggers import getLogger
+from terane.stats import getStat, stats
 
 logger = getLogger('terane.protocols.xmlrpc')
 
-searches = stats.get('terane.protocols.xmlrpc.search.count', 0, int)
-iters = stats.get('terane.protocols.xmlrpc.iter.count', 0, int)
-tails = stats.get('terane.protocols.xmlrpc.tail.count', 0, int)
-totalsearchtime = stats.get('terane.protocols.xmlrpc.search.totaltime', 0.0, float)
-totalitertime = stats.get('terane.protocols.xmlrpc.iter.totaltime', 0.0, float)
-totaltailtime = stats.get('terane.protocols.xmlrpc.tail.totaltime', 0.0, float)
 
 class FaultInternalError(xmlrpclib.Fault):
     def __init__(self):
@@ -43,6 +41,10 @@ class FaultInternalError(xmlrpclib.Fault):
 class FaultBadRequest(xmlrpclib.Fault):
     def __init__(self, info):
         xmlrpclib.Fault.__init__(self, 1002, "Bad Request: %s" % str(info))
+
+class FaultNotAuthorized(xmlrpclib.Fault):
+    def __init__(self, info):
+        xmlrpclib.Fault.__init__(self, 1003, "Not Authorized: %s" % str(info))
 
 def useThread(fn):
     """
@@ -55,16 +57,28 @@ def useThread(fn):
 
 class XMLRPCDispatcher(XMLRPC):
 
-    def __init__(self):
+    def __init__(self, avatarId):
         XMLRPC.__init__(self)
+        self.avatarId = avatarId
+        self.iters = getStat('terane.protocols.xmlrpc.iter.count', 0)
+        self.totalitertime = getStat('terane.protocols.xmlrpc.iter.totaltime', 0.0)
+        self.tails = getStat('terane.protocols.xmlrpc.tail.count', 0)
+        self.totaltailtime = getStat('terane.protocols.xmlrpc.tail.totaltime', 0.0)
 
     @useThread
     def xmlrpc_iter(self, query, last=None, indices=None, limit=100, reverse=False, fields=None):
         try:
-            iters.value += 1
+            if indices == None:
+                indices = queries.listIndices()
+            indices = [i for i in indices if auth.canAccess(self.avatarId, 'index', i, 'PERM::XMLRPC::ITER')]
+            if indices == []:
+                raise FaultNotAuthorized("not authorized to access the specified resource")
+            self.iters += 1
             results,meta = queries.iter(unicode(query), last, indices, limit, reverse, fields)
-            totalitertime.value += float(meta['runtime'])
+            self.totalitertime += float(meta['runtime'])
             return [meta] + list(results)
+        except xmlrpclib.Fault:
+            raise
         except (QuerySyntaxError, QueryExecutionError), e:
             raise FaultBadRequest(e)
         except BaseException, e:
@@ -74,10 +88,17 @@ class XMLRPCDispatcher(XMLRPC):
     @useThread
     def xmlrpc_tail(self, query, last=None, indices=None, limit=100, fields=None):
         try:
-            tails.value += 1
+            if indices == None:
+                indices = queries.listIndices()
+            indices = [i for i in indices if auth.canAccess(self.avatarId, 'index', i, 'PERM::XMLRPC::TAIL')]
+            if indices == []:
+                raise FaultNotAuthorized("not authorized to access the specified resource")
+            self.tails += 1
             results,meta = queries.tail(unicode(query), last, indices, limit, fields)
-            totaltailtime.value += float(meta['runtime'])
+            self.totaltailtime += float(meta['runtime'])
             return [meta] + list(results)
+        except xmlrpclib.Fault:
+            raise
         except (QuerySyntaxError, QueryExecutionError), e:
             raise FaultBadRequest(e)
         except BaseException, e:
@@ -87,8 +108,13 @@ class XMLRPCDispatcher(XMLRPC):
     @useThread
     def xmlrpc_listIndices(self):
         try:
-            indices,meta = queries.listIndices()
-            return [meta] + list(indices)
+            indices = queries.listIndices()
+            indices = [i for i in indices if auth.canAccess(self.avatarId, 'index', i, 'PERM::XMLRPC::LISTINDEX')]
+            if indices == []:
+                raise FaultNotAuthorized("not authorized to access the specified resource")
+            return [{}] + list(indices)
+        except xmlrpclib.Fault:
+            raise
         except (QuerySyntaxError, QueryExecutionError), e:
             raise FaultBadRequest(e)
         except BaseException, e:
@@ -98,13 +124,47 @@ class XMLRPCDispatcher(XMLRPC):
     @useThread
     def xmlrpc_showIndex(self, name):
         try:
+            if not auth.canAccess(self.avatarId, 'index', name, 'PERM::XMLRPC::SHOWINDEX'):
+                raise FaultNotAuthorized("not authorized to access the specified resource")
             fields,stats = queries.showIndex(name)
             return [stats] + fields
+        except xmlrpclib.Fault:
+            raise
         except (QuerySyntaxError, QueryExecutionError), e:
             raise FaultBadRequest(e)
         except BaseException, e:
             logger.exception(e)
             raise FaultInternalError()
+
+    @useThread
+    def xmlrpc_showStats(self, name, recursive=False):
+        try:
+            return stats.showStats(name, recursive)
+        except xmlrpclib.Fault:
+            raise
+        except BaseException, e:
+            logger.exception(e)
+            raise FaultInternalError()
+
+    @useThread
+    def xmlrpc_flushStats(self, flushAll=False):
+        try:
+            stats.flushStats(flushAll)
+            return [{}]
+        except xmlrpclib.Fault:
+            raise
+        except BaseException, e:
+            logger.exception(e)
+            raise FaultInternalError()
+
+class XMLRPCRealm(object):
+    implements(IRealm)
+
+    def requestAvatar(self, avatarId, mind, *interfaces):
+        logger.debug("logged in as %s" % avatarId)
+        if IResource in interfaces:
+            return (IResource, XMLRPCDispatcher(avatarId), lambda: None)
+        raise NotImplementedError()
 
 class XMLRPCProtocolPlugin(Plugin):
 
@@ -120,8 +180,11 @@ class XMLRPCProtocolPlugin(Plugin):
 
     def startService(self):
         Plugin.startService(self)
+        portal = auth.getPortal(XMLRPCRealm())
+        credentialFactory = BasicCredentialFactory("terane")
+        wrapper = HTTPAuthSessionWrapper(portal, [credentialFactory])
         from twisted.internet import reactor
-        self.listener = reactor.listenTCP(self.listenPort, Site(XMLRPCDispatcher()), interface=self.listenAddress)
+        self.listener = reactor.listenTCP(self.listenPort, Site(wrapper), interface=self.listenAddress)
         logger.debug("[%s] started xmlrpc listener on %s:%i" % (self.name, self.listenAddress, self.listenPort))
 
     def stopService(self):

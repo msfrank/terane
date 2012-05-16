@@ -172,7 +172,7 @@ class QueryManager(Service):
         :returns: A Results object containing a list of index names.
         :rtype: :class:`terane.query.results.Results`
         """
-        return self._searchables.keys(), {}
+        return self._searchables.keys()
 
 
 queries = QueryManager()
