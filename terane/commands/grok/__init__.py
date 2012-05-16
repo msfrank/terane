@@ -16,29 +16,62 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import os, sys, traceback
-from terane.commands.grok.grokker import Grokker
+from terane.commands.grok import commands
 from terane.settings import Settings, ConfigureError
 
 def grok_main():
     try:
-        settings = Settings(usage="%prog [options...] command [args...]")
-        settings.addOption("-H","--host", ("grok","host"),
+        settings = Settings(usage="[OPTIONS...] COMMAND")
+        # declare global options
+        settings.addOption("H","host", "grok", "host",
             help="Connect to terane server HOST", metavar="HOST"
             )
-        settings.addOption('',"--log-config", ("grok","log config file"),
+        settings.addOption("u", "username", "grok", "username",
+            help="Authenticate with username USER", metavar="USER"
+            )
+        settings.addOption("p", "password", "grok", "password",
+            help="Authenticate with password PASS", metavar="PASS"
+            )
+        settings.addSwitch("P", "prompt-password", "grok", "prompt password",
+            help="Prompt for a password"
+            )
+        settings.addOption('',"log-config", "grok", "log config file",
             help="use logging configuration file FILE", metavar="FILE"
             )
-        settings.addSwitch("-d","--debug", ("grok","debug"),
+        settings.addSwitch("d","debug", "grok", "debug",
             help="Print debugging information"
+            )
+        # declare list-indices command
+        settings.addSubcommand("list-indices", usage="",
+            description="List available indices", handler=commands.ListIndices
+            )
+        # declare show-index command
+        settings.addSubcommand("show-index", usage="[OPTIONS...] INDEX",
+            description="Show index statistics", handler=commands.ShowIndex
+            )
+        # declare show-stats command
+        subcommand = settings.addSubcommand("show-stats", usage="[OPTIONS...] STAT",
+            description="Display server statistics", handler=commands.ShowStats
+            )
+        subcommand.addSwitch("r", "recursive", "show-stats", "recursive",
+            help="Recursively display all stats"
+            )
+        # declare flush-stats command
+        subcommand = settings.addSubcommand("flush-stats", usage="[OPTIONS...]",
+            description="Reset server statistics", handler=commands.FlushStats
+            )
+        subcommand.addSwitch("a", "all", "flush-stats", "flush all",
+            help="Reset persistent statistics as well"
             )
         # load configuration
         settings.load()
         # create the Searcher and run it
-        grokker = Grokker()
-        grokker.configure(settings)
-        return grokker.run()
+        handler = settings.getHandler()
+        command = handler()
+        command.configure(settings)
+        return command.run()
     except ConfigureError, e:
-        print e
+        print >> sys.stderr, "%s: %s" % (settings.appname, e)
     except Exception, e:
-        print "\nUnhandled Exception:\n%s\n---\n%s" % (e,traceback.format_exc())
+        print >> sys.stderr, "\nUnhandled Exception:\n%s\n---\n%s" % (e,traceback.format_exc())
     sys.exit(1)

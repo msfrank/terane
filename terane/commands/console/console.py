@@ -16,6 +16,7 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import os, sys, urwid, dateutil.tz
+from getpass import getpass
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.application.service import MultiService
 from twisted.internet import reactor
@@ -70,6 +71,10 @@ class Console(MultiService, urwid.WidgetWrap):
         # load configuration
         section = settings.section("console")
         self.host = section.getString("host", 'localhost:45565')
+        self.username = section.getString("username", None)
+        self.password = section.getString("password", None)
+        if section.getBoolean("prompt password", False):
+            self.password = getpass("Password: ")
         self.tz = section.getString("timezone", None)
         if self.tz != None:
             self.tz = dateutil.tz.gettz(self.tz)

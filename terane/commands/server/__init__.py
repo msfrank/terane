@@ -21,17 +21,17 @@ from terane.settings import Settings, ConfigureError
 
 def server_main():
     try:
-        settings = Settings(usage="%prog [options...]")
-        settings.addSwitch("-d","--debug", ("server","debug"),
+        settings = Settings(usage="[OPTIONS...]")
+        settings.addSwitch("d", "debug", "server", "debug",
             help="do not fork into the background, log to stderr",
             )
-        settings.addOption("-f","--log-file", ("server","log file"),
+        settings.addOption("f", "log-file", "server", "log file",
             help="log messages to FILE (--debug overrides this)", metavar="FILE"
             )
-        settings.addOption('',"--log-config", ("server","log config file"),
+        settings.addOption('', "log-config", "server", "log config file",
             help="use logging configuration file FILE", metavar="FILE"
             )
-        settings.addOption("-p","--pid-file", ("server","pid file"),
+        settings.addOption("p", "pid-file", "server", "pid file",
             help="write PID to FILE", metavar="FILE"
             )
         # load settings from command line arguments, config file
@@ -43,7 +43,7 @@ def server_main():
         status = server.run()
         return
     except (ConfigureError,ServerError), e:
-        print e
+        print >> sys.stderr, "%s: %s" % (settings.appname, e)
     except Exception, e:
-        print "\nUnhandled Exception:\n%s\n---\n%s" % (e,traceback.format_exc())
+        print >> sys.stderr, "\nUnhandled Exception:\n%s\n---\n%s" % (e,traceback.format_exc())
     sys.exit(1)

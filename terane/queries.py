@@ -139,7 +139,7 @@ class QueryManager(Service):
         logger.trace("tail period: %s" % period)
         # query each index, and return the results
         runtime = time.time()
-        results,fields = searchIndices(indices, query, period, None, True, fields, limit)
+        results,fields = searchIndices(indices, query, period, None, False, fields, limit)
         runtime = time.time() - runtime
         try:
             lastId = results[-1][0]
@@ -172,7 +172,7 @@ class QueryManager(Service):
         :returns: A Results object containing a list of index names.
         :rtype: :class:`terane.query.results.Results`
         """
-        return self._searchables.keys(), {}
+        return self._searchables.keys()
 
 
 queries = QueryManager()

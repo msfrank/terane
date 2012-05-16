@@ -16,6 +16,7 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import os, sys, datetime, dateutil.tz, xmlrpclib
+from getpass import getpass
 from logging import StreamHandler, DEBUG, Formatter
 from twisted.web.xmlrpc import Proxy
 from twisted.internet import reactor
@@ -30,6 +31,10 @@ class Tailer(object):
         # load configuration
         section = settings.section("tail")
         self.host = section.getString("host", 'localhost:45565')
+        self.username = section.getString("username", None)
+        self.password = section.getString("password", None)
+        if section.getBoolean("prompt password", False):
+            self.password = getpass("Password: ")
         self.limit = section.getInt("limit", 100)
         self.longfmt = section.getBoolean("long format", False)
         self.indices = section.getList(str, "use indices", None)
@@ -52,7 +57,8 @@ class Tailer(object):
             startLogging(None)
 
     def run(self):
-        self._proxy = Proxy("http://%s/XMLRPC" % self.host, allowNone=True)
+        self._proxy = Proxy("http://%s/XMLRPC" % self.host, user=self.username,
+            password=self.password, allowNone=True)
         # make the XMLRPC call
         self.tail(None)
         reactor.run()
@@ -86,9 +92,11 @@ class Tailer(object):
         try:
             raise failure.value
         except xmlrpclib.Fault, e:
-            print "Search failed: %s (code %i)" % (e.faultString,e.faultCode)
+            print "Tail failed: %s (code %i)" % (e.faultString,e.faultCode)
+        except ValueError, e:
+            print "Tail failed: remote server returned HTTP status %s: %s" % e.args
         except BaseException, e:
-            print "Search failed: %s" % str(e)
+            print "Tail failed: %s" % str(e)
         reactor.stop()
 
     def rescheduleTail(self, lastId):

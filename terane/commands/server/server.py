@@ -15,12 +15,13 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, sys, signal, atexit
+import os, sys, pwd, grp, signal, atexit
 from logging import StreamHandler, FileHandler, Formatter
 from twisted.internet import reactor
 from twisted.application.service import MultiService
 from twisted.internet.defer import maybeDeferred
 from terane.plugins import plugins
+from terane.auth import auth
 from terane.routes import routes
 from terane.queries import queries
 from terane.idgen import idgen
@@ -38,13 +39,15 @@ class Server(MultiService):
     def configure(self, settings):
         self.settings = settings
         section = settings.section('server')
-        self.pidfile = section.getPath('pid file', '/var/run/terane/server.pid')
+        self.user = section.getString('runtime user', None)
+        self.group = section.getString('runtime group', None)
+        self.pidfile = section.getPath('pid file', '/var/lib/terane/terane-server.pid')
         self.debug = section.getBoolean('debug', False)
         logconfigfile = section.getString('log config file', "%s.logconfig" % settings.appname)
         if section.getBoolean("debug", False):
             startLogging(StdoutHandler(), DEBUG, logconfigfile)
         else:
-            logfile = section.getPath('log file', 'var/log/terane/server.log')
+            logfile = section.getPath('log file', '/var/log/terane/terane-server.log')
             verbosity = section.getString('log verbosity', 'WARNING')
             if verbosity == 'DEBUG': level = DEBUG
             elif verbosity == 'INFO': level = INFO
@@ -56,7 +59,39 @@ class Server(MultiService):
         reactor.suggestThreadPoolSize(self.threadpoolsize)
 
     def run(self):
-        # check that the pid file doesn't exist
+        # drop privileges if requested
+        if os.getuid() == 0:
+            # change the GID
+            if self.group != None:
+                try:
+                    group = grp.getgrnam(self.group)
+                except:
+                    try:
+                        group = grp.getgruid(int(self.group))
+                    except:
+                        raise ServerError("no such group %s" % self.group)
+                try:
+                    os.setgid(group.gr_gid)
+                    logger.debug("changed runtime group to %s" % group.gr_name)
+                except Exception, e:
+                    raise ServerError("failed to set runtime group: %s" % e)
+            # change the UID and supplementary groups
+            if self.user != None:
+                try:
+                    user = pwd.getpwnam(self.user)
+                except:
+                    try:
+                        user = pwd.getpwuid(int(self.user))
+                    except:
+                        raise ServerError("no such user %s" % self.user)
+                groups = [ g.gr_gid for g in grp.getgrall() if user.pw_name in g.gr_mem ]
+                try:
+                    os.setgroups(groups)
+                    os.setuid(user.pw_uid)
+                    logger.debug("changed runtime user to %s" % user.pw_name)
+                except Exception, e:
+                    raise ServerError("failed to set runtime user: %s" % e)
+         # check that the pid file doesn't exist
         try:
             fd = os.open(self.pidfile, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0644)
             os.close(fd)
@@ -102,6 +137,9 @@ class Server(MultiService):
         # configure the plugin manager
         plugins.setServiceParent(self)
         plugins.configure(self.settings)
+        # configure the auth manager
+        auth.setServiceParent(self)
+        auth.configure(self.settings)
         # configure the route manager
         routes.setServiceParent(self)
         routes.configure(self.settings)

@@ -35,52 +35,60 @@ class Searcher(Window):
         self._query = args
         self._results = ResultsListbox()
         self._url = "http://%s/XMLRPC" % console.host
+        self._user = console.username
+        self._pass = console.password
         self._deferred = None
         Window.__init__(self, title, self._results)
 
     def startService(self):
-        logger.debug("started searcher")
+        Window.startService(self)
+        logger.debug("started search")
         self.reload()
 
     def stopService(self):
         if self._deferred != None:
             self._deferred.cancel()
-        logger.debug("stopped searcher")
+        self._deferred = None
+        logger.debug("stopped search")
+        Window.stopService(self)
 
     @useMainThread
     def _getResult(self, results):
         """
         Append each search result into the ResultsListbox.
         """
-        self._meta = results.pop(0)
-        for evid,event in results:
-            self._results.append(EVID.fromString(evid), event)
-        console.redraw()
+        try:
+            self._meta = results.pop(0)
+            for evid,event in results:
+                self._results.append(EVID.fromString(evid), event)
+            console.redraw()
+        except Exception, e:
+            logger.exception(e)
 
     @useMainThread
     def _getError(self, failure):
         """
         Display the error popup.
         """
-        # close the search window
-        console.switcher.closeWindow(console.switcher.findWindow(self))
-        # display the error on screen
         try:
+            # close the search window
+            console.switcher.closeWindow(console.switcher.findWindow(self))
+            # display the error on screen
             raise failure.value
         except Fault, e:
             errtext = "Search failed: %s (code %i)" % (e.faultString,e.faultCode)
-            console.error(errtext)
-            logger.debug(errtext)
+        except ValueError, e:
+            errtext = "Search failed: remote server returned HTTP status %s: %s" % e.args
         except BaseException, e:
             errtext = "Search failed: %s" % str(e)
-            console.error(errtext)
-            logger.debug(errtext)
+        console.error(errtext)
+        logger.debug(errtext)
 
     def reload(self):
         if self._deferred != None:
             self._deferred.cancel()
         self._results.clear()
-        proxy = Proxy(self._url, allowNone=True)
+        proxy = Proxy(self._url, user=self._user, password=self._pass, allowNone=True)
         self._deferred = proxy.callRemote('iter', self._query)
         self._deferred.addCallback(self._getResult)
         self._deferred.addErrback(self._getError)
