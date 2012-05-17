@@ -1,6 +1,6 @@
-==================
-Configuring Terane
-==================
+=========================
+Configuring Terane Server
+=========================
 
 -------------------------------
 Configuration file syntax rules
@@ -14,14 +14,20 @@ itself.  The following declares a section called 'mysection'::
 
  [mysection]
 
-A section has zero or more key-value pairs associated with it.  A key is an
-alphanumeric string with spaces allowed.  The key is separated from the value
+A section has zero or more key-value pairs associated with it.  Leading and
+trailing whitespace in the key is ignored.  The key is separated from the value
 by an equals-sign '=' or a colon ':'.  The value is everything after the
 separator, with leading and trailing whitespace trimmed.  The following
 declares a section 'mysection' containing a key 'foo' with the value 'bar'::
 
  [mysection]
  foo = bar
+
+A configuration file may include comments.  A comment is prefixed by either the
+hash '#' or semicolon ';'. Comments may appear either on their own in an
+otherwise empty line, or they may be entered 'in-line' after a key-value or
+section name.  An in-line comment must be preceded by whitespace, and may be
+started only by a semi-colon.
 
 -----------------------------
 Server configuration sections
