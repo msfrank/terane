@@ -10,7 +10,7 @@ Terane has the following runtime dependencies:
 
 * `python`_: Terane requires at least version 2.6.  However, python3 is also not supported.  Terane is tested on version 2.6.5.
 * `setuptools`_: Any recent version should work.  Terane is tested with version 0.6.10.
-* `twisted`_: Any recent version should work.  Terane is tested with version 10.0.0.
+* `twisted`_: Terane requires at least version 10.1.  Terane is tested with version 12.0.0.
 * `Berkeley DB`_: Any version in the 4.x/5.x series should work.  Terane is tested with version 4.8.
 * `python-dateutil`_: Any recent version should work.  Terane is tested with version 1.4.1.
 * `pyparsing`_: Any recent version should work.  Terane is tested with version 1.5.2.
@@ -88,9 +88,8 @@ Terane expects certain directories to be present at runtime:
 Path                Description
 =================== ========================================
 ``/etc/terane``     Where configuration is read from.
-``/var/lib/terane`` Where the storage module writes data to.
+``/var/lib/terane`` Where application data is stored.
 ``/var/log/terane`` Where server logs are written to.
-``/var/run/terane`` Where the server pid file is written to.
 =================== ========================================
 
 Each directory specified above should be owned by the terane user and group.  For the
