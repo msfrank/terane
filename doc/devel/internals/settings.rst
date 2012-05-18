@@ -1,6 +1,6 @@
-===================
-``settings`` module
-===================
+==========================
+``terane.settings`` module
+==========================
 
 .. automodule:: terane.settings
 

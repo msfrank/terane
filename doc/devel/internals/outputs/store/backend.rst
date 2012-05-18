@@ -1,8 +1,8 @@
-=====================
-``db.storage`` module
-=====================
+=======================================
+``terane.outputs.store.backend`` module
+=======================================
 
-.. automodule:: terane.db.storage
+.. automodule:: terane.outputs.store.backend
 
 .. autoclass:: Env
     :members:
@@ -13,7 +13,7 @@
 .. autoclass:: Segment
     :members:
 
-.. autoclass:: TOC
+.. autoclass:: Index
     :members:
 
 .. autoclass:: Txn

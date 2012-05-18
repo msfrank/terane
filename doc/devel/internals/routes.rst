@@ -1,6 +1,6 @@
-=================
-``routes`` module
-=================
+========================
+``terane.routes`` module
+========================
 
 .. automodule:: terane.routes
 

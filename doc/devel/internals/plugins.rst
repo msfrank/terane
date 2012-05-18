@@ -1,6 +1,6 @@
-==================
-``plugins`` module
-==================
+=========================
+``terane.plugins`` module
+=========================
 
 .. automodule:: terane.plugins
 
