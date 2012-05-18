@@ -111,3 +111,13 @@ input events using the syslog filter, and stores them in an index called
  input = messages
  filter = syslog
  output = local
+
+------------------------------
+Server Configuration Reference
+------------------------------
+
+.. toctree::
+   :maxdepth: 2
+
+   reference/server
+   reference/plugin
