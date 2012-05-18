@@ -27,15 +27,24 @@ listen port           integer The network port to bind to.  The default is to
 Input Plugins
 -------------
 
-``[plugin:input:file]``
-"""""""""""""""""""""""
+``[plugin:input:collect]``
+""""""""""""""""""""""""""
 
-Monitor files.
+Listen for events from other terane servers.
 
 ===================== ======= ===============================================
 Configuration Key     Type    Value
 ===================== ======= ===============================================
+collect address       string  The network address to bind to.  The default is
+                              to bind to all available interfaces.
+collect port          integer The network port to bind to.  The default is to
+                              bind to port 8643.
 ===================== ======= ===============================================
+
+``[plugin:input:file]``
+"""""""""""""""""""""""
+
+Monitor files.
 
 ``[plugin:input:syslog]``
 """""""""""""""""""""""""
@@ -49,20 +58,6 @@ syslog udp address    string  The network address to bind to.  The default is
                               to bind to all available interfaces.
 syslog udp port       integer The network port to bind to.  The default is to
                               bind to port 514.
-===================== ======= ===============================================
-
-``[plugin:input:collect]``
-""""""""""""""""""""""""""
-
-Listen for events from other terane servers.
-
-===================== ======= ===============================================
-Configuration Key     Type    Value
-===================== ======= ===============================================
-collect address       string  The network address to bind to.  The default is
-                              to bind to all available interfaces.
-collect port          integer The network port to bind to.  The default is to
-                              bind to port 8643.
 ===================== ======= ===============================================
 
 --------------
@@ -96,3 +91,37 @@ Transform abitrary fields based on a regular expression.
 """"""""""""""""""""""""""
 
 Parse syslog formatted events.
+
+--------------
+Output Plugins
+--------------
+
+``[plugin:output:forward]``
+"""""""""""""""""""""""""""
+
+Send events to another Terane server.
+
+``[plugin:output:store]``
+"""""""""""""""""""""""""
+
+Store events in a searchable index.
+
+===================== ======= ==================================================
+Configuration Key     Type    Value
+===================== ======= ==================================================
+data directory        path    Path to the directory where index data is
+                              stored.  By default this is /var/lib/terane/db.
+cache size            integer BerkeleyDB cache size, in bytes.  The default
+                              is 64MB.
+max lockers           integer Maximum concurrent database locking entities.
+                              Default is 65536.
+max locks             integer Maximum concurrent database locks.  Default is
+                              65536.
+max objects           integer Maximum concurrent locked database objects.
+                              Default is 65536.
+max transactions      integer Maximum concurrent active database transactions.
+                              Default is 0, which means try to determine the
+                              appropriate number by dividing the cache size by
+                              the system page size.
+===================== ======= ==================================================
+
