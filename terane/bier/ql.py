@@ -79,6 +79,9 @@ import datetime, dateutil.tz
 import pyparsing as pp
 from terane.bier.matching import Term, Phrase, Every, AND, OR, NOT
 from terane.bier.searching import Period
+from terane.loggers import getLogger
+
+logger = getLogger('terane.bier.ql')
 
 class QuerySyntaxError(BaseException):
     """
@@ -99,6 +102,7 @@ class QuerySyntaxError(BaseException):
     def __str__(self):
         return self._message
 
+@logger.tracedfunc
 def parseIterQuery(string):
     """
     Parse the iter query specified by qstring.  Returns a Query object.
@@ -116,9 +120,14 @@ def parseIterQuery(string):
     except pp.ParseBaseException, e:
         raise QuerySyntaxError(e, string)
 
+@logger.tracedfunc
 def parseTailQuery(string):
-    "Parse the tail query specified by qstring.  Returns a Query object."
+    """
+    Parse the tail query specified by qstring.  Returns a Query object.
+    """
     try:
+        if string.strip() == '':
+            return Every()
         return tailQuery.parseString(string, parseAll=True).asList()[0]
     except pp.ParseBaseException, e:
         raise QuerySyntaxError(e, string)
