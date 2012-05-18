@@ -65,3 +65,34 @@ collect port          integer The network port to bind to.  The default is to
                               bind to port 8643.
 ===================== ======= ===============================================
 
+--------------
+Filter Plugins
+--------------
+
+``[plugin:filter:apache]``
+""""""""""""""""""""""""""
+
+Parse events from Apache common- and combined-format logs.
+
+``[plugin:filter:dt]``
+""""""""""""""""""""""
+
+``[plugin:filter:mysql]``
+"""""""""""""""""""""""""
+
+Parse events from the mysql server log.
+
+``[plugin:filter:nagios]``
+""""""""""""""""""""""""""
+
+Parse events from the nagios server log.
+
+``[plugin:filter:regex]``
+"""""""""""""""""""""""""
+
+Transform abitrary fields based on a regular expression.
+
+``[plugin:filter:syslog]``
+""""""""""""""""""""""""""
+
+Parse syslog formatted events.
