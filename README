@@ -23,7 +23,7 @@ Prerequisite Software
     http://pypi.python.org/pypi/zope.interface
 
  * twisted
-    Any recent version should work.  Terane is tested with version 10.0.0.
+    Terane requires at least version 10.1.  Terane is tested with version 10.0.0.
     http://www.twistedmatrix.com
 
  * libdb
