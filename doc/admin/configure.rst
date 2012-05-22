@@ -77,10 +77,9 @@ typed section is read, and the routes are constructed.
 An example server configuration
 -------------------------------
 
-Below is a basic but complete configuration, linked to further reference
-material.  A single route is defined which watches /var/log/messages, parses
-input events using the syslog filter, and stores them in an index called
-'local'::
+Below is a basic but complete configuration.  A single route is defined which
+watches /var/log/messages, parses input events using the syslog filter, and
+stores them in an index called 'local'::
 
  [server]
  
@@ -112,12 +111,18 @@ input events using the syslog filter, and stores them in an index called
  filter = syslog
  output = local
 
+For detailed information about every configuration section, consult the
+server configuration reference below.
+
 ------------------------------
 Server Configuration Reference
 ------------------------------
 
 .. toctree::
-   :maxdepth: 2
 
    reference/server
    reference/plugin
+   reference/input
+   reference/filter
+   reference/output
+   reference/route
