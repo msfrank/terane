@@ -5,7 +5,7 @@
 The ``[server]`` section contains global server configuration.
 
 ===================== ======= ===============================================
-Key                   Type    Value
+Configuration Key     Type    Value
 ===================== ======= ===============================================
 runtime user          string  The user to switch to on startup.  The user
                               may be specified by name or by UID.
