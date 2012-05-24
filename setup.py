@@ -6,13 +6,6 @@ from ez_setup import use_setuptools
 use_setuptools()
 from setuptools import setup, Extension, find_packages
 
-# verify required dependencies are installed
-try:
-    import twisted, pyparsing, dateutil, urwid, zope.interface
-except ImportError, e:
-    print "Missing required dependency: %s" % e
-    sys.exit(1)
-
 # jump through some hoops to get access to versionstring()
 from os.path import abspath, dirname
 sys.path.insert(0, abspath(dirname(__file__)))
@@ -25,6 +18,15 @@ setup(
     description="Distributed Log Search",
     author="Michael Frank",
     author_email="msfrank@syntaxockey.com",
+    # installation dependencies
+    install_requires=[
+        "Twisted >= 10.1",
+        "pyparsing",
+        "python-dateutil",
+        "urwid",
+        "zope.interface"
+        ],
+    # package classifiers for PyPI
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Environment "" No Input/Output (Daemon)",
@@ -74,7 +76,7 @@ setup(
             'terane/outputs/store/backend-segment-term.c',
             'terane/outputs/store/backend-txn.c',
             ],
-            libraries=['db-4.8',],
+            libraries=['db',],
             # turn off optimization for better stack traces
             extra_compile_args=['-O0']
             )
