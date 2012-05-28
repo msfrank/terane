@@ -46,6 +46,7 @@ setup(
     # package contents
     packages=[
         'terane',
+        'terane.auth',
         'terane.bier',
         'terane.commands',
         'terane.commands.console',
