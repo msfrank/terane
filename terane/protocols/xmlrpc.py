@@ -15,8 +15,8 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import xmlrpclib, functools
-from twisted.internet import threads
+import xmlrpclib
+from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.web.xmlrpc import XMLRPC
 from twisted.web.server import Site
 from twisted.cred.portal import IRealm
@@ -46,116 +46,92 @@ class FaultNotAuthorized(xmlrpclib.Fault):
     def __init__(self, info):
         xmlrpclib.Fault.__init__(self, 1003, "Not Authorized: %s" % str(info))
 
-def useThread(fn):
-    """
-    A decorator for methods which should be run in a separate thread.
-    """
-    @functools.wraps(fn)
-    def _threadWrapper(*args, **kwds):
-        return threads.deferToThread(fn, *args, **kwds)
-    return _threadWrapper
-
 class XMLRPCDispatcher(XMLRPC):
 
     def __init__(self, avatarId):
-        XMLRPC.__init__(self)
+        XMLRPC.__init__(self, allowNone=True)
         self.avatarId = avatarId
         self.iters = getStat('terane.protocols.xmlrpc.iter.count', 0)
         self.totalitertime = getStat('terane.protocols.xmlrpc.iter.totaltime', 0.0)
         self.tails = getStat('terane.protocols.xmlrpc.tail.count', 0)
         self.totaltailtime = getStat('terane.protocols.xmlrpc.tail.totaltime', 0.0)
 
-    @useThread
+    def _handleError(self, failure):
+        try:
+            raise failure
+        except xmlrpclib.Fault:
+            raise
+        except (QuerySyntaxError, QueryExecutionError), e:
+            raise FaultBadRequest(e)
+        except BaseException, e:
+            logger.exception(e)
+            raise FaultInternalError()
+
+    @inlineCallbacks
     def xmlrpc_iter(self, query, last=None, indices=None, limit=100, reverse=False, fields=None):
         try:
             if indices == None:
-                indices = queries.listIndices()
-            indices = [i for i in indices if auth.canAccess(self.avatarId, 'index', i, 'PERM::XMLRPC::ITER')]
+                result = yield queries.listIndices()
+            indices = [i for i in result.data \
+              if auth.canAccess(self.avatarId, 'index', i, 'PERM::XMLRPC::ITER')]
             if indices == []:
                 raise FaultNotAuthorized("not authorized to access the specified resource")
             self.iters += 1
-            results,meta = queries.iter(unicode(query), last, indices, limit, reverse, fields)
-            self.totalitertime += float(meta['runtime'])
-            return [meta] + list(results)
-        except xmlrpclib.Fault:
-            raise
-        except (QuerySyntaxError, QueryExecutionError), e:
-            raise FaultBadRequest(e)
-        except BaseException, e:
-            logger.exception(e)
-            raise FaultInternalError()
+            result = yield queries.iter(unicode(query), last, indices, limit, reverse, fields)
+            self.totalitertime += float(result.meta['runtime'])
+            returnValue(result)
+        except Exception, e:
+            self._handleError(e)
 
-    @useThread
+    @inlineCallbacks
     def xmlrpc_tail(self, query, last=None, indices=None, limit=100, fields=None):
         try:
             if indices == None:
-                indices = queries.listIndices()
-            indices = [i for i in indices if auth.canAccess(self.avatarId, 'index', i, 'PERM::XMLRPC::TAIL')]
+                result = yield queries.listIndices()
+            indices = [i for i in result.data \
+              if auth.canAccess(self.avatarId, 'index', i, 'PERM::XMLRPC::TAIL')]
             if indices == []:
                 raise FaultNotAuthorized("not authorized to access the specified resource")
             self.tails += 1
-            results,meta = queries.tail(unicode(query), last, indices, limit, fields)
-            self.totaltailtime += float(meta['runtime'])
-            return [meta] + list(results)
-        except xmlrpclib.Fault:
-            raise
-        except (QuerySyntaxError, QueryExecutionError), e:
-            raise FaultBadRequest(e)
-        except BaseException, e:
-            logger.exception(e)
-            raise FaultInternalError()
+            result = yield queries.tail(unicode(query), last, indices, limit, fields)
+            self.totaltailtime += float(result.meta['runtime'])
+            returnValue(result)
+        except Exception, e:
+            self._handleError(e)
 
-    @useThread
+    @inlineCallbacks
     def xmlrpc_listIndices(self):
         try:
-            indices = queries.listIndices()
-            indices = [i for i in indices if auth.canAccess(self.avatarId, 'index', i, 'PERM::XMLRPC::LISTINDEX')]
+            result = yield queries.listIndices()
+            indices = [i for i in result.data \
+              if auth.canAccess(self.avatarId, 'index', i, 'PERM::XMLRPC::LISTINDEX')]
             if indices == []:
                 raise FaultNotAuthorized("not authorized to access the specified resource")
-            return [{}] + list(indices)
-        except xmlrpclib.Fault:
-            raise
-        except (QuerySyntaxError, QueryExecutionError), e:
-            raise FaultBadRequest(e)
-        except BaseException, e:
-            logger.exception(e)
-            raise FaultInternalError()
+            result.data = indices
+            returnValue(result)
+        except Exception, e:
+            self._handleError(e)
 
-    @useThread
     def xmlrpc_showIndex(self, name):
         try:
             if not auth.canAccess(self.avatarId, 'index', name, 'PERM::XMLRPC::SHOWINDEX'):
                 raise FaultNotAuthorized("not authorized to access the specified resource")
-            fields,stats = queries.showIndex(name)
-            return [stats] + fields
-        except xmlrpclib.Fault:
-            raise
-        except (QuerySyntaxError, QueryExecutionError), e:
-            raise FaultBadRequest(e)
+            return queries.showIndex(name).addErrback(self._handleError)
         except BaseException, e:
-            logger.exception(e)
-            raise FaultInternalError()
+            self._handleError(e)
 
-    @useThread
     def xmlrpc_showStats(self, name, recursive=False):
         try:
             return stats.showStats(name, recursive)
-        except xmlrpclib.Fault:
-            raise
         except BaseException, e:
-            logger.exception(e)
-            raise FaultInternalError()
+            self._handleError(e)
 
-    @useThread
     def xmlrpc_flushStats(self, flushAll=False):
         try:
             stats.flushStats(flushAll)
-            return [{}]
-        except xmlrpclib.Fault:
-            raise
+            return ({}, [])
         except BaseException, e:
-            logger.exception(e)
-            raise FaultInternalError()
+            self._handleError(e)
 
 class XMLRPCRealm(object):
     implements(IRealm)

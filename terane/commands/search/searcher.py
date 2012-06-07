@@ -68,9 +68,10 @@ class Searcher(object):
 
     def printResult(self, results):
         logger.debug("XMLRPC result: %s" % str(results))
-        meta = results.pop(0)
-        if len(results) > 0:
-            for evid,event in results:
+        meta = results['meta']
+        data = results['data']
+        if len(data) > 0:
+            for evid,event in data:
                 evid = EVID.fromString(evid)
                 ts = datetime.datetime.fromtimestamp(evid.ts, dateutil.tz.tzutc())
                 if self.tz:
@@ -83,7 +84,7 @@ class Searcher(object):
                             continue
                         print "\t%s=%s" % (field,value)
             print ""
-            print "found %i matches in %f seconds." % (len(results), meta['runtime'])
+            print "found %i matches in %f seconds." % (len(data), meta['runtime'])
         else:
             print "no matches found."
         reactor.stop()
