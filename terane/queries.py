@@ -17,6 +17,7 @@
 
 import time
 from twisted.application.service import Service
+from twisted.internet.defer import succeed
 from terane.plugins import plugins
 from terane.outputs import ISearchableOutput
 from terane.bier.evid import EVID
@@ -31,6 +32,13 @@ class QueryExecutionError(Exception):
     There was an error while executing the plan.
     """
     pass
+
+class QueryResult(object):
+    def __init__(self, meta={}, data=[]):
+        self.meta = meta
+        self.data = data
+    def __str__(self):
+        return "<QueryResult meta=%s, data=%s>" % (self.meta, self.data)
 
 class QueryManager(Service):
     def __init__(self):
@@ -71,8 +79,8 @@ class QueryManager(Service):
         :type reverse: bool
         :param fields: A list of fields to return in the results, or None to return all fields.
         :type fields: list
-        :returns:
-        :rtype:
+        :returns: A Deferred object which receives the results.
+        :rtype: :class:`twisted.internet.defer.Deferred`
         """
         # look up the named indices
         if indices == None:
@@ -92,10 +100,10 @@ class QueryManager(Service):
         logger.trace("iter query: %s" % query)
         logger.trace("iter period: %s" % period)
         # query each index and return the results
-        runtime = time.time()
-        results,fields = searchIndices(indices, query, period, lastId, reverse, fields, limit)
-        runtime = time.time() - runtime
-        return list(results), {'runtime': runtime, 'fields': fields}
+        task = searchIndices(indices, query, period, lastId, reverse, fields, limit)
+        def _returnIterResult(result):
+            return QueryResult({'runtime': result.runtime, 'fields': result.fields}, result.events)
+        return task.whenDone().addCallback(_returnIterResult)
 
     def tail(self, query, lastId=None, indices=None, limit=100, fields=None):
         """
@@ -112,8 +120,8 @@ class QueryManager(Service):
         :type limit: int
         :param fields: A list of fields to return in the results, or None to return all fields.
         :type fields: list
-        :returns: A Results object containing the search results.
-        :rtype: :class:`terane.query.results.Results`
+        :returns: A Deferred object which receives the results.
+        :rtype: :class:`twisted.internet.defer.Deferred`
         """
         # look up the named indices
         if indices == None:
@@ -125,7 +133,7 @@ class QueryManager(Service):
                 raise QueryExecutionError("unknown index '%s'" % e)
         # if lastId is 0, return the id of the latest document
         if lastId == None:
-            return [], {'runtime': 0.0, 'last-id': str(EVID.fromDatetime())}
+            return QueryResult({'runtime': 0.0, 'lastId': str(EVID.fromDatetime())}, [])
         try:
             lastId = EVID.fromString(lastId)
         except:
@@ -138,14 +146,14 @@ class QueryManager(Service):
         period = Period(lastId, EVID.fromString(EVID.MAX_ID), True, False)
         logger.trace("tail period: %s" % period)
         # query each index, and return the results
-        runtime = time.time()
-        results,fields = searchIndices(indices, query, period, None, False, fields, limit)
-        runtime = time.time() - runtime
-        try:
-            lastId = results[-1][0]
-        except IndexError:
-            pass
-        return list(results), {'runtime': runtime, 'last-id': str(lastId), 'fields': fields}
+        task = searchIndices(indices, query, period, None, False, fields, limit)
+        def _returnTailResult(result, lastId):
+            events = list(result.events)
+            if len(events) > 0:
+                lastId = events[-1][0]
+            metadata = {'runtime': result.runtime, 'lastId': str(lastId), 'fields': result.fields}
+            return QueryResult(metadata, events)
+        return task.whenDone().addCallback(_returnTailResult, lastId)
 
     def showIndex(self, name):
         """
@@ -155,24 +163,23 @@ class QueryManager(Service):
 
         :param name: The name of the index.
         :type name: unicode
-        :returns: A Results object containing the index metadata.
-        :rtype: :class:`terane.query.results.Results`
+        :returns: A Deferred object which receives the results.
+        :rtype: :class:`twisted.internet.defer.Deferred`
         """
         try:
             index = self._searchables[name]
         except KeyError, e:
             raise QueryExecutionError("unknown index '%s'" % e)
-        stats = index.getStats()
-        return index.schema().listFields(), stats
+        return succeed(QueryResult(index.getStats(), index.schema().listFields()))
 
     def listIndices(self):
         """
         Return a list of names of the indices present.
 
-        :returns: A Results object containing a list of index names.
-        :rtype: :class:`terane.query.results.Results`
+        :returns: A Deferred object which receives the results.
+        :rtype: :class:`twisted.internet.defer.Deferred`
         """
-        return self._searchables.keys()
+        return succeed(QueryResult({}, self._searchables.keys()))
 
 
 queries = QueryManager()
