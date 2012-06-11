@@ -71,7 +71,7 @@ class Tailer(Window):
         """
         try:
             meta = results.pop(0)
-            self._lastId = meta['last-id']
+            self._lastId = meta['lastId']
             logger.debug("tail returned %i results, last id is %s" % (len(results), self._lastId))
             if len(results) > 0:
                 for evid,event in results:

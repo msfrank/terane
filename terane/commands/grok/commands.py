@@ -75,9 +75,10 @@ class ListIndices(Command):
         return self._callRemote("listIndices")
 
     def onResult(self, results):
-        meta = results.pop(0)
-        if len(results) > 0:
-            for row in results: print "%s" % row
+        meta = results['meta']
+        data = results['data']
+        if len(data) > 0:
+            for index in data: print "%s" % index
  
 class ShowIndex(Command):
 
@@ -92,10 +93,11 @@ class ShowIndex(Command):
         return self._callRemote("showIndex", self.index)
 
     def onResult(self, results):
-        meta = results.pop(0)
+        meta = results['meta']
+        data = results['data']
         for key,value in sorted(meta.items()):
             print "%s: %s" % (key,value)
-        print "fields: %s" % ', '.join(results)
+        print "fields: %s" % ', '.join(data)
 
 class ShowStats(Command):
 
