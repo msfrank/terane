@@ -48,6 +48,7 @@ setup(
         'terane',
         'terane.auth',
         'terane.bier',
+        'terane.bier.ql',
         'terane.commands',
         'terane.commands.console',
         'terane.commands.grok',
