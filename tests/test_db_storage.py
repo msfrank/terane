@@ -1,8 +1,9 @@
 import os, sys
 from twisted.trial import unittest
-import terane.db
 
 class db_storage_Env_tests(unittest.TestCase):
+
+    skip = "This test case uses the old terane.db.storage package"
 
     def test_create_Env(self):
         tmproot = os.path.abspath(self.mktemp())
@@ -17,6 +18,8 @@ class db_storage_Env_tests(unittest.TestCase):
         env.close()
 
 class db_storage_Store_tests(unittest.TestCase):
+
+    skip = "This test case uses the old terane.db.storage package"
 
     def setUp(self):
         tmproot = os.path.abspath(self.mktemp())

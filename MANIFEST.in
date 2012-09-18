@@ -7,3 +7,6 @@ recursive-include terane *.h
 # package sphinx documentation and build files
 include doc/conf.py
 recursive-include doc *.rst
+
+# package test modules
+recursive-include tests *.py

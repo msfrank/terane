@@ -3,3 +3,5 @@ dist/
 Terane.egg-info/
 *.pyc
 terane/outputs/store/backend.so
+_trial_temp
+tests/_trial_temp
