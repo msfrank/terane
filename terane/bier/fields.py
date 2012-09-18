@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import datetime, calendar, struct, base64, re
+import datetime, calendar, dateutil.tz, re
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier.schema')
@@ -24,6 +24,20 @@ class IdentityField(object):
     """
     IdentityField stores data as-is, without any linguistic processing.
     """
+
+    def validate(self, value):
+        """
+        Validate that the supplied value is a string (str or unicode).
+
+        :param value: The value to validate.
+        :type value: str or unicode
+        :returns: The value as a unicode object.
+        :rtype: unicode
+        :raises TypeError: The value if of the wrong type.
+        """
+        if not isinstance(value, unicode) and not isinstance(value, str):
+            raise TypeError('value must be of type unicode or str')
+        return unicode(value)
 
     def terms(self, value):
         """
@@ -68,6 +82,20 @@ class TextField(object):
     always lowercased, so queries on a TextField are case-insensitive.
     """
 
+    def validate(self, value):
+        """
+        Validate that the supplied value is a string (str or unicode).
+
+        :param value: The value to validate.
+        :type value: str or unicode
+        :returns: The value as a unicode object.
+        :rtype: unicode
+        :raises TypeError: The value if of the wrong type.
+        """
+        if not isinstance(value, unicode) and not isinstance(value, str):
+            raise TypeError('value must be of type unicode or str')
+        return unicode(value)
+
     def terms(self, value):
         """
         Process the specified unicode or string value, breaking it up into tokens.
@@ -111,33 +139,50 @@ class DatetimeField(object):
     DatetimeField stores a python datetime.datetime.
     """
 
-    def terms(self, value):
+    def validate(self, value):
+        """
+        Validate that the supplied value is a datetime.datetime, and convert
+        the value to UTC timezone if necessary.
+
+        :param value: The value to validate.
+        :type value: datetime.datetime
+        :returns: The value
+        :rtype: datetime.datetime
+        :raises TypeError: The value if of the wrong type.
+        """
         if not isinstance(value, datetime.datetime):
-            raise Exception("value '%s' is not of type datetime.datetime" % value)
+            raise TypeError('value must be of type datetime.datetime')
+        # if no timezone is specified, then assume local tz
+        if value.tzinfo == None:
+            value = value.replace(tzinfo=dateutil.tz.tzlocal())
+        # convert to UTC, if necessary
+        if not value.tzinfo == dateutil.tz.tzutc():
+            value = value.astimezone(dateutil.tz.tzutc())
+        return value
+
+    def terms(self, value):
+        """
+        Process the specified datetime.datetime value, converting it to a unix
+        timestamp.
+
+        :param value: The string value to tokenize.
+        :type value: unicode or str
+        :returns: A list of tokenized terms.
+        :rtype: list
+        """
         # calculate the unix timestamp, with 1 second accuracy
         ts = int(calendar.timegm(value.timetuple()))
-        # pack the int as a 32 bit big-endian integer
-        ts = struct.pack(">I", ts)
-        # convert the packed int to base64   
-        ts = unicode(base64.standard_b64encode(ts))
         return [ts,]
 
     def parse(self, value):
+        """
+        Process the specified datetime.datetime value, returning a list containing
+        one tuple which contains the datetime as a unix timestamp and None indicating
+        there is no term metadata.
+
+        :param value: The datetime value to parse.
+        :type value: datetime.datetime
+        :returns: A list of (term, metadata) tuples.
+        :rtype: list
+        """
         return [(self.terms(value)[0], None)]
-
-def fieldFactory(value):
-    """
-    Given a value, return a new field instance of the appropriate type for the value.
-
-    :param value: The object to instantiate a new field for.
-    :type value: object
-    :returns: A new field instance.
-    :rtype: An object implementing :class:`terane.bier.IField`
-    """
-    if isinstance(value, str) or isinstance(value, unicode):
-        return TextField()
-    if isinstance(value, datetime.datetime):
-        return DatetimeField()
-    if isinstance(value, list) or isinstance(value, tuple):
-        return IdentityField()
-    raise TypeError("unknown event value type '%s'" % str(type(value)))

@@ -113,4 +113,6 @@ setup(
             'xmlrpc=terane.protocols.xmlrpc:XMLRPCProtocolPlugin',
             ],
         },
+    test_suite="tests",
+    tests_require=["setuptools_trial"]
 )

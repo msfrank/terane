@@ -17,39 +17,78 @@
 
 from zope.interface import Interface
 
+class IField(Interface):
+    def validate(self, value):
+        """
+        Verify that the supplied value is valid.
+
+        :param value: The value to validate.
+        :type value: object
+        :returns: The value.
+        :rtype: object
+        :raises TypeError: The value is invalid.
+        """
+    def terms(self, value):
+        """
+        Tokenize the value.
+
+        :param value: The value to tokenize.
+        :type value: object
+        :returns: A list of tokenized terms.
+        :rtype: list
+        """
+    def parse(self, value):
+        """
+        Return a list of tuples, each containing a tokenized term and a dict
+        containing term metadata.
+
+        :param value: The value to parse.
+        :type value: object
+        :returns: A list of (term, metadata) tuples.
+        :rtype: list
+        """
+
 class ISchema(Interface):
-    def hasField(name):
+    def hasField(fieldname, fieldtype):
         """
         Determine whether a field exists in the schema.
 
-        :param name: The name of the field.
-        :type name: str
-        :returns True if the field exists in the schema, otherwise False.
+        :param fieldname: The name of the field.
+        :type fieldname: str
+        :param fieldtype: The type of the field.
+        :type fieldtype: type
+        :returns: True if the field exists in the schema, otherwise False.
         :rtype: bool
         """
-    def getField(name):
+    def getField(fieldname, fieldtype):
         """
         Returns the specified Field.
 
-        :param name: The name of the field.
-        :type name: str
-        :returns: The field specified by name.
-        :rtype: A subclass of :class:`terane.bier.schema.BaseField`
+        :param fieldname: The name of the field.
+        :type fieldname: str
+        :param fieldtype: The type of the field.
+        :type fieldtype: type
+        :returns: An instance of the field.
+        :rtype: An object implementing :class:`terane.bier.IField`
+        :raises KeyError: The field does not exist in the schema.
         """
-    def addField(name, field):
+    def addField(fieldname, fieldtype):
         """
         Adds a new field to the schema.
 
-        :param name: The name of the field.
-        :type name: str
-        :param field: The field to add.
-        :type field: A subclass of :class:`terane.bier.schema.BaseField`
+        :param fieldname: The name of the field.
+        :type fieldname: str
+        :param fieldtype: The type of the field.
+        :type fieldtype: type
+        :returns: An instance of the field.
+        :rtype: An object implementing :class:`terane.bier.IField`
+        :raises KeyError: The field already exists in the schema.
         """
     def listFields():
         """
         Returns a list of field names present in the schema.
 
-        :returns: The list of field names.
+        :returns: The list of (fieldname, fieldtype, field) tuples.
         :rtype: list
         """
 
@@ -201,15 +240,15 @@ class IWriter(Interface):
         """
           
 class IIndex(Interface):
-    def schema():
+    def getSchema():
         """
         Returns an object implementing ISchema.
         """
-    def searcher():
+    def newSearcher():
         """
         Returns an object implementing ISearcher.
         """
-    def writer():
+    def newWriter():
         """
         Returns an object implementing IWriter.
         """

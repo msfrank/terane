@@ -15,13 +15,14 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, sys, time, datetime, socket
-from dateutil.tz import tzutc
+import os, sys
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
-from terane.inputs import Input, IInput
+from terane.inputs import Input, IInput, Dispatcher
+from terane.bier.event import Contract, Assertion
+from terane.bier.fields import IdentityField
 from terane.loggers import getLogger
 
 logger = getLogger('terane.inputs.file')
@@ -31,12 +32,17 @@ class FileInput(Input):
     implements(IInput)
 
     def __init__(self):
+        self._dispatcher = Dispatcher()
+        self._delayed = None
         self._deferred = None
         self._file = None
         self._prevstats = None
         self._position = None
         self._skipcount = 0
         self._errno = None
+        self._contract = Contract(
+            Assertion('_raw', IdentityField, expects=False, guarantees=True, ephemeral=True)
+            )
         Input.__init__(self)
 
     def configure(self, section):
@@ -55,48 +61,84 @@ class FileInput(Input):
             self._loopchunk = self._linemax
         logger.debug("[input:%s] loop chunk length is %i bytes" % (self.name,self._loopchunk))
 
-    def outfields(self):
-        return set(('_raw',))
+    def getContract(self):
+        return self._contract
+
+    def getDispatcher(self):
+        return self._dispatcher
 
     def startService(self):
         Input.startService(self)
-        self._schedule(None)
+        self._check()
+        self._schedule(False)
         logger.debug("[input:%s] started input" % self.name)
 
-    def _schedule(self, loopimmediately):
+    def _schedule(self, value):
+        """
+        Schedule the next check of self._path for new data.  If value is True,
+        then schedule the next loop immediately, otherwise, pause for one loop
+        interval.
+
+        :param value: A boolean indicating whether or not to loop immediately.
+        :type value: bool
+        """
+        if self._delayed and self._delayed.active():
+            raise Exception("[input:%s] attempted to reschedule twice" % self.name)
         self._deferred = Deferred()
         self._deferred.addCallback(self._tail)
         self._deferred.addCallback(self._schedule)
-        self._deferred.addErrback(self._error)
-        if loopimmediately == True:
-            reactor.callLater(0, self._deferred.callback, None)
+        if value == True:
+            self._delayed = reactor.callLater(0, self._deferred.callback, None)
         else:
-            reactor.callLater(self._interval, self._deferred.callback, None)
+            self._delayed = reactor.callLater(self._interval, self._deferred.callback, None)
         logger.trace("[input:%s] rescheduled tail" % self.name)
 
-    def _tail(self, unused):
-        logger.trace("[input:%s] checking for file modification" % self.name)
+    def _check(self):
+        """
+        Return file statistics about self._path.  If there was an error, None is
+        returned and self._errno is set.
+
+        :returns: A tuple with the file statistics, or None if there was an error.
+        :rtype: tuple or None
+        """
         try:
+            logger.trace("[input:%s] checking for file modification" % self.name)
             # open the file if necessary
             if self._file == None:
                 self._file = open(self._path, 'r')
-                _currstats = os.stat(self._path)
+                currstats = os.stat(self._path)
                 # if this is the first file open, then start reading from
                 # the end of the file
                 if self._prevstats == None:
-                    self._position = _currstats.st_size
+                    self._position = currstats.st_size
                 # otherwise start reading from the beginning of the file
                 else:
                     self._position = 0
                 self._skipcount = 0
-                self._prevstats = _currstats
+                self._prevstats = currstats
             # get the current file stats
             else:
-                _currstats = os.stat(self._path)
+                currstats = os.stat(self._path)
+            return currstats
         except (IOError,OSError), (errno, errstr):
             if errno != self._errno:
                 logger.warning("[input:%s] failed to tail file: %s" % (self.name,errstr))
                 self._errno = errno
+            return None
+
+    def _tail(self, unused):
+        """
+
+        :param unused: This parameter is not used for anything, but Twisted
+          requires a parameter to be passed to a callback.
+        :type: object
+        :returns: True if _tail() should be called again immediately, otherwise
+          False to indicate we should pause for one loop interval.
+        :rtype: bool
+        """
+        # get the current file statistics
+        _currstats = self._check()
+        if _currstats == None:
             return False
 
         # check if the file inode and/or underlying block device changed
@@ -197,18 +239,17 @@ class FileInput(Input):
         if line.isspace():
             return
         logger.trace("[input:%s] received line: %s" % (self.name,line))
-        # generate default timestamp and hostname, in case later
-        # filters aren't able to add it
-        ts = datetime.datetime.now(tzutc())
-        hostname = socket.getfqdn()
-        fields = {'_raw':line, 'default':line, 'input':self.name, 'ts':ts, 'hostname':hostname}
-        self.on_received_event.signal(fields)
-
-    def _error(self, failure):
-        logger.debug("[input:%s] tail error: %s" % (self.name,str(failure)))
-        return failure
+        event = self._dispatcher.newEvent()
+        event[self._contract.input] = self.name
+        event[self._contract.message] = line
+        event[self._contract._raw] = line
+        self._dispatcher.signalEvent(event)
 
     def stopService(self):
+        if not self.running:
+            return
+        if self._delayed and self._delayed.active():
+            self._delayed.cancel()
         if self._file:
             self._file.close()
         self._file = None

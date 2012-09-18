@@ -15,6 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
+from zope.interface import Interface
 from twisted.internet.defer import Deferred
 from terane.loggers import getLogger
 
@@ -22,6 +23,15 @@ logger = getLogger('terane.signals')
 
 class SignalCancelled(Exception):
     pass
+
+class ICopyable(Interface):
+    def copy():
+        """
+        Return a copy of the object.
+
+        :returns: A copy of the object.
+        :rtype: object
+        """
 
 class Signal(object):
 
@@ -37,7 +47,12 @@ class Signal(object):
         return True
 
     def connect(self, **kwds):
-        """Connect to a signal.  Returns a deferred."""
+        """
+        Connect a receiver to the signal.
+      
+        :returns: A Deferred which fires when a signal is received.
+        :rtype: :class:`twisted.internet.defer.Deferred`
+        """
         d = Deferred()
         d.kwds = kwds
         self._receivers[d] = d
@@ -52,9 +67,12 @@ class Signal(object):
 
     def signal(self, result):
         """Signal all registered receivers."""
+        if not ICopyable.providedBy(result):
+            raise TypeError("result does not implement ICopyable")
         deferreds = self._receivers.values()
         self._receivers = {}
         for d in deferreds:
             if self.matches(d.kwds):
                 logger.trace("signaling receiver %s" % d)
-                d.callback(result)
+                # return a copy of the result, so the receiver can modify it
+                d.callback(result.copy())

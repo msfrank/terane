@@ -54,6 +54,11 @@ class EVID(object):
             dt = dt.astimezone(dateutil.tz.tzutc())
         return EVID(int(calendar.timegm(dt.timetuple())), 0, 0)
 
+    @classmethod
+    def fromEvent(cls, event):
+        ts = int(calendar.timegm(event.ts.timetuple()))
+        evid = EVID(ts, 0, event.id)
+
     def pack(self):
         return struct.pack('>IIQ', self.ts, self.node, self.offset)
 

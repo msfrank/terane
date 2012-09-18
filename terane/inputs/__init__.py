@@ -1,4 +1,4 @@
-# Copyright 2010,2011 Michael Frank <msfrank@syntaxjockey.com>
+# Copyright 2010,2011,2012 Michael Frank <msfrank@syntaxjockey.com>
 #
 # This file is part of Terane.
 #
@@ -16,34 +16,41 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 from twisted.application.service import IService, Service
-from zope.interface import Attribute
 from terane.signals import Signal
+from terane.bier.event import Event
 
 class IInput(IService):
     def configure(section):
         "Configure the plugin instance."
-    def outfields():
-         "Return a set of field names which the instance emits."
-    on_received_event = Attribute("")
+    def getContract():
+        "Return a Contract describing the fields which the Input emits."
+    def getDispatcher():
+        "Return an Dispatcher which the input uses to signal new events."
 
 class Input(Service):
     """
     The Input base implementation.
     """
 
-    on_received_event = None
-
     def __init__(self):
-        self.on_received_event = Signal()
+        pass
 
     def configure(self, section):
         pass
-
-    def outfields(self):
-        return set()
 
     def startService(self):
         Service.startService(self)
 
     def stopService(self):
         return Service.stopService(self)
+
+class Dispatcher(Signal):
+    """
+    A wrapper around Signal which emits events.
+    """
+
+    def newEvent(self):
+        return Event()
+
+    def signalEvent(self, event):
+        self.signal(event)
