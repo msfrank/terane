@@ -1,4 +1,4 @@
-#Copyright 2010,2011 Michael Frank <msfrank@syntaxjockey.com>
+#Copyright 2011,2011 Michael Frank <msfrank@syntaxjockey.com>
 #
 # This file is part of Terane.
 #
@@ -18,6 +18,7 @@
 import socket, datetime
 from dateutil.tz import tzutc
 from twisted.application.service import MultiService
+from twisted.internet.task import cooperate
 from terane.plugins import plugins
 from terane.filters import FilterError, StopFiltering
 from terane.signals import SignalCancelled
@@ -29,24 +30,35 @@ logger = getLogger('terane.routes')
 class RoutingError(Exception):
     pass
 
+class EventProcessor(object):
+    def __init__(self, event, filters):
+        self.event = event
+        self._filters = filters
+
+    def next(self):
+        if len(self._filters) == 0:
+            raise StopIteration()
+        filter = self._filters.pop(0)
+        self.event = filter.getContract().validateEvent(filter.filter(self.event))
+
 class Route(object):
+    """
+    A Route describes the flow of an event stream.  It consists of a single
+    input, zero or more filters, and a single output.
+    """
 
     def __init__(self, name):
         self.name = name
 
     def configure(self, section):
+        chain = []
         # load the route input
         name = section.getString('input')
         try:
             self._input = plugins.instance('input', name)
         except:
             raise ConfigureError("no such input %s" % name)
-        # load the route output
-        name = section.getString('output')
-        try:
-            self._output = plugins.instance('output', name)
-        except:
-            raise ConfigureError("no such output %s" % name)
+        chain.append(self._input)
         # load the route filter chain
         self._filters = []
         filters = section.getString('filter', '').strip()
@@ -55,78 +67,63 @@ class Route(object):
             # verify each referenced filter has been loaded
             for name in filters:
                 try:
-                    instance = plugins.instance('filter', name)
+                    filter = plugins.instance('filter', name)
                 except:
                     raise ConfigureError("no such filter %s" % name)
                 # add filter to the filter chain
-                self._filters.append(instance)
-            # verify that the filtering chain will work
-            requiredfields = self._filters[0].outfields()
-            for filter in self._filters[1:]:
-                # verify that the every field the filter requires for input is available
-                if not filter.infields().issubset(requiredfields):
-                    raise ConfigureError("filtering chain schemas are not compatible")
-                # update requiredfields
-                requiredfields.update(filter.outfields())
-            # warn if the input may not provide all required fields
-            if not self._filters[0].infields().issubset(self._input.outfields()):
-                logger.warn("[route:%s] input %s does not guarantee fields required by filter %s" %
-                    (self.name, self._input.name, self._filters[0].name))
-            # warn if the output may not receive all required fields
-            if not self._output.infields().issubset(requiredfields):
-                logger.warn("[route:%s] filter chain does not guarantee fields required by output %s" %
-                    (self.name, self._output.name))
-            logger.debug("[route:%s] route configuration: %s -> %s -> %s" %
-                (self.name,self._input.name,' -> '.join(filters),self._output.name))
-        else:
-            logger.debug("[route:%s] route configuration: %s -> %s" %
-                (self.name,self._input.name,self._output.name))
+                self._filters.append(filter)
+                chain.append(filter)
+        # load the route output
+        name = section.getString('output')
+        try:
+            self._output = plugins.instance('output', name)
+        except:
+            raise ConfigureError("no such output %s" % name)
+        chain.append(self._output)
+        # verify that the filtering chain will work
+        aggregate = chain[0].getContract()
+        for i in range(1, len(chain)):
+            try:
+                contract = chain[i].getContract()
+                aggregate = contract.validateContract(aggregate)
+            except Exception, e:
+                raise ConfigureError("element #%i: %s" % (i, e))
+        logger.debug("[route:%s] route configuration: %s" %
+            (self.name, ' -> '.join([e.name for e in chain])))
         # schedule the on_received_event signal
         self._scheduleReceivedEvent()
 
     def _scheduleReceivedEvent(self):
-        self.d = self._input.on_received_event.connect()
-        self.d.addCallback(self._receivedEvent)
+        self.d = self._input.getDispatcher().connect()
+        self.d.addCallbacks(self._receivedEvent, lambda failure: failure)
         self.d.addErrback(self._errorReceivingEvent)
 
-    def _receivedEvent(self, fields):
-        try:
-            # set default values for basic fields if they are missing
-            if not 'input' in fields:
-                fields['input'] = self._input.name
-            if not 'ts' in fields:
-                fields['ts'] = datetime.datetime.now(tzutc())
-            if not 'hostname' in fields:
-                fields['hostname'] = socket.gethostname()
-            if not 'default' in fields:
-                fields['default'] = ''
-            # copy the fields dict, so we can directly modify the copy
-            fields = fields.copy()
-            # run the fields through the filter chain
-            for filter in self._filters:
-                fields = filter.filter(fields)
-            # recheck that the required special fields are present
-            requiredfields = set(('input','ts','hostname','default'))
-            if not requiredfields.issubset(set(fields.keys())):
-                raise FilterError("missing required fields: %s" %
-                    ', '.join(set(fields.keys()).difference(requiredfields)))
-            logger.debug("[route:%s] processed event" % self.name)
-            # send the event to the output
-            self._output.receiveEvent(fields)
-        except StopFiltering, e:
-            # the event was intentionally dropped during filtering
-            logger.debug("[route:%s] dropped event: %s" % (self.name,e))
-        # reschedule the on_received_event signal
+    def _receivedEvent(self, event):
+        # run the fields through the filter chain, then reschedule the signal
+        self._input.getContract().validateEvent(event)
+        task = cooperate(EventProcessor(event, self._filters))
+        task.whenDone().addCallbacks(self._processedEvent, self._errorProcessingEvent)
         self._scheduleReceivedEvent()
 
     def _errorReceivingEvent(self, failure):
-        if failure.check(SignalCancelled) == None:
-            logger.debug("[route:%s] error processing event: %s" % (self.name,str(failure)))
+        if not failure.check(SignalCancelled):
+            logger.debug("[route:%s] error receiving event: %s" % (self.name,str(failure)))
             self._scheduleReceivedEvent()
+            return failure
+
+    def _processedEvent(self, processor):
+        logger.debug("[route:%s] processed event" % self.name)
+        self._output.receiveEvent(processor.event)
+
+    def _errorProcessingEvent(self, failure):
+        if not failure.check(StopFiltering):
+            logger.debug("[route:%s] error processing event: %s" % (self.name,str(failure)))
+            return failure
+        logger.debug("[route:%s] dropped event: %s" % (self.name,e))
 
     def close(self):
         if self.d != None:
-            self._input.on_received_event.disconnect(self.d)
+            self._input.getDispatcher().disconnect(self.d)
             self.d = None
         logger.debug("[route:%s] stopped processing route" % self.name)
 
@@ -144,7 +141,7 @@ class RouteManager(MultiService):
                 route = Route(name)
                 route.configure(section)
                 self._routes.append(route)
-            except Exception, e:
+            except ConfigureError, e:
                 logger.warning("failed to load route %s: %s" % (name, e))
 
     def stopService(self):

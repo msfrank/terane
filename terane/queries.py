@@ -19,7 +19,7 @@ import time
 from twisted.application.service import Service
 from twisted.internet.defer import succeed
 from terane.plugins import plugins
-from terane.outputs import ISearchableOutput
+from terane.outputs import ISearchable
 from terane.bier.evid import EVID
 from terane.bier.ql import parseIterQuery, parseTailQuery
 from terane.bier.searching import searchIndices, Period
@@ -51,8 +51,8 @@ class QueryManager(Service):
 
     def startService(self):
         Service.startService(self)
-        for output in plugins.instancesImplementing('output', ISearchableOutput):
-            index = output.index()
+        for output in plugins.instancesImplementing('output', ISearchable):
+            index = output.getIndex()
             self._searchables[output.name] = index
         if len(self._searchables) < 1:
             logger.info("no searchable indices found")

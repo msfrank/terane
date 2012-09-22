@@ -15,11 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import datetime, dateutil.tz, calendar
+import calendar
 from terane.bier import IIndex, ISchema, IWriter
-from terane.bier.schema import fieldFactory
 from terane.bier.evid import EVID
-from terane.idgen import idgen
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier.writing')
@@ -28,78 +26,49 @@ class WriterError(Exception):
     pass
 
 def writeEventToIndex(event, index):
+    """
+
+    :param event:
+    :type event:
+    :param index:
+    :type index:
+    :returns: The EVID of the new event.
+    :rtype: :class:`terane.bier.evid.EVID`
+    """
     # verify that the index provides the appropriate interface
     if not IIndex.providedBy(index):
         raise TypeError("index does not implement IIndex")
-    # verify required fields are present
-    if not 'input' in event:
-        raise WriterError("missing required field 'input'")
-    if not 'hostname' in event:
-        raise WriterError("missing required field 'hostname'")
-    if not 'ts' in event:
-        raise WriterError("missing required field 'ts'")
-
-    # get the timestamp
-    ts = event['ts']
-    del event['ts']
-    if not isinstance(ts, datetime.datetime):
-        raise WriterError("field 'ts' is not of type datetime.datetime")
-    # if no timezone is specified, then assume local tz
-    if ts.tzinfo == None:
-        ts = ts.replace(tzinfo=dateutil.tz.tzlocal())
-    # convert to UTC, if necessary
-    if not ts.tzinfo == dateutil.tz.tzutc():
-        ts = ts.astimezone(dateutil.tz.tzutc())
-    ts = int(calendar.timegm(ts.timetuple()))
-
-    # create a list of valid field names from the passed in fields. a valid
-    # field name is defined as any name that starts with an alphabetic character
-    fieldnames = [fieldname for fieldname in event.keys() if fieldname[0].isalpha()]
-    # verify that each field name exists in the index schema
-    schema = index.schema()
+    # get the current schema
+    schema = index.getSchema()
     if not ISchema.providedBy(schema):
-        raise TypeError("index.schema() does not implement ISchema")
-    for fieldname in fieldnames:
-        if not schema.hasField(fieldname):
-            schema.addField(fieldname, fieldFactory(event[fieldname]))
+        raise TypeError("index schema does not implement ISchema")
 
     # create a new transactional writer
-    writer = index.writer()
+    writer = index.newWriter()
     if not IWriter.providedBy(writer):
-        raise TypeError("index.writer() does not implement IWriter")
+        raise TypeError("index writer does not implement IWriter")
     writer.begin()
 
     # update the index in the context of a writer
     try:   
         # create a new event identifier
-        evid = EVID(ts, 0, idgen.allocate())
-        logger.trace("created new event %s" % evid)
-        document = {}
-
+        evid = EVID.fromEvent(event)
         # process the value of each field in the event
-        for fieldname in fieldnames:
-            field = schema.getField(fieldname)
+        fields = list(event.fields())
+        for fieldname,fieldtype,value in fields:
+            if not schema.hasField(fieldname, fieldtype):
+                schema.addField(fieldname, fieldtype)
+            field = schema.getField(fieldname, fieldtype)
             # update the field with the event value
-            evalue = event.get(fieldname)
-            for term,tvalue in field.parse(evalue):
-                writer.newPosting(fieldname, term, evid, tvalue)
-            # add the event value to the document
-            document[fieldname] = evalue
-
-        # fieldnames that start with '&' are stored but not indexed.  this may
-        # possibly overwrite a value for an indexed field in the document.
-        for storedname in event.keys():
-            if storedname.startswith('&') and len(storedname) > 1:
-                fieldname = storedname[1:]
-                document[fieldname] = event[storedname]
-
+            for term,meta in field.parse(value):
+                writer.newPosting(fieldname, fieldtype, term, evid, meta)
         # store the document data
-        logger.trace("id=%s: event=%s" % (evid,document))
-        writer.newEvent(evid, document)
+        logger.trace("id=%s: fields=%s" % (evid, fields))
+        writer.newEvent(evid, fields)
     # if an exception was raised, then abort the transaction
     except:
         writer.abort()
         raise
-    # otherwise commit the transaction and return the document id
+    # otherwise commit the transaction and return the event id
     writer.commit()
     return evid

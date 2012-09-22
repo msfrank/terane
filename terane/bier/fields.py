@@ -16,6 +16,8 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import datetime, calendar, dateutil.tz, re
+from zope.interface import implements
+from terane.bier import IField
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier.schema')
@@ -24,6 +26,8 @@ class IdentityField(object):
     """
     IdentityField stores data as-is, without any linguistic processing.
     """
+
+    implements(IField)
 
     def validate(self, value):
         """
@@ -49,8 +53,8 @@ class IdentityField(object):
         :returns: A list of tokenized terms.
         :rtype: list
         """
-        if not isinstance(value, list) and not isinstance(value, tuple):
-            raise Exception("value '%s' is not of type list or tuple" % value)
+        if not isinstance(value, unicode) and not isinstance(value, str):
+            raise Exception("value '%s' is not of type unicode or str" % value)
         return [unicode(t) for t in value if t != '']
 
     def parse(self, value):
@@ -81,6 +85,8 @@ class TextField(object):
     (as designated by the unicode properties database).  Tokens in a TextField are
     always lowercased, so queries on a TextField are case-insensitive.
     """
+
+    implements(IField)
 
     def validate(self, value):
         """
@@ -138,6 +144,8 @@ class DatetimeField(object):
     """
     DatetimeField stores a python datetime.datetime.
     """
+
+    implements(IField)
 
     def validate(self, value):
         """
