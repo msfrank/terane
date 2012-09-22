@@ -14,22 +14,6 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
-#
-# ----------------------------------------------------------------------
-#
-# This file contains portions of code Copyright 2009 Matt Chaput
-# 
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-# 
-#    http://www.apache.org/licenses/LICENSE-2.0
-# 
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
 import pickle
 from zope.interface import implements
@@ -45,24 +29,37 @@ class Schema(object):
     def __init__(self, index):
         self._index = index
         self._fields = {}
+        self._cached = {}
         with self._index.new_txn() as txn:
             for fieldname,fieldspec in self._index.list_fields(txn):
                 self._fields[fieldname] = pickle.loads(fieldspec)
+        for fieldname,fieldspec in self._fields.items():
+            for fieldtype in fieldspec:
+                self._cached[(fieldname,fieldtype)] = fieldtype()
 
-    def addField(self, name, field):
-        if name in self._fields:
-            raise IndexError("field named '%s' already exists in Schema" % name)
+    def addField(self, fieldname, fieldtype):
+        if (fieldname,fieldtype) in self._cached:
+            raise KeyError("field %s:%s already exists in Schema" % (fieldname,fieldtype.__name__))
+        if fieldname in self._fields:
+            fieldspec = self._fields[fieldname]
+        else:
+            fieldspec = []
+        fieldspec.append(fieldtype)
         with self._index.new_txn() as txn:
-            self._index.add_field(txn, name, pickle.dumps(field))
-        self._fields[name] = field
+            self._index.add_field(txn, fieldname, pickle.dumps(fieldspec))
+        self._fields[fieldname] = fieldspec
+        field = fieldtype()
+        self._cached[(fieldname,fieldtype)] = field
+        return field
 
-    def getField(self, name):
-        return self._fields[name]
+    def getField(self, fieldname, fieldtype):
+        return self._cached[(fieldname,fieldtype)]
 
-    def hasField(self, name):
-        if name in self._fields:
+    def hasField(self, fieldname, fieldtype):
+        if (fieldname,fieldtype) in self._cached:
             return True
         return False
 
     def listFields(self):
-        return self._fields.keys()
+        return [(f[0],f[1],spec) for f,spec in self._cached.iteritems()]
+

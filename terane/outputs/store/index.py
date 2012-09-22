@@ -90,16 +90,16 @@ class Index(backend.Index):
     def __str__(self):
         return "<terane.outputs.store.Index '%s'>" % self.name
 
-    def schema(self):
+    def getSchema(self):
         return self._schema
  
-    def searcher(self):
+    def newSearcher(self):
         """
         Return a new object implementing ISearcher.
         """
         return IndexSearcher(self)
     
-    def writer(self):
+    def newWriter(self):
         """
         Return a new object implementing IWriter, which is protected by a new
         transaction.

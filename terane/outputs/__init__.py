@@ -16,18 +16,18 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 from twisted.application.service import IService, Service
-from zope.interface import Interface, Attribute
+from zope.interface import Interface
 
 class IOutput(IService):
     def configure(section):
         "Configure the plugin instance."
-    def infields():
+    def getContract():
          "Return a set of field names which the receiveEvent method expects."
     def receiveEvent(fields):
         "Receive a dict of event fields and store them."
 
-class ISearchableOutput(IOutput):
-    def index():
+class ISearchable(Interface):
+    def getIndex():
         "Return the Index."
 
 class Output(Service):
@@ -38,14 +38,11 @@ class Output(Service):
     def configure(self, section):
         pass
 
-    def infields(self):
-        return set()
-
     def startService(self):
         Service.startService(self)
 
     def stopService(self):
         Service.stopService(self)
 
-    def receiveEvent(self, fields):
+    def receiveEvent(self, event):
         pass

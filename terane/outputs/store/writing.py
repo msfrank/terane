@@ -46,8 +46,18 @@ class IndexWriter(object):
         return self
 
     def newEvent(self, evid, fields):
+        # build a dict out of the fields list
+        _fields = dict()
+        for fn,ft,v in fields:
+            if not isinstance(v, unicode):
+                raise TypeError("field value %s must be a unicode" % fn)
+            fieldspec = "%s~%s" % (fn,ft.__name__)
+            _fields[fieldspec] = v
+        fields = _fields
+        # serialize the fields dict and write it to the segment
         segment = self._ix._current
         segment.set_doc(self._txn, str(evid), json_encode(fields))
+        # update segment metadata
         self._indexSize += 1
         self._currentSize += 1
         self._lastId = str(evid)
@@ -55,30 +65,31 @@ class IndexWriter(object):
         lastUpdate = {'size': self._currentSize, 'last-id': self._lastId, 'last-modified': self._lastModified}
         segment.set_meta(self._txn, 'last-update', json_encode(lastUpdate))
 
-    def newPosting(self, fieldname, term, evid, value):
+    def newPosting(self, fieldname, fieldtype, term, evid, value):
         segment = self._ix._current
         try:
-            tmeta = json_decode(segment.get_term_meta(self._txn, fieldname, term))
+            fieldspec = "%s~%s" % (fieldname,fieldtype.__name__)
+            tmeta = json_decode(segment.get_term_meta(self._txn, fieldspec, term))
             if not 'num-docs' in tmeta:
                 raise WriterError("term metadata corruption: no such key 'num-docs'")
             tmeta['num-docs'] += 1
         except KeyError:
             tmeta = {'num-docs': 1}
         # increment the document count for this term
-        segment.set_term_meta(self._txn, fieldname, term, json_encode(tmeta))
+        segment.set_term_meta(self._txn, fieldspec, term, json_encode(tmeta))
         try:
-            fmeta = json_decode(segment.get_field_meta(self._txn, fieldname))
+            fmeta = json_decode(segment.get_field_meta(self._txn, fieldspec))
             if not 'num-docs' in fmeta:
                 raise WriterError("field metadata corruption: no such key 'num-docs'")
             fmeta['num-docs'] += 1
         except KeyError:
             fmeta = {'num-docs': 1}
         # increment the document count for this field
-        segment.set_field_meta(self._txn, fieldname, json_encode(fmeta))
+        segment.set_field_meta(self._txn, fieldspec, json_encode(fmeta))
         if value == None:
             value = dict()
         # add the term to the reverse index
-        segment.set_term(self._txn, fieldname, term, str(evid), json_encode(value))
+        segment.set_term(self._txn, fieldspec, term, str(evid), json_encode(value))
 
     def commit(self):
         self._txn.commit()

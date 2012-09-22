@@ -20,8 +20,9 @@ from twisted.internet import reactor
 from twisted.application.service import MultiService
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
+from terane.bier.event import Contract
 from terane.bier.writing import writeEventToIndex
-from terane.outputs import Output, ISearchableOutput
+from terane.outputs import Output, IOutput, ISearchable
 from terane.outputs.store.env import Env
 from terane.outputs.store.index import Index
 from terane.outputs.store.logfd import LogFD
@@ -31,10 +32,11 @@ logger = getLogger('terane.outputs.store')
 
 class StoreOutput(Output):
 
-    implements(ISearchableOutput)
+    implements(IOutput, ISearchable)
 
     def __init__(self):
         self._index = None
+        self._contract = Contract().sign()
 
     def configure(self, section):
         self._indexName = section.getString("index name", self.name)
@@ -56,6 +58,9 @@ class StoreOutput(Output):
         self._index = None
         return Output.stopService(self)
 
+    def getContract(self):
+        return self._contract
+
     def receiveEvent(self, event):
         # if the output is not running, discard any received events
         if not self.running:
@@ -65,7 +70,7 @@ class StoreOutput(Output):
         # rotate the index segments if necessary
         self._index.rotateSegments(self._segRotation, self._segRetention)
     
-    def index(self):
+    def getIndex(self):
         return self._index
 
 class StoreOutputPlugin(Plugin):
