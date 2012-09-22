@@ -19,42 +19,40 @@ import re, time, dateutil.parser
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
 from terane.filters import Filter, IFilter, FilterError
+from terane.bier.event import Contract
 from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.mysql")
 
 class MysqlServerFilter(Filter):
+    """
+    Parse the event.message in MySQL server log format.
+    """
 
     implements(IFilter)
 
     def configure(self, section):
         self._regex = re.compile(r'(?P<date>\d{6})\w+(?P<time>\d\d:\d\d\:\d\d)\w+(?P<msg>.*)')
+        self._contract = Contract()
 
-    def infields(self):
-        # this filter requires the following incoming fields
-        return set(('_raw',))
+    def getContract(self):
+        return self._contract
 
-    def outfields(self):
-        # this filter guarantees values for the following outgoing fields
-        return set()
-
-    def filter(self, fields):
-        # if the regex matches, then we have a timestamped event
-        m = self._regex.match(fields['_raw'])
+    def filter(self, event):
+        m = self._regex.match(event[self._contract.field_message])
+        # if the regex matches, then we have a timestamped event, otherwise
+        # keep the entire line in the message field.
         if m != None:
             try:
                 # override the default timestamp
-                fields['ts'] = datetime.datetime.strptime("%s %s" % 
-                    m.group('date','time'), '%y%m%d %%H:%M:%S')
+                date = "%s %s" % m.group('date','time')
+                event.ts = datetime.datetime.strptime(date, '%y%m%d %%H:%M:%S')
             except Exception, e:
                 raise FilterError("failed to parse timestamp: %s" % e)
             # put the rest of the line into the default field
-            fields['default'] = m.group('msg')
-        # otherwise just stick the entire line into the default field
-        else:
-            fields['default'] = fields['_raw']
-        return fields
+            event[self._contract.field_message] = m.group('msg')
+        return event
 
 class MysqlServerFilterPlugin(Plugin):
     implements(IPlugin)
-    factory = MysqlServerFilter()
+    factory = MysqlServerFilter

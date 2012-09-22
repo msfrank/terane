@@ -19,83 +19,124 @@ import re, time, email.utils, datetime
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
 from terane.filters import Filter, IFilter, FilterError, StopFiltering
+from terane.bier.event import Contract, Assertion
+from terane.bier.fields import IdentityField, TextField
 from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.datetime")
 
-class DatetimeFilter(Filter):
+class RFC2822DatetimeFilter(Filter):
+    """
+    Given an event field with a RFC2822-compatible datetime string, convert the
+    string to a datetime.datetime and store it as the event ts.
+    """
 
     implements(IFilter)
 
     def configure(self, section):
-        pass
+        self._fieldname = section.getString('source field', 'rfc2822_date')
+        self._expected = section.getBoolean('expects source', False)
+        self._guaranteed = section.getBoolean('guarantees source', False)
+        self._contract = Contract()
+        self._contract.addAssertion( self._fieldname, TextField,
+            expects=self._expected, guarantees=self._guaranteed, ephemeral=True)
+        self._assertion = getattr(self._contract, 'field_' + self._fieldname)
+        self._contract.sign()
 
-    def infields(self):
-        # this filter requires the following incoming fields
-        return set()
+    def getContract(self):
+        return self._contract
 
-    def outfields(self):
-        # this filter guarantees values for the following outgoing fields
-        return set(('ts',))
-
-    def filter(self, fields):
+    def filter(self, event):
         try:
-            # if there is already a ts value, then skip parsing
-            if 'ts' in fields:
-                pass
-            # parse the timestamp
-            if 'rfc2822_date' in fields:
-                ts = email.utils.parsedate_tz(fields['rfc2822_date'])
-            elif 'syslog_date' in fields:
-                date = fields['syslog_date']
-                # if there is no leading zero in front of the day, then add it
-                if date[4] == ' ':
-                    date = list(date)
-                    date[4] = '0'
-                    date = ''.join(date)
-                # append the year to the date string
-                date += ' %i' % time.localtime()[0]
-                # parse the date string into a struct_time
-                ts = time.strptime(date, "%b %d %H:%M:%S %Y")
-            else:
-                year,mon,mday,hour,min,sec,wday,yday,isdst = time.localtime()
-                if 'year' in fields:
-                    year = time.strptime(fields['year'],"%Y")[0]
-                if 'abbrev_year' in fields:
-                    year = time.strptime(fields['abbrev_year'],"%y")[0]
-                if 'month' in fields:
-                    mon = time.strptime(fields['month'],"%m")[1]
-                if 'month_name' in fields:
-                    mon = time.strptime(fields['month_name'],"%B")[1]
-                if 'abbrev_month_name' in fields:
-                    mon = time.strptime(fields['abbrev_month_name'],"%b")[1]
-                if 'day' in fields:
-                    mday = time.strptime(fields['day'],"%d")[2]
-                if 'hour' in fields:
-                    hour = time.strptime(fields['hour'],"%H")[3]
-                if '12hour' in fields and 'ampm' in fields:
-                    hour = time.strptime(fields['12hour'] + fields['ampm'],"%I%p")[3]
-                if 'minute' in fields:
-                    minute = time.strptime(fields['minute'],"%M")[4]
-                if 'second' in fields:
-                    second = time.strptime(fields['second'],"%M")[5]
-                if 'weekday' in fields:
-                    wday = time.strptime(fields['weekday'],"%w")[6]
-                if 'weekday_name' in fields:
-                    wday = time.strptime(fields['weekday_name'],"%A")[6]
-                if 'abbrev_weekday_name' in fields:
-                    yday = time.strptime(fields['abbrev_weekday_name'],"%a")[6]
-                if 'yearday' in fields:
-                    yday = time.strptime(fields['yearday'],"%j")[7]
-                ts = (year,mon,mday,hour,min,sec,wday,yday,-1)
+            ts = email.utils.parsedate_tz(event[self._assertion])
+            event.ts = datetime.datetime.fromtimestamp(time.mktime(ts))
+            return event
         except Exception, e:
-            raise FilterError("failed to generate ts: %s" % e)
-        try:
-            fields['ts'] = datetime.datetime.fromtimestamp(time.mktime(ts)).isoformat()
-        except Exception, e:
-            raise FilterError("failed to generate 'ts': %s" %  e)
-        return fields
+            raise FilterError("failed to update ts: %s" %  e)
 
-class DatetimeFilterPlugin(Plugin):
+class RFC2822DatetimeFilterPlugin(Plugin):
     implements(IPlugin)
-    factory = DatetimeFilter()
+    factory = RFC2822DatetimeFilter
+
+class SyslogDatetimeFilter(Filter):
+    """
+    Given an event field with a syslog-compatible datetime string, convert the
+    string to a datetime.datetime and store as the event ts.
+    """
+
+    implements(IFilter)
+
+    def configure(self, section):
+        self._fieldname = section.getString('source field', 'syslog_date')
+        self._expected = section.getBoolean('expects source', False)
+        self._guaranteed = section.getBoolean('guarantees source', False)
+        self._contract = Contract()
+        self._contract.addAssertion(self._fieldname, TextField,
+            expects=self._expected, guarantees=self._guaranteed, ephemeral=True)
+        self._assertion = getattr(self._contract, 'field_' + self._fieldname)
+        self._contract.sign()
+
+    def getContract(self):
+        return self._contract
+
+    def filter(self, event):
+        try:
+            date = event[self._assertion]
+            # if there is no leading zero in front of the day, then add it
+            if date[4] == ' ':
+                date = list(date)
+                date[4] = '0'
+                date = ''.join(date)
+            # append the year to the date string
+            date += ' %i' % time.localtime()[0]
+            # parse the date string into a struct_time
+            ts = time.strptime(date, "%b %d %H:%M:%S %Y")
+            event.ts = datetime.datetime.fromtimestamp(time.mktime(ts))
+            return event
+        except Exception, e:
+            raise FilterError("failed to update ts: %s" %  e)
+
+class SyslogDatetimeFilterPlugin(Plugin):
+    implements(IPlugin)
+    factory = SyslogDatetimeFilter
+
+class DatetimeExpanderFilter(Filter):
+    """
+    Expand the event ts into separate fields for each datetime component.
+    """
+
+    implements(IFilter)
+
+    def configure(self, section):
+        self._contract = Contract()
+        self._contract.addAssertion('dt_year', TextField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('dt_month', TextField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('dt_day', TextField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('dt_hour', TextField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('dt_minute', TextField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('dt_second', TextField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('dt_weekday', TextField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('dt_yearday', TextField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.sign()
+
+    def getContract(self):
+        return self._contract
+
+    def filter(self, event):
+        try:
+            tm = event.ts.timetuple()
+            event[self._contract.field_dt_year] = tm.tm_year
+            event[self._contract.field_dt_month] = tm.tm_mon
+            event[self._contract.field_dt_day] = tm.tm_mday
+            event[self._contract.field_dt_hour] = tm.tm_hour
+            event[self._contract.field_dt_minute] = tm.tm_min
+            event[self._contract.field_dt_second] = tm.tm_sec
+            event[self._contract.field_dt_weekday] = tm.tm_wday
+            event[self._contract.field_dt_yearday] = tm.tm_yday
+            return event
+        except Exception, e:
+            raise FilterError("failed to expand ts: %s" % e)
+
+class DatetimeExpanderFilterPlugin(Plugin):
+    implements(IPlugin)
+    factory = DatetimeExpanderFilter

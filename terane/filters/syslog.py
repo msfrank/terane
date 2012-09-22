@@ -19,6 +19,8 @@ import re, time, dateutil.parser
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
 from terane.filters import Filter, IFilter, FilterError, StopFiltering
+from terane.bier.event import Contract
+from terane.bier.fields import IdentityField, TextField
 from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.syslog")
@@ -26,6 +28,14 @@ logger = getLogger("terane.filters.syslog")
 class SyslogFilter(Filter):
 
     implements(IFilter)
+
+    def __init__(self):
+        self._contract = Contract()
+        self._contract.addAssertion('syslog_facility', IdentityField, guarantees=True)
+        self._contract.addAssertion('syslog_severity', IdentityField, guarantees=True)
+        self._contract.addAssertion('syslog_pid', IdentityField, guarantees=False)
+        self._contract.addAssertion('syslog_tag', TextField, guarantees=False)
+        self._contract.sign()
 
     def _updateselected(self, selector):
             # split the selector into the facility list and serverity
@@ -43,7 +53,7 @@ class SyslogFilter(Filter):
             # parse the severity, first checking for a modifier
             if severity[0] in ('=','!'):
                 modifier = severity[0]
-                severity = serverity[1:]
+                severity = severity[1:]
             else:
                 modifier = None
             # log msgs of all severities for the specified facilities
@@ -103,21 +113,16 @@ class SyslogFilter(Filter):
             for selector in [s.strip() for s in selectors.split(';') if not s == '']:
                 self._updateselected(selector)
 
-    def infields(self):
-        # this filter requires the following incoming fields
-        return set(('_raw',))
+    def getContract(self):
+        return self._contract
 
-    def outfields(self):
-        # this filter guarantees values for the following outgoing fields
-        return set()
+    def filter(self, event):
+        if event[self._contract.field_message][0].isdigit():
+            return self._filterSyslog(event)
+        return self._filterFile(event)
 
-    def filter(self, fields):
-        if fields['_raw'][0].isdigit():
-            return self._filterSyslog(fields)
-        return self._filterFile(fields)
-
-    def _filterFile(self, fields):
-        m = self._filematcher.match(fields['_raw'])
+    def _filterFile(self, event):
+        m = self._filematcher.match(event[self._contract.field_message])
         if m == None:
             raise FilterError("[filter:%s] line is not in syslog format" % self.name)
         ts,hostname,msg = m.group('ts','hostname','msg')
@@ -125,14 +130,14 @@ class SyslogFilter(Filter):
             raise FilterError("[filter:%s] line is not in syslog format" % self.name)
         # parse the timestamp
         try:
-            fields['ts'] = dateutil.parser.parse(ts)
+            event.ts = dateutil.parser.parse(ts)
         except Exception, e:
             raise FilterError("[filter:%s] failed to parse ts '%s': %s" % (self.name, ts, e))
-        fields['hostname'] = hostname
-        return self._filterMsg(msg, fields)
+        event[self._contract.field_hostname] = hostname
+        return self._filterMsg(msg, event)
 
-    def _filterSyslog(self, fields):
-        data = fields['_raw']
+    def _filterSyslog(self, event):
+        data = event[self._contract.field_message]
         # parse the PRI section
         m = self._PRImatcher.match(data)
         if m == None:
@@ -155,8 +160,8 @@ class SyslogFilter(Filter):
         if severity < 0 or severity > 7:
             raise FilterError("[filter:%s] line has invalid severity %i" % (self.name,severity))
         # notify each input about the new syslog message
-        fields['syslog_facility'] = facility
-        fields['syslog_severity'] = severity
+        event[self._contract.field_syslog_facility] = facility
+        event[self._contract.field_syslog_severity] = severity
         # parse the HEADER section
         # this is a RFC5424-compliant syslog message
         if data[0].isdigit():
@@ -172,7 +177,7 @@ class SyslogFilter(Filter):
         data = data[len(timestamp):]
         # parse the timestamp
         try:
-            fields['ts'] = dateutils.parser.parse(timestamp)
+            event.ts = dateutils.parser.parse(timestamp)
         except Exception, e:
             raise FilterError("[filter:%s] failed to parse date '%s': %s" % (self.name, timestamp, e))
         # the remainder of the data consists of the HOSTNAME, a space, then the MSG
@@ -180,24 +185,24 @@ class SyslogFilter(Filter):
             hostname,msg = data.split(' ', 1)
         except:
             raise FilterError("[filter:%s] line has no syslog body")
-        fields['hostname'] = hostname
-        return self._filterMsg(msg, fields)
+        event[self._contract.field_hostname] = hostname
+        return self._filterMsg(msg, event)
 
-    def _filterMsg(self, msg, fields):
+    def _filterMsg(self, msg, event):
         tag,content = msg.split(' ', 1)
         m = self._TAGmatcher.match(tag)
         if m == None:
             raise FilterError("[filter:%s] line has an invalid tag" % self.name)
         data = m.groups()
         if data[0] != None and data[1] != None:
-            fields['syslog_tag'] = data[0]
-            fields['syslog_pid'] = data[1]
+            event[self._contract.field_syslog_tag] = data[0]
+            event[self._contract.field_syslog_pid] = data[1]
         elif data[2] != None:
-            fields['syslog_tag'] = data[2]
+            event[self._contract.field_syslog_tag] = data[2]
         else:
             raise FilterError("[filter:%s] line has an invalid tag" % self.name)
-        fields['default'] = content
-        return fields
+        event[self._contract.field_message] = content
+        return event
 
 class SyslogFilterPlugin(Plugin):
     implements(IPlugin)

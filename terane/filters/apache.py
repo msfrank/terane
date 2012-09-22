@@ -19,6 +19,8 @@ import re, time, dateutil.parser
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
 from terane.filters import Filter, IFilter, FilterError
+from terane.bier.event import Contract, Assertion
+from terane.bier.fields import IdentityField, TextField
 from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.apache")
@@ -38,20 +40,21 @@ class ApacheCommonFilter(Filter):
                 (?P<byteswritten>\d+)''',
             re.VERBOSE
             )
-        self._outfields = ('remotehost', 'remotelog', 'remoteuser', 'request',
-            'status', 'byteswritten')
+        self._contract = Contract()
+        self._contract.addAssertion('remotehost', TextField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('remotelog', IdentityField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('remoteuser', IdentityField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('request', TextField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('status', IdentityField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('byteswritten', IdentityField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.sign()
 
-    def infields(self):
-        # this filter requires the following incoming fields
-        return set(('_raw',))
+    def getContract(self):
+        return self._contract
 
-    def outfields(self):
-        # this filter guarantees values for the following outgoing fields
-        return set(self._outfields)
-
-    def filter(self, fields):
-        m = self._regex.match(fields['_raw'])
-        fields['default'] = fields['_raw']
+    def filter(self, event):
+        line = event[self._contract.field_message]
+        m = self._regex.match(line)
         if m == None:
             raise FilterError("incoming line '%s' didn't match regex" % line)
         date = m.group('date')
@@ -59,16 +62,18 @@ class ApacheCommonFilter(Filter):
             raise FilterError("regex did not match 'date'")
         # parse the timestamp
         try:
-            fields['ts'] = dateutil.parser.parse(date, dayfirst=True, fuzzy=True)
+            event.ts = dateutil.parser.parse(date, dayfirst=True, fuzzy=True)
         except Exception, e:
             raise FilterError("failed to parse date '%s': %s" % (date, e))
         # extract each field
-        for field in self._outfields:
-            value = m.group(field)
+        for assertion in self._contract:
+            if assertion.fieldname in ('message', 'hostname', 'input'):
+                continue
+            value = m.group(assertion.fieldname)
             if value == None:
-                raise FilterError("regex did not match '%s'" % field)
-            fields[field] = value
-        return fields
+                raise FilterError("regex did not match '%s'" % assertion.fieldname)
+            event[assertion] = value
+        return event
 
 class ApacheCommonFilterPlugin(Plugin):
     implements(IPlugin)
@@ -91,37 +96,42 @@ class ApacheCombinedFilter(Filter):
                 \"(?P<useragent>[^\"]+)\"''',
             re.VERBOSE
             )
-        self._outfields = ('remotehost', 'remotelog', 'remoteuser', 'request',
-            'status', 'byteswritten', 'referrer', 'useragent')
+        self._contract = Contract()
+        self._contract.addAssertion('remotehost', TextField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('remotelog', IdentityField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('remoteuser', IdentityField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('request', TextField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('status', IdentityField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('byteswritten', IdentityField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('referrer', TextField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('useragent', TextField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.sign()
 
-    def infields(self):
-        # this filter requires the following incoming fields
-        return set(('_raw',))
+    def getContract(self):
+        return self._contract
 
-    def outfields(self):
-        # this filter guarantees values for the following outgoing fields
-        return set(self._outfields)
-
-    def filter(self, fields):
-        m = self._regex.match(fields['_raw'])
-        fields['default'] = fields['_raw']
+    def filter(self, event):
+        line = event[self._contract.message]
+        m = self._regex.match(line)
         if m == None:
-            raise FilterError("incoming line '%s' didn't match regex" % fields['_raw'])
+            raise FilterError("incoming line '%s' didn't match regex" % line)
         date = m.group('date')
         if date == None:
             raise FilterError("regex did not match 'date'")
         # parse the timestamp
         try:
-            fields['ts'] = dateutil.parser.parse(date, dayfirst=True, fuzzy=True)
+            event.ts = dateutil.parser.parse(date, dayfirst=True, fuzzy=True)
         except Exception, e:
             raise FilterError("failed to parse date '%s': %s" % (date, e))
         # extract each field
-        for field in self._outfields:
-            value = m.group(field)
+        for assertion in self._contract:
+            if assertion.fieldname in ('message', 'hostname', 'input'):
+                continue
+            value = m.group(assertion.fieldname)
             if value == None:
-                raise FilterError("regex did not match '%s'" % field)
-            fields[field] = value
-        return fields
+                raise FilterError("regex did not match '%s'" % assertion.fieldname)
+            event[assertion] = value
+        return event
 
 class ApacheCombinedFilterPlugin(Plugin):
     implements(IPlugin)

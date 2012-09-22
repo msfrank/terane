@@ -19,6 +19,8 @@ import re
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
 from terane.filters import Filter, IFilter, FilterError, StopFiltering
+from terane.bier.event import Contract
+
 from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.regex")

@@ -19,6 +19,8 @@ from datetime import datetime
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
 from terane.filters import Filter, IFilter, FilterError, StopFiltering
+from terane.bier.event import Contract
+from terane.bier.fields import IdentityField, TextField
 from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.nagios")
@@ -27,19 +29,24 @@ class NagiosFilter(Filter):
 
     implements(IFilter)
 
+    def __init__(self):
+        self._contract = Contract()
+        self._contract.addAssertion('nagios_evtype', IdentityField, guarantees=True)
+        self._contract.addAssertion('nagios_host', TextField, guarantees=False)
+        self._contract.addAssertion('nagios_service', TextField, guarantees=False)
+        self._contract.addAssertion('nagios_status', TextField, guarantees=False)
+        self._contract.addAssertion('nagios_state', TextField, guarantees=False)
+        self._contract.addAssertion('nagios_attempt', TextField, guarantees=False)
+        self._contract.sign()
+
     def configure(self, section):
         pass
 
-    def infields(self):
-        # this filter requires the following incoming fields
-        return set(('_raw',))
+    def getContract(self):
+        return self._contract
 
-    def outfields(self):
-        # this filter guarantees values for the following outgoing fields
-        return set(('nagios_evtype',))
-
-    def filter(self, fields):
-        line = fields['_raw']
+    def filter(self, event):
+        line = event[self._contract.field_message]
         # all lines should start with '['
         if line[0] != '[':
             raise FilterError("incoming line '%s' didn't start with timestamp" % line)
@@ -49,7 +56,7 @@ class NagiosFilter(Filter):
         except:
             raise FilterError("incoming line '%s' didn't start with timestamp" % line)
         try:
-            fields['ts'] = datetime.fromtimestamp(float(ts))
+            event.ts = datetime.fromtimestamp(float(ts))
         except Exception, e:
             raise FilterError("%s cannot be converted into a timestamp: %s" % (ts, e))
         # determine the event type
@@ -59,50 +66,50 @@ class NagiosFilter(Filter):
         except:
             raise StopFiltering()
         # set the nagios_event type field
-        fields['nagios_event'] = evtype
+        event[self._contract.field_nagios_evtype] = evtype
         # parse the rest of the line
         if evtype == 'HOST ALERT':
-            return self._hostAlert(line, fields)
+            return self._hostAlert(line, event)
         if evtype == 'SERVICE ALERT':
-            return self._serviceAlert(line, fields)
+            return self._serviceAlert(line, event)
         if evtype == 'Error':
-            return self._error(line, fields)
+            return self._error(line, event)
         if evtype == 'Warning':
-            return self._warning(line, fields)
+            return self._warning(line, event)
         raise StopFiltering()
         
-    def _hostAlert(self, line, fields):
+    def _hostAlert(self, line, event):
         try:
             host,status,state,attempt,detail = line.strip().split(';', 4)
-            fields['nagios_host'] = host
-            fields['nagios_status'] = status
-            fields['nagios_state'] = state
-            fields['nagios_attempt'] = attempt
-            fields['default'] = detail
-            return fields
+            event[self._contract.field_nagios_host] = host
+            event[self._contract.field_nagios_status] = status
+            event[self._contract.field_nagios_state] = state
+            event[self._contract.field_nagios_attempt] = attempt
+            event[self._contract.field_message] = detail
+            return event
         except Exception, e:
             FilterError("failed to parse host alert: %s" % e)
 
-    def _serviceAlert(self, line, fields):
+    def _serviceAlert(self, line, event):
         try:
             host,service,status,state,attempt,detail = line.strip().split(';', 5)
-            fields['nagios_host'] = host
-            fields['nagios_service'] = service
-            fields['nagios_status'] = status
-            fields['nagios_state'] = state
-            fields['nagios_attempt'] = attempt
-            fields['default'] = detail
-            return fields
+            event[self._contract.field_nagios_host] = host
+            event[self._contract.field_nagios_service] = service
+            event[self._contract.field_nagios_status] = status
+            event[self._contract.field_nagios_state] = state
+            event[self._contract.field_nagios_attempt] = attempt
+            event[self._contract.field_message] = detail
+            return event
         except Exception, e:
             FilterError("failed to parse service alert: %s" % e)
 
-    def _error(self, line, fields):
-        fields['default'] = line.strip()
-        return fields
+    def _error(self, line, event):
+        event[self._contract.field_message] = detail
+        return event
 
-    def _warning(self, line, fields):
-        fields['default'] = line.strip()
-        return fields
+    def _warning(self, line, event):
+        event[self._contract.field_message] = detail
+        return event
 
 class NagiosFilterPlugin(Plugin):
     implements(IPlugin)

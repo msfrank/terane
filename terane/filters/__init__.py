@@ -26,23 +26,15 @@ class StopFiltering(Exception):
 class IFilter(IService):
     def configure(section):
         "Configure the plugin instance."
-    def infields():
-        "Return a set of field names which the instance requires."
-    def outfields():
-        "Return a set of field names which the instance emits."
-    def filter(fields):
-        "Filter fields."
+    def getContract():
+        "Return a Contract describing the fields which the Input emits."
+    def filter(event):
+        "Process the event."
 
 class Filter(Service):
 
     def configure(self, section):
         pass
 
-    def infields(self):
-        return set()
-
-    def outfields(self):
-        return set()
-
-    def filter(self, fields):
+    def filter(self, event):
         raise FilterError("filter() not implemented for filter %s" % self.name)
