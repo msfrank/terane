@@ -40,9 +40,9 @@ class FileInput(Input):
         self._position = None
         self._skipcount = 0
         self._errno = None
-        self._contract = Contract(
-            Assertion('_raw', IdentityField, expects=False, guarantees=True, ephemeral=True)
-            )
+        self._contract = Contract()
+        self._contract.addAssertion('_raw', IdentityField, expects=False, guarantees=True, ephemeral=True)
+        self._contract.sign() 
         Input.__init__(self)
 
     def configure(self, section):
@@ -240,9 +240,9 @@ class FileInput(Input):
             return
         logger.trace("[input:%s] received line: %s" % (self.name,line))
         event = self._dispatcher.newEvent()
-        event[self._contract.input] = self.name
-        event[self._contract.message] = line
-        event[self._contract._raw] = line
+        event[self._contract.field_input] = self.name
+        event[self._contract.field_message] = line
+        event[self._contract.field__raw] = line
         self._dispatcher.signalEvent(event)
 
     def stopService(self):
