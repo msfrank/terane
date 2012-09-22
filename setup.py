@@ -103,7 +103,9 @@ setup(
         'terane.plugin.filter': [
             'syslog=terane.filters.syslog:SyslogFilterPlugin',
             'regex=terane.filters.regex:RegexFilterPlugin',
-            'dt=terane.filters.dt:DatetimeFilterPlugin',
+            'dt_rfc2822=terane.filters.dt:RFC2822DatetimeFilterPlugin',
+            'dt_syslog=terane.filters.dt:SyslogDatetimeFilterPlugin',
+            'dt_expand=terane.filters.dt:DatetimeExpanderFilterPlugin',
             'apache_combined=terane.filters.apache:ApacheCombinedFilterPlugin',
             'apache_common=terane.filters.apache:ApacheCommonFilterPlugin',
             'mysql_server=terane.filters.mysql:MysqlServerFilterPlugin',
