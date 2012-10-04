@@ -17,11 +17,47 @@
 
 import time, datetime, copy, bisect
 from zope.interface import implements
-from terane.bier import IMatcher, IPostingList
+from terane.bier.interfaces import IMatcher, IPostingList
+from terane.bier.event import Contract
 from terane.bier.evid import EVID
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier.matching')
+
+class QueryTerm(object):
+
+    implements(IMatcher)
+
+    def __init__(self, fieldname, fieldtype, fieldfunc, value):
+        """
+        :param fieldname: The name of the field to search.
+        :type fieldname: str
+        :param value: The term to search for in the field.
+        :type value: unicode
+        """
+        self.fieldname = fieldname
+        self.fieldtype = fieldtype
+        self.fieldfunc = fieldfunc
+        self.value = value
+
+    def __str__(self):
+        return "<Term %s=%s:%s(%s)>" % (self.fieldname,self.typename,self.funcname,self.value)
+
+    def optimizeMatcher(self, index):
+        schema = index.getSchema()
+        if not schema.hasField(self.fieldname, self.typename):
+            return None
+        field = schema.getField(self.fieldname, self.typename)
+        matcher = field.makeMatcher(self.funcname, self.value)
+        if not matcher:
+            return None
+        return matcher.optimizeMatcher(index)
+
+    def matchesLength(searcher, startId, endId):
+        raise NotImplementedError()
+
+    def iterMatches(searcher, startId, endId):
+        raise NotImplementedError()
 
 class Term(object):
     """
@@ -31,21 +67,18 @@ class Term(object):
 
     implements(IMatcher, IPostingList)
 
-    def __init__(self, fieldname, value):
+    def __init__(self, field, value):
         """
-        :param fieldname: The name of the field to search.
-        :type fieldname: str
-        :param value: The term to search for in the field.
+        :param field: The field to search.
+        :type field: :class:`terane.bier.fields.QualifiedField`
+        :param value: The string representation of the term to search for in the field.
         :type value: unicode
         """
-        if fieldname == None:
-            self.fieldname = 'default'
-        else:
-            self.fieldname = fieldname
-        self.value = unicode(value)
+        self.field = field
+        self.value = value
 
     def __str__(self):
-        return "<Term %s=%s>" % (self.fieldname,self.value)
+        return "<Term %s=%s>" % (self.field,self.value)
 
     def optimizeMatcher(self, index):
         """
@@ -58,16 +91,6 @@ class Term(object):
         :returns: The optimized matcher.
         :rtype: An object implementing :class:`terane.bier.IMatcher`
         """
-        schema = index.schema()
-        if not schema.hasField(self.fieldname):
-            return None
-        field = schema.getField(self.fieldname)
-        terms = field.terms(self.value)
-        if len(terms) == 0:
-            return None
-        elif len(terms) > 1:
-            return Phrase(self.fieldname, terms).optimizeMatcher(index)
-        self.value = terms[0]
         return self
 
     def matchesLength(self, searcher, startId, endId):
@@ -80,7 +103,7 @@ class Term(object):
         :returns: The postings length estimate.
         :rtype: int
         """
-        length = searcher.postingsLength(self.fieldname, self.value, startId, endId)
+        length = searcher.postingsLength(self.field, self.value, startId, endId)
         logger.trace("%s: postingsLength() => %i" % (self, length))
         return length
 
@@ -93,7 +116,7 @@ class Term(object):
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.IPostingList`
         """
-        self._postings = searcher.iterPostings(self.fieldname, self.value, startId, endId)
+        self._postings = searcher.iterPostings(self.field, self.value, startId, endId)
         return self
 
     def nextPosting(self):
@@ -496,9 +519,9 @@ class NOT(object):
     def matchesLength(self, searcher, startId, endId):
         """
         The NOT operator has no use for the matchesLength() method, and raises a
-        NotImplemented exception if called.
+        NotImplementedError exception if called.
         """
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def iterMatches(self, searcher, startId, endId):
         """
@@ -657,21 +680,18 @@ class Phrase(object):
 
     implements(IMatcher, IPostingList)
 
-    def __init__(self, fieldname, value):
+    def __init__(self, field, terms):
         """
         :param phrase: A list of child term matchers.
         :type phrase: list of strings
         """
-        if fieldname == None:
-            self.fieldname = 'default'
-        else:
-            self.fieldname = fieldname
-        self.value = value
+        self.field = field
+        self.terms = terms
         self._lengths = None
         self._iters = None
 
     def __str__(self):
-        return "<Phrase %s>" % self.value
+        return "<Phrase %s>" % self.terms
 
     def optimizeMatcher(self, index):
         """
@@ -682,16 +702,10 @@ class Phrase(object):
         :returns: The optimized matcher.
         :rtype: An object implementing :class:`terane.bier.IMatcher`
         """
-        schema = index.schema()
-        if not schema.hasField(self.fieldname):
+        if len(self.terms) == 0:
             return None
-        field = schema.getField(self.fieldname)
-        if isinstance(self.value, unicode):
-            self.terms = field.terms(self.value)
-        else:
-            self.terms = self.value
         if len(self.terms) == 1:
-            return Term(self.fieldname, self.terms[0]).optimizeMatcher(index)
+            return Term(self.field, self.terms[0]).optimizeMatcher(index)
         return self
 
     def matchesLength(self, searcher, startId, endId):
@@ -710,7 +724,7 @@ class Phrase(object):
         self._lengths = []
         for position in range(len(self.terms)):
             term = self.terms[position]
-            length = searcher.postingsLength(self.fieldname, term, startId, endId)
+            length = searcher.postingsLength(self.field, term, startId, endId)
             bisect.insort_right(self._lengths, (length,term,position))
         length = self._lengths[0][0]
         logger.trace("%s: matchesLength() => %i" % (self, length))
@@ -729,7 +743,7 @@ class Phrase(object):
         """
         if self._lengths == None:
             self.matchesLength(searcher, startId, endId)
-        self._iters = [searcher.iterPostings(self.fieldname, v[1], startId, endId) for v in self._lengths]
+        self._iters = [searcher.iterPostings(self.field, v[1], startId, endId) for v in self._lengths]
         return self
 
     def nextPosting(self):

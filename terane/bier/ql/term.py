@@ -16,39 +16,55 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import pyparsing as pp
-from terane.bier.matching import Term, Phrase
+from terane.bier.matching import QueryTerm
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier.ql')
 
-# -------------------
-# subjectTerm grammar
-# -------------------
+
+# --------------------
+# keyValueTerm grammar
+# --------------------
 # <alphanums>             ::= alphabetic characters 'a' through 'z', 'A' through 'Z', digits 0 through 9
 # <unreservedSymbols>     ::= '_' | '+' | '-' | '*' | '/' | '\' | ',' | '.' | '&' | '|' | '^' | '~' | '@' | '#' | '$' | '%' | ':' | ';'
 # <unreservedChars>       ::= <alphas> | <digits> | <unreservedSymbols>
-# <quotedString>          ::= sequence of characters starting with a single or double quotaton mark, containing a span of
-#                             zero or more characters, and ending with a matching single or double quotation mark
 # <subjectWord>           ::= <quotedString> | <unreservedChars>+
 # <subjectFieldName>      ::= <unreservedChars>+
 # <subjectFieldType>      ::= <unreservedChars>+
-# <subjectFieldOperator>  ::= <unreservedChars>+
-# <subjectQualifiedTerm>  ::= <subjectFieldName> ':' [ <subjectFieldType> ':' ] <subjectFieldOperator> '(' <subjectWord> ')'
-# <subjectTerm>           ::= <subjectWord> | <subjectFieldName> '=' <subjectWord> | <subjectQualifiedTerm>
+# <keyValueTerm>          ::= <subjectWord> | <subjectFieldName> '=' <subjectWord>
 
-unreservedChars = pp.alphanums + '_+-*/\,.&|^~@#$%:;'
-fieldSeparator = pp.Suppress('=')
-subjectWord = pp.quotedString | pp.Word(unreservedChars)
-subjectTerm = ( pp.Word(unreservedChars) + fieldSeparator + subjectWord ) | subjectWord
-def parseSubjectTerm(tokens):
+fieldName = pp.Word(pp.alphanums + '_')
+unquotedValue = pp.Word(pp.alphanums + '_+*/\\,.&|^~@#$%:;')
+value = pp.QuotedString('\'') | pp.QuotedString('"') | unquotedValue
+keyValueTerm = ( fieldName + pp.Suppress('=') + value ) | value
+def parseKeyValueTerm(tokens):
     "Parse a subject term."
     if len(tokens) == 1:
-        fieldname,term = None, unicode(tokens[0])
+        fieldname,value = None, unicode(tokens[0])
     else:
-        fieldname,term = str(tokens[0]), unicode(tokens[1])
-    if term[0] == '\"' and term[-1] == '\"':
-        return Phrase(fieldname, term[1:-1])
-    if term[0] == '\'' and term[-1] == '\'':
-        return Term(fieldname, term[1:-1])
-    return Term(fieldname, term)
-subjectTerm.setParseAction(parseSubjectTerm)
+        fieldname,value = str(tokens[0]), unicode(tokens[1])
+    return QueryTerm(fieldname, None, None, value)
+keyValueTerm.setParseAction(parseKeyValueTerm)
+
+# --------------------
+# functionTerm grammar
+# --------------------
+# <typedFunctionTerm>     ::= <fieldName> '=' <fieldType> ':' <function> '(' <params> ')'
+# <untypedFunctionTerm>   ::= <fieldName> '=' <function> '(' <params> ')'
+# <subjectTerm>           ::= <subjectWord> | <subjectFieldName> '=' <subjectWord> | <subjectQualifiedTerm>
+
+fieldType = pp.Word(pp.alphanums + '_')
+function = pp.Word(pp.alphanums + '_')
+value = pp.QuotedString('(', escChar='\\', endQuoteChar=')')
+typedFunctionTerm = fieldName + pp.Suppress('=') + fieldType + pp.Suppress(':') + function + value
+untypedFunctionTerm = fieldName + pp.Suppress('=') + function + value
+functionTerm = typedFunctionTerm | untypedFunctionTerm
+def parseFunctionTerm(tokens):
+    if len(tokens) == 4:
+        fieldname,fieldtype,function,value = str(tokens[0]),str(tokens[1]),str(tokens[2]),unicode(tokens[3])
+    elif len(tokens) == 3:
+        fieldname,fieldtype,function,value = str(tokens[0]),None,str(tokens[1]),unicode(tokens[2])
+    return QueryTerm(fieldname, fieldtype, function, value)
+functionTerm.setParseAction(parseFunctionTerm)
+
+subjectTerm = functionTerm | keyValueTerm
