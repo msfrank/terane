@@ -15,6 +15,8 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
+from twisted.application.service import IServiceCollection, MultiService
+
 __version__ = (0, 2, 2)
 
 def versionstring():
@@ -22,3 +24,19 @@ def versionstring():
     Return the version number as a string.
     """
     return "%i.%i.%i" % __version__
+
+class IManager(IServiceCollection):
+    def configure(settings):
+        """
+        Configure the manager.
+
+        :param settings: The settings object.
+        :type settings: :class:`terane.settings.Settings`
+        """
+
+class Manager(MultiService):
+    """
+    """
+
+    def configure(self, settings):
+        pass

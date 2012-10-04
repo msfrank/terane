@@ -16,10 +16,10 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import time
-from twisted.application.service import Service
+from zope.interface import implements
 from twisted.internet.defer import succeed
-from terane.plugins import plugins
-from terane.outputs import ISearchable
+from terane import IManager, Manager
+from terane.registry import getRegistry
 from terane.bier.evid import EVID
 from terane.bier.ql import parseIterQuery, parseTailQuery
 from terane.bier.searching import searchIndices, Period
@@ -40,8 +40,12 @@ class QueryResult(object):
     def __str__(self):
         return "<QueryResult meta=%s, data=%s>" % (self.meta, self.data)
 
-class QueryManager(Service):
+class QueryManager(Manager):
+
+    implements(IManager)
+
     def __init__(self):
+        Manager.__init__(self)
         self._searchables = {}
         self.maxResultSize = 10
         self.maxIterations = 5
@@ -50,8 +54,9 @@ class QueryManager(Service):
         pass
 
     def startService(self):
-        Service.startService(self)
-        for output in plugins.instancesImplementing('output', ISearchable):
+        Manager.startService(self)
+        routes = getRegistry().getComponent(IManager, 'routes')
+        for output in routes.listSearchables():
             index = output.getIndex()
             self._searchables[output.name] = index
         if len(self._searchables) < 1:
@@ -61,7 +66,7 @@ class QueryManager(Service):
 
     def stopService(self):
         self._searchables = None
-        return Service.stopService(self)
+        return Manager.stopService(self)
 
     def iter(self, query, lastId=None, indices=None, limit=100, reverse=False, fields=None):
         """

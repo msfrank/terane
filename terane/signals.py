@@ -40,7 +40,7 @@ class Signal(object):
     def __init__(self):
         self._receivers = set()
 
-    def matches(self, kwds):
+    def matchesKeywords(self, kwds):
         """
         Override this method in your signal subclass if you want to do keyword
         matching of signal receivers.  If you don't override this method, then
@@ -53,7 +53,7 @@ class Signal(object):
         """
         return True
 
-    def connect(self, **kwds):
+    def connectSignal(self, **kwds):
         """
         Connect a receiver to the signal.
       
@@ -65,7 +65,7 @@ class Signal(object):
         self._receivers.add(d)
         return d
 
-    def disconnect(self, d):
+    def disconnectSignal(self, d):
         """
         Disconnect a receiver from a signal.
 
@@ -78,7 +78,7 @@ class Signal(object):
         self._receivers.remove(d)
         d.errback(SignalCancelled())
 
-    def signal(self, result):
+    def emitSignal(self, result):
         """
         Signal all registered receivers.
 
@@ -91,7 +91,7 @@ class Signal(object):
         receivers = self._receivers
         self._receivers = set()
         for d in receivers:
-            if self.matches(d.kwds):
+            if self.matchesKeywords(d.kwds):
                 logger.trace("signaling receiver %s" % d)
                 # return a copy of the result, so the receiver can modify it
                 d.callback(result.copy())

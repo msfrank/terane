@@ -15,29 +15,51 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, traceback
-from twisted.application.service import Service, MultiService, IServiceCollection
-from zope.interface import Attribute
+import os
 from pkg_resources import Environment, working_set
+from zope.interface import Interface, implements
+from twisted.application.service import IService, Service
+from terane import IManager, Manager
+from terane.registry import getRegistry
 from terane.settings import ConfigureError
 from terane.loggers import getLogger
 
 logger = getLogger('terane.plugins')
 
-class IPlugin(IServiceCollection):
-    factory = Attribute("The factory for producing plugin instances.")
+class IPlugin(IService):
     def configure(section):
-        "Configure the plugin."
+        """
+        Configure the plugin.
 
-class Plugin(MultiService):
+        :param section: The configuration section.
+        :type section: :class:`terane.settings.Section`
+        """
+    def listComponents():
+        """
+        Get all of the components which the plugin advertises.
+
+        :returns: A list of (impl,spec,name) tuples.
+        :rtype: list
+        """
+
+class ILoadable(Interface):
+    def __call__(plugin):
+        """
+        Pass the parent plugin instance to the constructor.
+
+        :param plugin: The plugin parent.
+        :type plugin: :class:`terane.plugins.Plugin`
+        """
+
+class Plugin(Service):
     """
     Abstract class which all plugins inherit from.
     """
 
-    factory = None
+    components = None
 
     def __init__(self):
-        MultiService.__init__(self)
+        pass
 
     def configure(self, section):
         """
@@ -50,13 +72,22 @@ class Plugin(MultiService):
         """
         pass
 
+    def listComponents(self):
+        """
+        returns the list of components specified in the components class
+        attribute.
+        """
+        if not self.components:
+            raise NotImplementedError()
+        return self.components
+
     def startService(self):
         """
         Called when the plugin is started.  If a plugin needs to perform any
         startup tasks, they should override this method (be sure to chain up
         to the parent method) and perform them here.
         """
-        MultiService.startService(self)
+        Service.startService(self)
 
     def stopService(self):
         """
@@ -64,9 +95,9 @@ class Plugin(MultiService):
         shutdown task, they should override this method (be sure to chain up
         to the parent method) and perform them here.
         """
-        return MultiService.stopService(self)
+        return Service.stopService(self)
 
-class PluginManager(MultiService):
+class PluginManager(Manager):
     """
     Manages the lifecycle of all plugins.  Each plugin is loaded during the
     configure phase, and its configure method is called.  When terane enters
@@ -74,11 +105,11 @@ class PluginManager(MultiService):
     terane exits the main loop, the stopService method of each plugin is called.
     """
 
+    implements(IManager)
+
     def __init__(self):
-        MultiService.__init__(self)
+        Manager.__init__(self)
         self.setName("plugins")
-        self._plugins = {}
-        self._instances = {}
 
     def configure(self, settings):
         """
@@ -86,6 +117,7 @@ class PluginManager(MultiService):
         discoverable if they are in the normal python module path, or in
         the path specified by 'plugin directory'.
         """
+        registry = getRegistry()
         # load plugins
         section = settings.section('server')
         self.pluginsdir = os.path.join(section.getPath("plugin directory"))
@@ -103,86 +135,38 @@ class PluginManager(MultiService):
         for e in errors:
             logger.info("failed to load plugin egg '%s'" % e)
         # load all discovered plugins for each type
-        for ptype in ['protocol','input','output','filter']:
-            plugins = {}
-            for ep in working_set.iter_entry_points("terane.plugin.%s" % ptype):
-                if not settings.hasSection("plugin:%s:%s" % (ptype, ep.name)):
-                    continue
-                # if a configuration section exists, load and configure the plugin
-                try:
-                    _Plugin = ep.load()
-                    if not IPlugin.implementedBy(_Plugin):
-                        raise Exception("%s plugin '%s' doesn't implement IPlugin" % (ptype, ep.name))
-                    section = settings.section("plugin:%s:%s" % (ptype, ep.name))
-                    plugin = _Plugin()
-                    plugin.setName("plugin:%s:%s" % (ptype, ep.name))
-                    plugin.setServiceParent(self)
-                    plugin.configure(section)
-                    plugins[ep.name] = plugin
-                    logger.info("loaded %s plugin '%s'" % (ptype, ep.name))
-                except ConfigureError:
-                    raise
-                except Exception, e:
-                    logger.exception(e)
-                    logger.warning("failed to load %s plugin '%s'" % (ptype, ep.name))
-            self._plugins[ptype] = plugins
-        # instanciate all configured plugins for each type
-        for ptype in ['protocol','input','output','filter']:
-            instances = {}
-            for section in settings.sectionsLike("%s:" % ptype):
-                iname = section.name.split(':',1)[1]
-                try:
-                    itype = section.getString('type', None)
-                    if itype == None:
-                        raise ConfigureError("plugin instance missing required option 'type'")
-                    plugins = self._plugins[ptype]
-                    try:
-                        plugin = plugins[itype]
-                    except:
-                        raise ConfigureError("no registered %s plugin named '%s'" % (ptype, itype))
-                    instance = plugin.factory()
-                    instance.setName(iname)
-                    instance.setServiceParent(plugin)
-                    instance.configure(section)
-                    instances[iname] = instance
-                except ConfigureError:
-                    raise
-                except Exception, e:
-                    logger.exception(e)
-                    logger.warning("failed to load %s instance '%s'" % (ptype, iname))
-            self._instances[ptype] = instances
- 
-    def instance(self, ptype, iname):
-        """
-        Returns an instance of the specified plugin.
-        
-        :param ptype: The type of plugin.
-        :type ptype: str
-        :param iname: The name of the plugin instance.
-        :type iname: str
-        :returns: An instance of the specified plugin.
-        :rtype: :class:`terane.plugins.Plugin`
-        :raises Exception: The specified plugin was not found.
-        """
-        return self._instances[ptype][iname]
-
-    def instancesImplementing(self, ptype, iface):
-        """
-        Returns a list of instances providing the specified interface.
-        
-        :param ptype: The type of plugin.
-        :type ptype: str
-        :param iface: The interface.
-        :type iname: zope.interface.Interface
-        :returns: A list of instances providing the specified interface.
-        :rtype: list
-        """
-        return [i for i in self._instances[ptype].values() if iface.providedBy(i)]
-
-
-plugins = PluginManager()
-"""
-`plugins` is a singleton instance of a :class:`PluginManager`.  All interaction
-with the plugin infrastructure must occur through this instance; do *not* instantiate
-new :class:`PluginManager` instances!
-"""
+        for ep in working_set.iter_entry_points("terane.plugin"):
+            # if no config section exists, then don't load the plugin
+            if not settings.hasSection("plugin:%s" % ep.name):
+                continue
+            try:
+                # load and configure the plugin
+                _Plugin = ep.load()
+                if not IPlugin.implementedBy(_Plugin):
+                    raise Exception("plugin '%s' doesn't implement IPlugin" % ep.name)
+                plugin = _Plugin()
+                plugin.setName(ep.name)
+                plugin.setServiceParent(self)
+                section = settings.section("plugin:%s" % ep.name)
+                plugin.configure(section)
+                registry.addComponent(plugin, IPlugin, ep.name)
+                logger.info("loaded plugin '%s'" % ep.name)
+                # find all plugin components and load them into the registry
+                for impl,spec,name in plugin.listComponents():
+                    if not ILoadable.implementedBy(impl):
+                        raise Exception("component %s:%s in plugin %s doesn't implement ILoadable" % 
+                            (spec.__name__, name, ep.name))
+                    # a little extra syntax here to make sure the lambda expression
+                    # passed as the factory function to addComponent() has the appropriate
+                    # variables bound in its scope
+                    def _makeTrampoline(impl=impl, plugin=plugin):
+                        def _trampoline():
+                            logger.trace("allocating new %s from plugin %s" % (impl.__name__,plugin.name))
+                            return impl(plugin)
+                        return _trampoline
+                    registry.addComponent(_makeTrampoline(impl, plugin), spec, name)
+            except ConfigureError:
+                raise
+            except Exception, e:
+                logger.exception(e)
+                logger.warning("failed to load plugin '%s'" % ep.name)
