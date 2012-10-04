@@ -17,19 +17,54 @@
 
 import datetime, calendar, dateutil.tz, re
 from zope.interface import implements
-from terane.bier import IField
+from terane.plugins import ILoadable, IPlugin, Plugin
+from terane.bier.interfaces import IField
+from terane.bier.matching import Term, Phrase
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier.schema')
 
-class IdentityField(object):
+class QualifiedField(object):
+    """
+    """
+    def __init__(self, fieldname, fieldtype, field):
+        self.fieldname = fieldname
+        self.fieldtype = fieldtype
+        self.field = field
+
+    def parseValue(self, value):
+        return self.field.parseValue(value)
+
+    def makeMatcher(self, funcname, value):
+        return self.field.makeMatcher(self, fieldfunc, value)
+
+    def __str__(self):
+        return "%s:%s" % (self.fieldtype, self.fieldname)
+        
+class BaseField(object):
+    """
+    """
+    def __init__(self, plugin):
+        pass
+
+    def makeMatcher(self, field, fieldfunc, value):
+        if fieldfunc == None:
+            func = self.defaultMatcher
+        else:
+            func = getattr(self, "match_%s" % funcname)
+        return func(field, value)
+
+    def defaultMatcher(self, field, value):
+        raise NotImplementedError("Default field method not implemented")
+
+class IdentityField(BaseField):
     """
     IdentityField stores data as-is, without any linguistic processing.
     """
 
     implements(IField)
 
-    def validate(self, value):
+    def validateValue(self, value):
         """
         Validate that the supplied value is a string (str or unicode).
 
@@ -43,42 +78,34 @@ class IdentityField(object):
             raise TypeError('value must be of type unicode or str')
         return unicode(value)
 
-    def terms(self, value):
-        """
-        The IdentityField tokenizer just converts each item in value to unicode,
-        if necessary.
-
-        :param value: The list or tuple value to tokenize.
-        :type value: list or tuple
-        :returns: A list of tokenized terms.
-        :rtype: list
-        """
-        if not isinstance(value, unicode) and not isinstance(value, str):
-            raise Exception("value '%s' is not of type unicode or str" % value)
-        return [unicode(t) for t in value if t != '']
-
-    def parse(self, value):
+    def parseValue(self, value):
         """
         Return a list of tuples, each containing a tokenized term and a dict
         containing term metadata.  The metadata for an IdentityField term is the
         'pos' item which is a list of term positions.
 
-        :param value: The list or tuple value to parse.
-        :type value: list or tuple
+        :param value: The value to parse.
+        :type value: str or unicode
         :returns: A list of (term, metadata) tuples.
         :rtype: list
         """
-        terms = self.terms(value)
-        positions = {}
-        for position in range(len(terms)):
-            term = terms[position]
-            if term in positions:
-                positions[term]['pos'].append(position)
-            else:
-                positions[term] = {'pos': [position]}
-        return positions.items()
+        return [(unicode(value), {'pos': 0})]
 
-class TextField(object):
+    def match_is(self, field, value):
+        """
+        The IdentityField tokenizer just converts the value to unicode,
+        if necessary.
+
+        :param value: The value to tokenize.
+        :type value: str or unicode
+        :returns: The value as a unicode object.
+        :rtype: unicode
+        """
+        return Term(field, self.validateValue(value))
+
+    defaultMatcher = match_is
+
+class TextField(BaseField):
     """
     TextField stores input by breaking it into tokens separated by whitespace or
     any character other than an underscore, numeral, or alphanumeric character
@@ -88,7 +115,7 @@ class TextField(object):
 
     implements(IField)
 
-    def validate(self, value):
+    def validateValue(self, value):
         """
         Validate that the supplied value is a string (str or unicode).
 
@@ -102,23 +129,7 @@ class TextField(object):
             raise TypeError('value must be of type unicode or str')
         return unicode(value)
 
-    def terms(self, value):
-        """
-        Process the specified unicode or string value, breaking it up into tokens.
-        Tokens are separated by any run of one or more characters which are not in
-        [0-9_] and not alphanumeric as defined by the unicode properties database.
-        Further, each token is converted to all lowercase if necessary.
-
-        :param value: The string value to tokenize.
-        :type value: unicode or str
-        :returns: A list of tokenized terms.
-        :rtype: list
-        """
-        if not isinstance(value, unicode) and not isinstance(value, str):
-            raise Exception("value '%s' is not of type unicode or str" % value)
-        return [unicode(t.lower()) for t in re.split(r'\W+', value, re.UNICODE) if t != '']
-
-    def parse(self, value):
+    def parseValue(self, value):
         """
         Process the specified unicode or string value, breaking it up into tokens,
         and return a list of tuples, each containing a tokenized term and a dict
@@ -130,7 +141,7 @@ class TextField(object):
         :returns: A list of (term, metadata) tuples.
         :rtype: list
         """
-        terms = self.terms(value)
+        terms = [t.lower() for t in re.split(r'\W+', value, re.UNICODE) if t != '']
         positions = {}
         for position in range(len(terms)):
             term = terms[position]
@@ -140,14 +151,36 @@ class TextField(object):
                 positions[term] = {'pos': [position]}
         return positions.items()
 
-class DatetimeField(object):
+    def match_in(self, field, value):
+        """
+        Process the specified unicode or string value, breaking it up into tokens.
+        Tokens are separated by any run of one or more characters which are not in
+        [0-9_] and not alphanumeric as defined by the unicode properties database.
+        Further, each token is converted to all lowercase if necessary.
+
+        :param value: The string value to tokenize.
+        :type value: unicode or str
+        :returns: A list of tokenized terms.
+        :rtype: list
+        """
+        value = self.validateValue(value)
+        terms = [t.lower() for t in re.split(r'\W+', value, re.UNICODE) if t != '']
+        if len(terms) == 0:
+            return None
+        if len(terms) == 1:
+            return Term(field, terms[0])
+        return Phrase(field, terms)
+
+    defaultMatcher = match_in
+
+class DatetimeField(BaseField):
     """
     DatetimeField stores a python datetime.datetime.
     """
 
     implements(IField)
 
-    def validate(self, value):
+    def validateValue(self, value):
         """
         Validate that the supplied value is a datetime.datetime, and convert
         the value to UTC timezone if necessary.
@@ -168,7 +201,20 @@ class DatetimeField(object):
             value = value.astimezone(dateutil.tz.tzutc())
         return value
 
-    def terms(self, value):
+    def parseValue(self, value):
+        """
+        Process the specified datetime.datetime value, returning a list containing
+        one tuple which contains the datetime as a unix timestamp and None indicating
+        there is no term metadata.
+
+        :param value: The datetime value to parse.
+        :type value: datetime.datetime
+        :returns: A list of (term, metadata) tuples.
+        :rtype: list
+        """
+        return [(self.terms(value)[0], None)]
+
+    def match_is(self, fieldname, fieldtype, value):
         """
         Process the specified datetime.datetime value, converting it to a unix
         timestamp.
@@ -182,15 +228,10 @@ class DatetimeField(object):
         ts = int(calendar.timegm(value.timetuple()))
         return [ts,]
 
-    def parse(self, value):
-        """
-        Process the specified datetime.datetime value, returning a list containing
-        one tuple which contains the datetime as a unix timestamp and None indicating
-        there is no term metadata.
-
-        :param value: The datetime value to parse.
-        :type value: datetime.datetime
-        :returns: A list of (term, metadata) tuples.
-        :rtype: list
-        """
-        return [(self.terms(value)[0], None)]
+class BaseFieldPlugin(Plugin):
+    implements(IPlugin)
+    components = [
+        (IdentityField, IField, 'literal'),
+        (TextField, IField, 'text'),
+        (DatetimeField, IField, 'datetime'),
+        ]
