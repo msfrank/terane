@@ -17,7 +17,7 @@
 
 import time, datetime, calendar, copy
 from twisted.internet.task import cooperate
-from terane.bier import ISearcher, IPostingList, IEventStore
+from terane.bier.interfaces import IIndex, ISearcher, IPostingList, IEventStore
 from terane.bier.evid import EVID
 from terane.loggers import getLogger
 
@@ -213,6 +213,8 @@ def searchIndices(indices, query, period, lastId=None, reverse=False, fields=Non
         searchers = []
         postingLists = []
         for index in indices:
+            if not IIndex.providedBy(index):
+                raise TypeError("index does not implement IIndex")
             # we create a copy of the original query, which can possibly be optimized
             # with index-specific knowledge.
             _query = copy.deepcopy(query).optimizeMatcher(index)
@@ -221,7 +223,7 @@ def searchIndices(indices, query, period, lastId=None, reverse=False, fields=Non
             if _query == None:
                 continue
             # get the posting list to iterate through
-            searcher = index.searcher()
+            searcher = index.newSearcher()
             if not ISearcher.providedBy(searcher):
                 raise TypeError("searcher does not implement ISearcher")
             postingList = _query.iterMatches(searcher, startId, endId)
