@@ -18,9 +18,9 @@
 import socket, datetime, copy, re
 from dateutil.tz import tzutc
 from zope.interface import implements
-from terane.idgen import idgen
-from terane.bier import IField
-from terane.bier.fields import IdentityField, TextField, DatetimeField
+from terane import IManager
+from terane.registry import getRegistry
+from terane.bier.interfaces import IField
 from terane.signals import ICopyable
 
 class Assertion(object):
@@ -33,10 +33,10 @@ class Assertion(object):
             raise TypeError("fieldname must not start with two underscores")
         if not re.match(r'[a-zA-Z0-9_]+', fieldname):
             raise TypeError("fieldname must consist of only alphanumeric characters or underscores")
+        field = getRegistry().getComponent(IManager, "bier").getField(fieldtype)
         self.fieldname = fieldname
-        if not IField.implementedBy(fieldtype):
-            raise TypeError("fieldtype must implement IField")
         self.fieldtype = fieldtype
+        self.field = field
         self.expects = bool(expects)
         self.guarantees = bool(guarantees)
         self.ephemeral = bool(ephemeral)
@@ -49,16 +49,16 @@ class Contract(object):
     def __init__(self):
         self.signed = False
         self._assertions = {}
-        self.addAssertion('input', IdentityField, guarantees=True, ephemeral=False)
-        self.addAssertion('hostname', IdentityField, guarantees=True, ephemeral=False)
-        self.addAssertion('message', TextField, guarantees=True, ephemeral=False)
+        self.addAssertion('input', 'literal', guarantees=True, ephemeral=False)
+        self.addAssertion('hostname', 'literal', guarantees=True, ephemeral=False)
+        self.addAssertion('message', 'text', guarantees=True, ephemeral=False)
 
     def addAssertion(self, fieldname, fieldtype, **kwds):
         if self.signed:
             raise Exception("writing to a signed Contract is not allowed")
-        assertion = Assertion(fieldname, fieldtype, **kwds)
         if fieldname in self._assertions:
-            raise Exception("'%s' is already present in the Contract" % fieldname)
+            raise Exception("Assertion is already present in the Contract" % fieldname)
+        assertion = Assertion(fieldname, fieldtype, **kwds)
         self._assertions[fieldname] = assertion
         return self
 
@@ -99,17 +99,25 @@ class Contract(object):
         contract._assertions.update(self._assertions)
         return contract.sign()
 
-    def validateEvent(self, event):
+    def validateEventBefore(self, event):
         """
-        Validate the specified event against the contract.
+        Validate the specified event against the contract before it is processed.
 
         :param event: The event to validate.
         :type event: :class:`terane.bier.event.Event`
-        :returns: The validated event.
+        :raises Exception: The validation failed.
+        """
+        pass
+
+    def validateEventAfter(self, event):
+        """
+        Validate the specified event against the contract after it is processed.
+
+        :param event: The event to validate.
         :type event: :class:`terane.bier.event.Event`
         :raises Exception: The validation failed.
         """
-        return event
+        pass
 
     def _setReadonly(self, name, value):
         raise Exception("writing to a signed Contract is not allowed")
@@ -136,23 +144,22 @@ class Event(object):
 
     implements(ICopyable)
 
-    _contract = Contract()
+    _contract = None
 
     def __init__(self):
+        if not Event._contract:
+            Event._contract = Contract()
         self._fields = dict()
         # set ts and id
         self.ts = datetime.datetime.now(tzutc())
-        try:
-            self.id = idgen.allocate()
-        except:
-            self.id = None
+        self.id = None
         # set default values for basic fields
         self[Event._contract.field_hostname] = socket.gethostname()
         self[Event._contract.field_input] = ''
         self[Event._contract.field_message] = ''
 
     def __str__(self):
-        return "<Event %s>" % ' '.join(["%s:%s='%s'" %(fn,ft.__name__,v) for fn,ft,v in self.fields()])
+        return "<Event %s>" % ' '.join(["%s:%s='%s'" %(n,t,v) for n,t,v in self.fields()])
 
     def __contains__(self, assertion):
         if (assertion.fieldname,assertion.fieldtype) in self._fields:
@@ -163,14 +170,15 @@ class Event(object):
         return self._fields[(assertion.fieldname,assertion.fieldtype)]
 
     def __setitem__(self, assertion, value):
-        self._fields[(assertion.fieldname,assertion.fieldtype)] = assertion.fieldtype().validate(value)
+        value = assertion.field.validateValue(value)
+        self._fields[(assertion.fieldname,assertion.fieldtype)] = value
 
     def __delitem__(self, assertion):
         del self._fields[(assertion.fieldname,assertion.fieldtype)]
 
     def fields(self):
-        for (name,fieldtype),value in self._fields.items():
-            yield name, fieldtype, value
+        for (fieldname,fieldtype),value in self._fields.items():
+            yield fieldname, fieldtype, value
 
     def copy(self):
         return copy.deepcopy(self)
