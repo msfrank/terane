@@ -15,244 +15,148 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-from zope.interface import Interface
+import os, time
+from zope.interface import Interface, implements
+from twisted.application.service import Service
+from terane import IManager, Manager
+from terane.registry import getRegistry
+from terane.settings import ConfigureError
+from terane.bier.interfaces import *
+from terane.bier.event import Event
+from terane.loggers import getLogger
 
-class IField(Interface):
-    def validate(self, value):
-        """
-        Verify that the supplied value is valid.
+logger = getLogger('terane.bier')
 
-        :param value: The value to validate.
-        :type value: object
-        :returns: The value.
-        :rtype: object
-        :raises TypeError: The value is invalid.
-        """
-    def terms(self, value):
-        """
-        Tokenize the value.
+class BierManager(Manager):
+    """
+    """
 
-        :param value: The value to tokenize.
-        :type value: object
-        :returns: A list of tokenized terms.
-        :rtype: list
-        """
-    def parse(self, value):
-        """
-        Return a list of tuples, each containing a tokenized term and a dict
-        containing term metadata.
+    implements(IManager)
 
-        :param value: The value to parse.
-        :type value: object
-        :returns: A list of (term, metadata) tuples.
-        :rtype: list
-        """
+    def __init__(self):
+        Manager.__init__(self)
+        self.setName("bier")
+        self._fields = dict()
+        self._idstore = None
+        self._idcache = []
 
-class ISchema(Interface):
-    def hasField(fieldname, fieldtype):
+    def configure(self, settings):
         """
-        Determine whether a field exists in the schema.
+        Configure the ID generator.
+        """
+        section = settings.section('server')
+        self._backingfile = section.getString('id cache file', '/var/lib/terane/idgen')
+        self.cachesize = section.getInt('id cache size', 256)
+        if self.cachesize < 0:
+            raise ConfigureError("'id cache size' cannot be smaller than 0")
 
-        :param fieldname: The name of the field.
-        :type fieldname: str
-        :param fieldtype: The type of the field.
-        :type fieldtype: type
-        :returns: True if the field exists in the schema, otherwise False.
-        :rtype: bool
+    def startService(self):
         """
-    def getField(fieldname, fieldtype):
+        Read the last document identifier from the backing file, and
+        fill the cache with new identifiers.
         """
-        Returns the specified Field.
+        Manager.startService(self)
+        logger.debug("started id generator")
+        self._idstore = os.open(self._backingfile, os.O_RDWR | os.O_CREAT, 0600)
+        self._refillcache()
+        logger.debug("loaded %i entries into id cache" % self.cachesize)
 
-        :param fieldname: The name of the field.
-        :type fieldname: str
-        :param fieldtype: The type of the field.
-        :type fieldtype: type
-        :returns: An instance of the field.
+    def stopService(self):
+        """
+        Write back the last document identifier, and sync the backing
+        file to disk.
+        """
+        self._writelast(self._idcache.pop(0))
+        os.close(self._idstore)
+        self._idstore = None
+        self._idcache = []
+        logger.debug("stopped id generator")
+        return Manager.stopService(self)
+
+    def getField(self, name):
+        """
+        Returns a singleton instance of the specified field.
+
+        :returns: The field instance.
         :rtype: An object implementing :class:`terane.bier.IField`
-        :raises KeyError: The field does not exist in the schema.
         """
-    def addField(fieldname, fieldtype):
-        """
-        Adds a new field to the schema.
+        if name in self._fields:
+            return self._fields[name]
+        factory = getRegistry().getComponent(IField, name)
+        field = factory()
+        self._fields[name] = field
+        return field
 
-        :param fieldname: The name of the field.
-        :type fieldname: str
-        :param fieldtype: The type of the field.
-        :type fieldtype: type
-        :returns: An instance of the field.
-        :rtype: An object implementing :class:`terane.bier.IField`
-        :raises KeyError: The field already exists in the schema.
+    def newEvent(self):
         """
-    def listFields():
-        """
-        Returns a list of field names present in the schema.
+        Returns a new Event with a unique event identifier.
 
-        :returns: The list of (fieldname, fieldtype, field) tuples.
-        :rtype: list
+        :returns: The new event.
+        :rtype: :class:`terane.bier.event.Event`
         """
+        event = Event()
+        event.id = self._allocateOffset()
+        return event
 
-class IPostingList(Interface):
-    def nextPosting():
+    def _allocateOffset(self):
         """
-        Returns the next posting, or None if iteration is finished.
+        Return a new 64-bit long document identifier.
+        """
+        try:
+            # try to use the cache first
+            return long(self._idcache.pop(0))
+        except IndexError:
+            # if the cache is empty, the fill it back up
+            self._refillcache()
+            return long(self._idcache.pop(0))
 
-        :returns: A tuple containing the evid, the term value, and the store, or (None,None,None)
-        :rtype: tuple
+    def _refillcache(self):
         """
-    def skipPosting(targetId):
+        Generate a new cache of document identifiers.
         """
-        Skips to the targetId, returning the posting or None if the posting doesn't exist.
+        if len(self._idcache) > 0:
+            raise Exception("ID generator failed to refill cache: cache not empty")
+        last = self._readlast()
+        if last == 0:
+            self._idcache = range(1, 1 + self.cachesize)
+            self._writelast(1 + self.cachesize)
+        else:
+            self._idcache = range(last, last + self.cachesize)
+            self._writelast(last + self.cachesize)
 
-        :param targetId: The target evid to skip to.
-        :type targetId: :class:`terane.bier.evid.EVID`
-        :returns: A tuple containing the evid, the term value, and the store, or (None,None,None)
-        :rtype: tuple
+    def _readlast(self):
         """
-    def close():
+        Read the last document identifier stored in the backing file.
         """
-        Frees any resources associated with the searcher.
-        """
+        try:
+            # seek to the beginning of the file
+            os.lseek(self._idstore, 0, os.SEEK_SET)
+            # read 16 bytes from idgen
+            data = os.read(self._idstore, 16)
+        except EnvironmentError, (errno, strerror):
+            raise Exception("ID generator failed to read from idgen: %s (%i)" % (strerror,errno))
+        # indicates EOF.  this usually means idgen was just created, so return 0
+        if data == '':
+            return long(0)
+        # if data isn't empty, then there should be 16 bytes of data to read
+        if len(data) != 16:
+            raise Exception("ID generator is corrupt: idgen data is too small")
+        last = long(data, 16)
+        # the id should be greater than 0
+        if last < 1:
+            raise Exception("ID generator is corrupt: last id is smaller than 1")
+        return last
 
-class IMatcher(Interface):
-    def optimizeMatcher(index):
+    def _writelast(self, last):
         """
-        Optimizes the matcher.  This may return the object itself, a new object, or
-        None if the query completely optimizes away.
-
-        :param index: The index we are querying.
-        :type index: An object implementing :class:`terane.bier.index.IIndex`
-        :returns: An optimized matcher.
-        :rtype: An object implementing :class:`terane.bier.searching.IMatcher`
+        Write the last document identifier to in the backing file.
         """
-    def matchesLength(searcher, startId, endId):
-        """
-        Returns an estimate of the number of matching postings within the specified period.
-
-        :param searcher: A handle to the index we are searching.
-        :type searcher: An object implementing :class:`terane.bier.searching.ISearcher`
-        :param period: The period within which the search query is constrained.
-        :type period: :class:`terane.bier.searching.Period`
-        :returns: An estimate of the number of postings.
-        :rtype: int
-        """
-    def iterMatches(searcher, startId, endId):
-        """
-        Returns an object implementing IPostingList which yields each matching posting
-        within the specified period.
-        
-        :param searcher: A handle to the index we are searching.
-        :type searcher: An object implementing :class:`terane.bier.searching.ISearcher`
-        :param period: The period within which the search query is constrained.
-        :type period: :class:`terane.bier.searching.Period`
-        :param reverse: If True, then reverse the order of iteration.
-        :type reverse: bool
-        :returns: An object for iterating through events matching the query.
-        :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
-        """
-
-class ISearcher(Interface):
-    def postingsLength(fieldname, term, startId, endId):
-        """
-        Returns an estimate of the number of possible postings for the term in the
-        specified field.  As a special case, if fieldname and term are None, then
-        return an estimate of the number of documents within the specified period.
-
-        :param fieldname: The name of the field to search within.
-        :type fieldname: str
-        :param term: The term to search for.
-        :type term: unicode
-        :param startId:
-        :type startId: :class:`terane.bier.evid.EVID`
-        :param endId:
-        :type endId: :class:`terane.bier.evid.EVID`
-        :returns: An estimate of the number of postings.
-        :rtype: int
-        """
-    def iterPostings(fieldname, term, startId, endId):
-        """
-        Returns an object implementing IPostingList which yields postings for the
-        term in the specified field.  As a special case, if fieldname and term are
-        None, then yield postings for all terms in all fields within the specified
-        period.
-
-        :param fieldname: The name of the field to search within.
-        :type fieldname: str
-        :param term: The term to search for.
-        :type term: unicode
-        :param startId:
-        :type startId: :class:`terane.bier.evid.EVID`
-        :param endId:
-        :type endId: :class:`terane.bier.evid.EVID`
-        :returns: An object for iterating through events matching the query.
-        :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
-        """
-    def close():
-        """
-        Frees any resources associated with the searcher.
-        """
-
-class IEventStore(Interface):
-    def getEvent(evid):
-        """
-        Returns the event specified by evid.
-
-        :param evid: The event identifier.
-        :type evid: :class:`terane.bier.evid.EVID`
-        :returns: A dict mapping fieldnames to values.
-        :rtype: dict
-        """
-
-class IWriter(Interface):
-    def begin():
-        """
-        Enter the transactional context.
-        """
-    def newEvent(evid, fields):
-        """
-        Create a new event with the specified event identifier.
-
-        :param evid: The event identifier to use for the document."
-        :type evid: :class:`terane.bier.evid.EVID`
-        :param fields: The event fields.
-        :type fields: dict
-        """
-    def newPosting(fieldname, term, evid, value):
-        """
-        Create a new posting for the field term with the specified event identifier.
-
-        :param fieldname:
-        :type fieldname: str
-        :param term:
-        :type term: unicode
-        :param evid:
-        :type evid: :class:`terane.bier.evid.EVID`
-        :param value:
-        :type value:
-        """
-    def commit():
-        """
-        Exit the transactional context, committing any modifications.
-        """
-    def abort():
-        """
-        Exit the transactional context, discarding any modifications.
-        """
-          
-class IIndex(Interface):
-    def getSchema():
-        """
-        Returns an object implementing ISchema.
-        """
-    def newSearcher():
-        """
-        Returns an object implementing ISearcher.
-        """
-    def newWriter():
-        """
-        Returns an object implementing IWriter.
-        """
-    def getStats():
-        """
-        Returns a dict with Index statistics.
-        """
+        try:
+            # seek to the beginning of the file
+            os.lseek(self._idstore, 0, os.SEEK_SET)
+            # read 16 bytes from idgen
+            os.write(self._idstore, "%016x" % last)
+            # sync any buffered data to disk
+            os.fsync(self._idstore)
+        except EnvironmentError, (errno, strerror):
+            raise Exception("ID generator failed to write to idgen: %s (%i)" % (strerror,errno))
