@@ -110,4 +110,4 @@ class ForwardOutput(Output):
 
 class ForwardOutputPlugin(Plugin):
     implements(IPlugin)
-    factory = ForwardOutput
+    components = [(ForwardOutput, IOutput, 'forward')]

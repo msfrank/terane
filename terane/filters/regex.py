@@ -59,4 +59,4 @@ class RegexFilter(Filter):
 
 class RegexFilterPlugin(Plugin):
     implements(IPlugin)
-    factory = RegexFilter()
+    components = [(RegexFilter, IFilter, 'regex')]

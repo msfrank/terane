@@ -19,10 +19,12 @@ import os, sys
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred
 from zope.interface import implements
+from terane import IManager
 from terane.plugins import Plugin, IPlugin
-from terane.inputs import Input, IInput, Dispatcher
+from terane.inputs import Input, IInput
+from terane.registry import getRegistry
+from terane.signals import Signal
 from terane.bier.event import Contract, Assertion
-from terane.bier.fields import IdentityField
 from terane.loggers import getLogger
 
 logger = getLogger('terane.inputs.file')
@@ -31,8 +33,9 @@ class FileInput(Input):
 
     implements(IInput)
 
-    def __init__(self):
-        self._dispatcher = Dispatcher()
+    def __init__(self, plugin):
+        self._evgen = getRegistry().getComponent(IManager, "bier")
+        self._dispatcher = Signal()
         self._delayed = None
         self._deferred = None
         self._file = None
@@ -41,9 +44,8 @@ class FileInput(Input):
         self._skipcount = 0
         self._errno = None
         self._contract = Contract()
-        self._contract.addAssertion('_raw', IdentityField, expects=False, guarantees=True, ephemeral=True)
+        self._contract.addAssertion('_raw', 'literal', expects=False, guarantees=True, ephemeral=True)
         self._contract.sign() 
-        Input.__init__(self)
 
     def configure(self, section):
         self._path = section.getString('file path', None)
@@ -86,12 +88,22 @@ class FileInput(Input):
             raise Exception("[input:%s] attempted to reschedule twice" % self.name)
         self._deferred = Deferred()
         self._deferred.addCallback(self._tail)
-        self._deferred.addCallback(self._schedule)
+        self._deferred.addCallbacks(self._schedule, self._tailError)
+        self._deferred.addErrback(self._scheduleError)
         if value == True:
             self._delayed = reactor.callLater(0, self._deferred.callback, None)
         else:
             self._delayed = reactor.callLater(self._interval, self._deferred.callback, None)
         logger.trace("[input:%s] rescheduled tail" % self.name)
+
+    def _tailError(self, failure):
+        logger.debug("[input:%s] error tailing file: %s" % (self.name,str(failure)))
+        self._schedule()
+        return failure
+
+    def _scheduleError(self, failure):
+        logger.debug("[input:%s] error scheduling tail: %s" % (self.name,str(failure)))
+        return failure
 
     def _check(self):
         """
@@ -239,11 +251,11 @@ class FileInput(Input):
         if line.isspace():
             return
         logger.trace("[input:%s] received line: %s" % (self.name,line))
-        event = self._dispatcher.newEvent()
+        event = self._evgen.newEvent()
         event[self._contract.field_input] = self.name
         event[self._contract.field_message] = line
         event[self._contract.field__raw] = line
-        self._dispatcher.signalEvent(event)
+        self._dispatcher.emitSignal(event)
 
     def stopService(self):
         if not self.running:
@@ -261,4 +273,4 @@ class FileInput(Input):
 
 class FileInputPlugin(Plugin):
     implements(IPlugin)
-    factory = FileInput
+    components = [(FileInput, IInput, 'file')]

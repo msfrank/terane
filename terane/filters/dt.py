@@ -20,7 +20,6 @@ from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
 from terane.filters import Filter, IFilter, FilterError, StopFiltering
 from terane.bier.event import Contract, Assertion
-from terane.bier.fields import IdentityField, TextField
 from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.datetime")
@@ -38,7 +37,7 @@ class RFC2822DatetimeFilter(Filter):
         self._expected = section.getBoolean('expects source', False)
         self._guaranteed = section.getBoolean('guarantees source', False)
         self._contract = Contract()
-        self._contract.addAssertion( self._fieldname, TextField,
+        self._contract.addAssertion( self._fieldname, 'text',
             expects=self._expected, guarantees=self._guaranteed, ephemeral=True)
         self._assertion = getattr(self._contract, 'field_' + self._fieldname)
         self._contract.sign()
@@ -54,10 +53,6 @@ class RFC2822DatetimeFilter(Filter):
         except Exception, e:
             raise FilterError("failed to update ts: %s" %  e)
 
-class RFC2822DatetimeFilterPlugin(Plugin):
-    implements(IPlugin)
-    factory = RFC2822DatetimeFilter
-
 class SyslogDatetimeFilter(Filter):
     """
     Given an event field with a syslog-compatible datetime string, convert the
@@ -71,7 +66,7 @@ class SyslogDatetimeFilter(Filter):
         self._expected = section.getBoolean('expects source', False)
         self._guaranteed = section.getBoolean('guarantees source', False)
         self._contract = Contract()
-        self._contract.addAssertion(self._fieldname, TextField,
+        self._contract.addAssertion(self._fieldname, 'text',
             expects=self._expected, guarantees=self._guaranteed, ephemeral=True)
         self._assertion = getattr(self._contract, 'field_' + self._fieldname)
         self._contract.sign()
@@ -96,10 +91,6 @@ class SyslogDatetimeFilter(Filter):
         except Exception, e:
             raise FilterError("failed to update ts: %s" %  e)
 
-class SyslogDatetimeFilterPlugin(Plugin):
-    implements(IPlugin)
-    factory = SyslogDatetimeFilter
-
 class DatetimeExpanderFilter(Filter):
     """
     Expand the event ts into separate fields for each datetime component.
@@ -109,14 +100,14 @@ class DatetimeExpanderFilter(Filter):
 
     def configure(self, section):
         self._contract = Contract()
-        self._contract.addAssertion('dt_year', TextField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('dt_month', TextField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('dt_day', TextField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('dt_hour', TextField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('dt_minute', TextField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('dt_second', TextField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('dt_weekday', TextField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('dt_yearday', TextField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('dt_year', 'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('dt_month', 'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('dt_day', 'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('dt_hour', 'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('dt_minute', 'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('dt_second', 'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('dt_weekday', 'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('dt_yearday', 'text', expects=False, guarantees=True, ephemeral=False)
         self._contract.sign()
 
     def getContract(self):
@@ -137,6 +128,10 @@ class DatetimeExpanderFilter(Filter):
         except Exception, e:
             raise FilterError("failed to expand ts: %s" % e)
 
-class DatetimeExpanderFilterPlugin(Plugin):
+class DatetimeFilterPlugin(Plugin):
     implements(IPlugin)
-    factory = DatetimeExpanderFilter
+    components = [
+        (RFC2822DatetimeFilter, IFilter, 'dt_rfc2822'),
+        (SyslogDatetimeFilter, IFilter, 'dt_syslog'),
+        (DatetimeExpanderFilter, IFilter, 'dt_expander'),
+        ]

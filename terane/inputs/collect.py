@@ -35,11 +35,11 @@ class Collector(Avatar):
         self._id = avatarId
         self._plugin = plugin
 
-    def perspective_collect(self, fields):
+    def perspective_collect(self, event):
         try:
-            logger.debug("collected remote event from %s: %s" % (self._id,fields))
+            logger.debug("collected remote event from %s: %s" % (self._id,event))
             for input in self._plugin._inputs:
-                input._write(fields)
+                input._write(event.copy())
         except Exception, e:
             logger.debug(str(e))
 
@@ -58,15 +58,12 @@ class CollectInput(Input):
 
     implements(IInput)
 
-    def outfields(self):
-        return set()
-
     def startService(self):
         Input.startService(self)
         logger.debug("[input:%s] started input" % self.name)
 
-    def _write(self, fields):
-        self.on_received_event.signal(fields)
+    def _write(self, event):
+        self.on_received_event.signal(event)
 
     def stopService(self):
         Input.stopService(self)
@@ -76,7 +73,7 @@ class CollectInputPlugin(Plugin):
 
     implements(IPlugin)
 
-    factory = CollectInput
+    components = [(CollectInput, IInput, 'collect')]
 
     def configure(self, section):
         self._inputs = []

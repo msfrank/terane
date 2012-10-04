@@ -17,8 +17,9 @@
 
 from twisted.application.service import IService, Service
 from zope.interface import Interface
+from terane.plugins import ILoadable
 
-class IOutput(IService):
+class IOutput(IService, ILoadable):
     def configure(section):
         "Configure the plugin instance."
     def getContract():
@@ -34,6 +35,9 @@ class Output(Service):
     """
     The Output base implementation.
     """
+
+    def __init__(self, plugin):
+        pass
 
     def configure(self, section):
         pass

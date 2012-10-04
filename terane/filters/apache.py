@@ -20,7 +20,6 @@ from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
 from terane.filters import Filter, IFilter, FilterError
 from terane.bier.event import Contract, Assertion
-from terane.bier.fields import IdentityField, TextField
 from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.apache")
@@ -41,12 +40,12 @@ class ApacheCommonFilter(Filter):
             re.VERBOSE
             )
         self._contract = Contract()
-        self._contract.addAssertion('remotehost', TextField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('remotelog', IdentityField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('remoteuser', IdentityField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('request', TextField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('status', IdentityField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('byteswritten', IdentityField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('remotehost', 'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('remotelog', 'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('remoteuser', 'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('request', 'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('status', 'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('byteswritten', 'literal', expects=False, guarantees=True, ephemeral=False)
         self._contract.sign()
 
     def getContract(self):
@@ -75,10 +74,6 @@ class ApacheCommonFilter(Filter):
             event[assertion] = value
         return event
 
-class ApacheCommonFilterPlugin(Plugin):
-    implements(IPlugin)
-    factory = ApacheCommonFilter
-
 class ApacheCombinedFilter(Filter):
 
     implements(IFilter)
@@ -97,14 +92,14 @@ class ApacheCombinedFilter(Filter):
             re.VERBOSE
             )
         self._contract = Contract()
-        self._contract.addAssertion('remotehost', TextField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('remotelog', IdentityField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('remoteuser', IdentityField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('request', TextField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('status', IdentityField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('byteswritten', IdentityField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('referrer', TextField, expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('useragent', TextField, expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('remotehost', 'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('remotelog', 'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('remoteuser', 'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('request', 'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('status', 'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('byteswritten', 'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('referrer', 'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion('useragent', 'text', expects=False, guarantees=True, ephemeral=False)
         self._contract.sign()
 
     def getContract(self):
@@ -133,6 +128,9 @@ class ApacheCombinedFilter(Filter):
             event[assertion] = value
         return event
 
-class ApacheCombinedFilterPlugin(Plugin):
+class ApacheFilterPlugin(Plugin):
     implements(IPlugin)
-    factory = ApacheCombinedFilter()
+    components = [
+        (ApacheCombinedFilter, IFilter, 'apache_combined'),
+        (ApacheCommonFilter, IFilter, 'apache_common'),
+        ]

@@ -91,28 +91,25 @@ setup(
             'terane-search=terane.commands.search:search_main',
             'terane-tail=terane.commands.tail:tail_main',
             ],
-        'terane.plugin.input': [
-            'file=terane.inputs.file:FileInputPlugin',
-            'syslog=terane.inputs.syslog:SyslogInputPlugin',
-            'collect=terane.inputs.collect:CollectInputPlugin',
-            ],
-        'terane.plugin.output': [
-            'store=terane.outputs.store:StoreOutputPlugin',
-            'forward=terane.outputs.forward:ForwardOutputPlugin',
-            ],
-        'terane.plugin.filter': [
-            'syslog=terane.filters.syslog:SyslogFilterPlugin',
-            'regex=terane.filters.regex:RegexFilterPlugin',
-            'dt_rfc2822=terane.filters.dt:RFC2822DatetimeFilterPlugin',
-            'dt_syslog=terane.filters.dt:SyslogDatetimeFilterPlugin',
-            'dt_expand=terane.filters.dt:DatetimeExpanderFilterPlugin',
-            'apache_combined=terane.filters.apache:ApacheCombinedFilterPlugin',
-            'apache_common=terane.filters.apache:ApacheCommonFilterPlugin',
-            'mysql_server=terane.filters.mysql:MysqlServerFilterPlugin',
-            'nagios=terane.filters.nagios:NagiosFilterPlugin',
-            ],
-        'terane.plugin.protocol': [
-            'xmlrpc=terane.protocols.xmlrpc:XMLRPCProtocolPlugin',
+        'terane.plugin': [
+            # protocol plugins
+            'protocol:xmlrpc=terane.protocols.xmlrpc:XMLRPCProtocolPlugin',
+            # input plugins
+            'input:file=terane.inputs.file:FileInputPlugin',
+            'input:syslog=terane.inputs.syslog:SyslogInputPlugin',
+            'input:collect=terane.inputs.collect:CollectInputPlugin',
+            # filter plugins
+            'filter:syslog=terane.filters.syslog:SyslogFilterPlugin',
+            'filter:regex=terane.filters.regex:RegexFilterPlugin',
+            'filter:dt=terane.filters.dt:DatetimeFilterPlugin',
+            'filter:apache=terane.filters.apache:ApacheFilterPlugin',
+            'filter:mysql=terane.filters.mysql:MysqlFilterPlugin',
+            'filter:nagios=terane.filters.nagios:NagiosFilterPlugin',
+            # output plugins
+            'output:store=terane.outputs.store:StoreOutputPlugin',
+            'output:forward=terane.outputs.forward:ForwardOutputPlugin',
+            # field plugins
+            'field:base=terane.bier.fields:BaseFieldPlugin',
             ],
         },
     test_suite="tests",

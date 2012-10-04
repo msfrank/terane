@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-from twisted.application.service import Service, IService
+from terane.plugins import ILoadable
 
 class FilterError(Exception):
     pass
@@ -23,18 +23,29 @@ class FilterError(Exception):
 class StopFiltering(Exception):
     pass
 
-class IFilter(IService):
+class IFilter(ILoadable):
+    def setName(name):
+        "Set the name of the filter."
     def configure(section):
-        "Configure the plugin instance."
+        "Configure the filter."
     def getContract():
         "Return a Contract describing the fields which the Input emits."
     def filter(event):
         "Process the event."
 
-class Filter(Service):
+class Filter(object):
+
+    def __init__(self, plugin):
+        pass
+
+    def setName(self, name):
+        self.name = name
 
     def configure(self, section):
         pass
+
+    def getContract(self):
+        raise NotImplementedError()
 
     def filter(self, event):
         raise FilterError("filter() not implemented for filter %s" % self.name)

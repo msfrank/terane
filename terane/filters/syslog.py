@@ -20,7 +20,6 @@ from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
 from terane.filters import Filter, IFilter, FilterError, StopFiltering
 from terane.bier.event import Contract
-from terane.bier.fields import IdentityField, TextField
 from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.syslog")
@@ -29,12 +28,12 @@ class SyslogFilter(Filter):
 
     implements(IFilter)
 
-    def __init__(self):
+    def __init__(self, plugin):
         self._contract = Contract()
-        self._contract.addAssertion('syslog_facility', IdentityField, guarantees=True)
-        self._contract.addAssertion('syslog_severity', IdentityField, guarantees=True)
-        self._contract.addAssertion('syslog_pid', IdentityField, guarantees=False)
-        self._contract.addAssertion('syslog_tag', TextField, guarantees=False)
+        self._contract.addAssertion('syslog_facility', 'literal', guarantees=True)
+        self._contract.addAssertion('syslog_severity', 'literal', guarantees=True)
+        self._contract.addAssertion('syslog_pid', 'literal', guarantees=False)
+        self._contract.addAssertion('syslog_tag', 'text', guarantees=False)
         self._contract.sign()
 
     def _updateselected(self, selector):
@@ -206,7 +205,7 @@ class SyslogFilter(Filter):
 
 class SyslogFilterPlugin(Plugin):
     implements(IPlugin)
-    factory = SyslogFilter
+    components = [(SyslogFilter, IFilter, 'syslog')]
 
 _severities = {
     'emerg': 0,

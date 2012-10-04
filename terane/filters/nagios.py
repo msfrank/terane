@@ -20,7 +20,6 @@ from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
 from terane.filters import Filter, IFilter, FilterError, StopFiltering
 from terane.bier.event import Contract
-from terane.bier.fields import IdentityField, TextField
 from terane.loggers import getLogger
 
 logger = getLogger("terane.filters.nagios")
@@ -29,14 +28,14 @@ class NagiosFilter(Filter):
 
     implements(IFilter)
 
-    def __init__(self):
+    def __init__(self, plugin):
         self._contract = Contract()
-        self._contract.addAssertion('nagios_evtype', IdentityField, guarantees=True)
-        self._contract.addAssertion('nagios_host', TextField, guarantees=False)
-        self._contract.addAssertion('nagios_service', TextField, guarantees=False)
-        self._contract.addAssertion('nagios_status', TextField, guarantees=False)
-        self._contract.addAssertion('nagios_state', TextField, guarantees=False)
-        self._contract.addAssertion('nagios_attempt', TextField, guarantees=False)
+        self._contract.addAssertion('nagios_evtype', 'literal', guarantees=True)
+        self._contract.addAssertion('nagios_host', 'text', guarantees=False)
+        self._contract.addAssertion('nagios_service', 'text', guarantees=False)
+        self._contract.addAssertion('nagios_status', 'text', guarantees=False)
+        self._contract.addAssertion('nagios_state', 'text', guarantees=False)
+        self._contract.addAssertion('nagios_attempt', 'text', guarantees=False)
         self._contract.sign()
 
     def configure(self, section):
@@ -113,4 +112,4 @@ class NagiosFilter(Filter):
 
 class NagiosFilterPlugin(Plugin):
     implements(IPlugin)
-    factory = NagiosFilter()
+    components = [(NagiosFilter, IFilter, 'nagios')]

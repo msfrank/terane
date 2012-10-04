@@ -22,6 +22,8 @@ from twisted.internet.defer import Deferred
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
 from terane.inputs import Input, IInput
+from terane.signals import Signal
+from terane.bier.event import Contract
 from terane.loggers import getLogger
 
 logger = getLogger('terane.inputs.syslog')
@@ -33,11 +35,16 @@ class SyslogUDPReceiver(DatagramProtocol):
 
     def datagramReceived(self, data, (host,port)):
         try:
-            fields = {'_raw': data, '_host': host, '_port': port}
             logger.trace("received msg from %s:%i: %s" % (host,port,data))
             for input in self._plugin:
                 if input._check(host, port):
-                    input._write(fields)
+                    event = input._dispatcher.newEvent()
+                    event[input._contract.field_hostname] = host
+                    event[input._contract.field_message] = data
+                    event[input._contract.field__raw] = data
+                    event[input._contract.field__host] = data
+                    event[input._contract.field__port] = data
+                    input._dispatcher.signalEvent(event)
         except Exception, e:
             logger.debug(str(e))
 
@@ -45,11 +52,22 @@ class SyslogInput(Input):
 
     implements(IInput)
 
+    def __init__(self, plugin):
+        self._dispatcher = Signal()
+        self._contract = Contract()
+        self._contract.addAssertion('_host', 'text', expects=False, guarantees=True, ephemeral=True)
+        self._contract.addAssertion('_port', 'literal', expects=False, guarantees=True, ephemeral=True)
+        self._contract.addAssertion('_raw', 'literal', expects=False, guarantees=True, ephemeral=True)
+        self._contract.sign()
+
     def configure(self, section):
         allowed = section.getString('syslog udp allowed clients', '').strip()
 
-    def outfields(self):
-        return set(('_raw', '_host', '_port'))
+    def getContract(self):
+        return self._contract
+
+    def getDispatcher(self):
+        return self._dispatcher
 
     def startService(self):
         Input.startService(self)
@@ -59,9 +77,8 @@ class SyslogInput(Input):
         # return True if host:port passes access restrictions
         return True
 
-    def _write(self, fields):
-        fields['input'] = self.name
-        self.on_received_event.signal(fields)
+    def _write(self, event):
+        self.on_received_event.signal(event)
 
     def stopService(self):
         Input.stopService(self)
@@ -71,7 +88,7 @@ class SyslogInputPlugin(Plugin):
 
     implements(IPlugin)
 
-    factory = SyslogInput
+    components = [(SyslogInput, IInput, 'syslog')]
 
     def configure(self, section):
         self._udplistener = None
@@ -93,5 +110,3 @@ class SyslogInputPlugin(Plugin):
             self._udplistener = None
         Plugin.stopService(self)
         logger.info("[%s] stopped listening for syslog messages" % self.name)
-
-

@@ -16,12 +16,13 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 from twisted.application.service import IService, Service
+from terane.plugins import ILoadable
 from terane.signals import Signal
 from terane.bier.event import Event
 
-class IInput(IService):
+class IInput(IService, ILoadable):
     def configure(section):
-        "Configure the plugin instance."
+        "Configure the input."
     def getContract():
         "Return a Contract describing the fields which the Input emits."
     def getDispatcher():
@@ -32,7 +33,7 @@ class Input(Service):
     The Input base implementation.
     """
 
-    def __init__(self):
+    def __init__(self, plugin):
         pass
 
     def configure(self, section):
@@ -43,14 +44,3 @@ class Input(Service):
 
     def stopService(self):
         return Service.stopService(self)
-
-class Dispatcher(Signal):
-    """
-    A wrapper around Signal which emits events.
-    """
-
-    def newEvent(self):
-        return Event()
-
-    def signalEvent(self, event):
-        self.signal(event)

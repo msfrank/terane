@@ -14,3 +14,33 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
+
+from terane.plugins import ILoadable
+
+class IProtocol(ILoadable):
+    def getDefaultPort():
+        """
+        Return the port which the protocol suggests the listener should
+        listen on.  The listener can override this by specifying a
+        'listen port' configuration setting in the [listener] section.
+
+        :returns: The suggested listening port.
+        :rtype: int
+        """
+    def makeFactory():
+        """
+
+        :returns: A ServerFactory suitable to pass to listenTCP. 
+        :rtype: :class:`twisted.internet.protocol.ServerFactory`
+        """
+            
+class Protocol(object):
+
+    def __init__(self, plugin):
+        pass
+
+    def getDefaultPort(self):
+        return None
+
+    def makeFactory(self):
+        raise NotImplementedError()

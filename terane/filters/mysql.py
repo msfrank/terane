@@ -53,6 +53,6 @@ class MysqlServerFilter(Filter):
             event[self._contract.field_message] = m.group('msg')
         return event
 
-class MysqlServerFilterPlugin(Plugin):
+class MysqlFilterPlugin(Plugin):
     implements(IPlugin)
-    factory = MysqlServerFilter
+    components = [(MysqlServerFilter, IFilter, 'mysql_server')]
