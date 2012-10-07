@@ -119,6 +119,21 @@ class Contract(object):
         """
         pass
 
+    def finalizeEvent(self, event):
+        """
+        Remove all ephemeral fields from the event.
+
+        :param event: The event to finalize.
+        :type event: :class:`terane.bier.event.Event`
+        :returns: The finalized event.
+        :rtype event: :class:`terane.bier.event.Event`
+        :raises Exception: The validation failed.
+        """
+        for assertion in self:
+            if assertion.ephemeral and assertion in event:
+                del event[assertion]    
+        return event
+
     def _setReadonly(self, name, value):
         raise Exception("writing to a signed Contract is not allowed")
 

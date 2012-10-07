@@ -38,5 +38,14 @@ class Manager(MultiService):
     """
     """
 
+    def __init__(self):
+        MultiService.__init__(self)
+
     def configure(self, settings):
         pass
+
+    def startService(self):
+        MultiService.startService(self)
+
+    def stopService(self):
+        MultiService.stopService(self)

@@ -73,11 +73,11 @@ class Route(Service):
         self._output = manager.outputs[name]
         # verify that the route will work
         chain = [self._input] + [f for f in self._filters] + [self._output]
-        aggregate = chain[0].getContract()
+        self._final = chain[0].getContract()
         for i in range(1, len(chain)):
             try:
                 contract = chain[i].getContract()
-                aggregate = contract.validateContract(aggregate)
+                self._final = contract.validateContract(self._final)
             except Exception, e:
                 raise ConfigureError("element #%i: %s" % (i, e))
         logger.debug("[route:%s] route configuration: %s" %
@@ -116,7 +116,8 @@ class Route(Service):
     def _processedEvent(self, processor):
         logger.debug("[route:%s] processed event" % self.name)
         self._output.getContract().validateEventBefore(processor.event)
-        self._output.receiveEvent(processor.event)
+        event = self._final.finalizeEvent(processor.event)
+        self._output.receiveEvent(event)
 
     def _errorProcessingEvent(self, failure):
         if not failure.check(StopFiltering):
