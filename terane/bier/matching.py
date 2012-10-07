@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import time, datetime, copy, bisect
+import bisect
 from zope.interface import implements
 from terane.bier.interfaces import IMatcher, IPostingList
 from terane.bier.event import Contract
@@ -41,14 +41,20 @@ class QueryTerm(object):
         self.value = value
 
     def __str__(self):
-        return "<Term %s=%s:%s(%s)>" % (self.fieldname,self.typename,self.funcname,self.value)
+        if self.fieldname and self.fieldtype and self.fieldfunc:
+            return "<Term %s=%s:%s(%s)>" % (self.fieldname,self.fieldtype,self.fieldfunc,self.value)
+        if self.fieldname and self.fieldfunc:
+            return "<Term %s=%s(%s)>" % (self.fieldname,self.fieldfunc,self.value)
+        if self.fieldname :
+            return "<Term %s='%s'>" % (self.fieldname,self.value)
+        return "<Term '%s'>" % self.value
 
     def optimizeMatcher(self, index):
         schema = index.getSchema()
-        if not schema.hasField(self.fieldname, self.typename):
+        if not schema.hasField(self.fieldname, self.fieldtype):
             return None
-        field = schema.getField(self.fieldname, self.typename)
-        matcher = field.makeMatcher(self.funcname, self.value)
+        field = schema.getField(self.fieldname, self.fieldtype)
+        matcher = field.makeMatcher(self.fieldfunc, self.value)
         if not matcher:
             return None
         return matcher.optimizeMatcher(index)

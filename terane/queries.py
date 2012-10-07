@@ -18,11 +18,12 @@
 import time
 from zope.interface import implements
 from twisted.internet.defer import succeed
+from twisted.python.failure import Failure
 from terane import IManager, Manager
 from terane.registry import getRegistry
 from terane.bier.evid import EVID
 from terane.bier.ql import parseIterQuery, parseTailQuery
-from terane.bier.searching import searchIndices, Period
+from terane.bier.searching import searchIndices, Period, SearcherError
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier')
@@ -105,10 +106,15 @@ class QueryManager(Manager):
         logger.trace("iter query: %s" % query)
         logger.trace("iter period: %s" % period)
         # query each index and return the results
-        task = searchIndices(indices, query, period, lastId, reverse, fields, limit)
+        try:
+            task = searchIndices(indices, query, period, lastId, reverse, fields, limit)
+        except SearcherError, e:
+            raise QueryExecutionError(str(e))
         def _returnIterResult(result):
+            if isinstance(result, Failure) and result.check(SearcherError):
+                raise QueryExecutionError(str(e))
             return QueryResult({'runtime': result.runtime, 'fields': result.fields}, result.events)
-        return task.whenDone().addCallback(_returnIterResult)
+        return task.whenDone().addBoth(_returnIterResult)
 
     def tail(self, query, lastId=None, indices=None, limit=100, fields=None):
         """
@@ -152,13 +158,15 @@ class QueryManager(Manager):
         logger.trace("tail period: %s" % period)
         # query each index, and return the results
         task = searchIndices(indices, query, period, None, False, fields, limit)
-        def _returnTailResult(result, lastId):
+        def _returnTailResult(result, lastId=None):
+            if isinstance(result, Failure) and result.check(SearcherError):
+                raise QueryExecutionError(str(e))
             events = list(result.events)
             if len(events) > 0:
                 lastId = events[-1][0]
             metadata = {'runtime': result.runtime, 'lastId': str(lastId), 'fields': result.fields}
             return QueryResult(metadata, events)
-        return task.whenDone().addCallback(_returnTailResult, lastId)
+        return task.whenDone().addBoth(_returnTailResult, lastId)
 
     def showIndex(self, name):
         """
@@ -185,11 +193,3 @@ class QueryManager(Manager):
         :rtype: :class:`twisted.internet.defer.Deferred`
         """
         return succeed(QueryResult({}, self._searchables.keys()))
-
-
-queries = QueryManager()
-"""
-`queries` is a singleton instance of a :class:`QueryManager`.  All interaction
-with the query infrastructure must occur through this instance; do *not* instantiate
-new :class:`QueryManager` instances!
-"""

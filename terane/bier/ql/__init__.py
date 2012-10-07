@@ -17,6 +17,7 @@
 
 import datetime
 from pyparsing import ParseBaseException
+from terane.bier.matching import Every
 from terane.bier.searching import Period
 from terane.bier.ql.queries import iterQuery, tailQuery
 from terane.loggers import getLogger

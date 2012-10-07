@@ -35,7 +35,7 @@ class QualifiedField(object):
     def parseValue(self, value):
         return self.field.parseValue(value)
 
-    def makeMatcher(self, funcname, value):
+    def makeMatcher(self, fieldfunc, value):
         return self.field.makeMatcher(self, fieldfunc, value)
 
     def __str__(self):
@@ -48,10 +48,13 @@ class BaseField(object):
         pass
 
     def makeMatcher(self, field, fieldfunc, value):
-        if fieldfunc == None:
-            func = self.defaultMatcher
+        if fieldfunc:
+            try:
+                func = getattr(self, "match_%s" % fieldfunc)
+            except:
+                raise NotImplementedError("'%s' field method not implemented" % fieldfunc)
         else:
-            func = getattr(self, "match_%s" % funcname)
+            func = self.defaultMatcher
         return func(field, value)
 
     def defaultMatcher(self, field, value):

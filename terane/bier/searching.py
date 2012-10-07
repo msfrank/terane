@@ -112,9 +112,12 @@ class ResultSet(object):
 
     def next(self):
         try:
-            curr = 0
+            nlists = len(self._postingLists)
+            if nlists == 0:
+                raise StopIteration()
             # check each child iter for the lowest evid
-            for i in range(len(self._postingLists)):
+            curr = 0
+            for i in range(nlists):
                 # if the postingList is None, then its closed
                 if self._postingLists[i] == None:
                     continue
@@ -217,7 +220,11 @@ def searchIndices(indices, query, period, lastId=None, reverse=False, fields=Non
                 raise TypeError("index does not implement IIndex")
             # we create a copy of the original query, which can possibly be optimized
             # with index-specific knowledge.
-            _query = copy.deepcopy(query).optimizeMatcher(index)
+            _query = copy.deepcopy(query)
+            try:
+                _query = _query.optimizeMatcher(index)
+            except NotImplementedError, e:
+                raise SearcherError(str(e))
             logger.debug("optimized query for index '%s': %s" % (index.name,str(_query)))
             # if the query optimized out entirely, then skip to the next index
             if _query == None:
@@ -233,9 +240,10 @@ def searchIndices(indices, query, period, lastId=None, reverse=False, fields=Non
             postingLists.append(postingList)
         # return a cooperative task
         return cooperate(ResultSet(searchers, postingLists, start, reverse, fields, limit))
-    except Exception, e:
-        logger.exception(e)
-        # free all held resources 
+    except BaseException, e:
+        if not isinstance(e, SearcherError):
+            logger.exception(e)
+        # free all held resources since we aren't passing them to ResultSet
         for postingList in postingLists: postingList.close()
         for searcher in searchers: searcher.close()
         raise
