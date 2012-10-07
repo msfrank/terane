@@ -24,10 +24,11 @@ from twisted.web.resource import IResource
 from twisted.web.guard import HTTPAuthSessionWrapper, BasicCredentialFactory
 from twisted.application.service import Service
 from zope.interface import implements
+from terane import IManager
 from terane.plugins import Plugin, IPlugin
 from terane.protocols import IProtocol, Protocol
-from terane.auth import auth
-from terane.queries import queries, QueryExecutionError
+from terane.registry import getRegistry
+from terane.queries import QueryExecutionError
 from terane.bier.ql import QuerySyntaxError
 from terane.loggers import getLogger
 from terane.stats import getStat, stats
@@ -65,7 +66,7 @@ class XMLRPCDispatcher(XMLRPC):
         except (QuerySyntaxError, QueryExecutionError), e:
             raise FaultBadRequest(e)
         except BaseException, e:
-            logger.exception(e)
+            logger.exception(failure)
             raise FaultInternalError()
 
     @inlineCallbacks
@@ -74,7 +75,7 @@ class XMLRPCDispatcher(XMLRPC):
             if indices == None:
                 result = yield self.queries.listIndices()
             indices = [i for i in result.data \
-              if auth.canAccess(self.avatarId, 'index', i, 'PERM::XMLRPC::ITER')]
+              if self.auth.canAccess(self.avatarId, 'index', i, 'PERM::XMLRPC::ITER')]
             if indices == []:
                 raise FaultNotAuthorized("not authorized to access the specified resource")
             self.iters += 1
@@ -90,7 +91,7 @@ class XMLRPCDispatcher(XMLRPC):
             if indices == None:
                 result = yield self.queries.listIndices()
             indices = [i for i in result.data \
-              if auth.canAccess(self.avatarId, 'index', i, 'PERM::XMLRPC::TAIL')]
+              if self.auth.canAccess(self.avatarId, 'index', i, 'PERM::XMLRPC::TAIL')]
             if indices == []:
                 raise FaultNotAuthorized("not authorized to access the specified resource")
             self.tails += 1
@@ -105,7 +106,7 @@ class XMLRPCDispatcher(XMLRPC):
         try:
             result = yield self.queries.listIndices()
             indices = [i for i in result.data \
-              if auth.canAccess(self.avatarId, 'index', i, 'PERM::XMLRPC::LISTINDEX')]
+              if self.auth.canAccess(self.avatarId, 'index', i, 'PERM::XMLRPC::LISTINDEX')]
             if indices == []:
                 raise FaultNotAuthorized("not authorized to access the specified resource")
             result.data = indices
@@ -115,7 +116,7 @@ class XMLRPCDispatcher(XMLRPC):
 
     def xmlrpc_showIndex(self, name):
         try:
-            if not auth.canAccess(self.avatarId, 'index', name, 'PERM::XMLRPC::SHOWINDEX'):
+            if not self.auth.canAccess(self.avatarId, 'index', name, 'PERM::XMLRPC::SHOWINDEX'):
                 raise FaultNotAuthorized("not authorized to access the specified resource")
             return self.queries.showIndex(name).addErrback(self._handleError)
         except BaseException, e:
@@ -151,10 +152,10 @@ class XMLRPCProtocol(Protocol):
 
     def makeFactory(self):
         registry = getRegistry()
-        auth = registry.getComponent(IManager, 'auth')
-        portal = auth.getPortal(XMLRPCRealm())
+        XMLRPCDispatcher.auth = registry.getComponent(IManager, 'auth')
         XMLRPCDispatcher.queries = registry.getComponent(IManager, 'queries')
         XMLRPCDispatcher.stats = registry.getComponent(IManager, 'stats')
+        portal = XMLRPCDispatcher.auth.getPortal(XMLRPCRealm())
         credentialFactory = BasicCredentialFactory("terane")
         wrapper = HTTPAuthSessionWrapper(portal, [credentialFactory])
         return Site(wrapper)
