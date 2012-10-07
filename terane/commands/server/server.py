@@ -28,6 +28,7 @@ from terane.auth import AuthManager
 from terane.bier import BierManager
 from terane.routes import RouteManager
 from terane.queries import QueryManager
+from terane.listeners import ListenerManager
 from terane.loggers import getLogger, startLogging, StdoutHandler, FileHandler
 from terane.loggers import ERROR, WARNING, INFO, DEBUG
 
@@ -164,6 +165,11 @@ class Server(MultiService):
         registry.addComponent(queries, IManager, 'queries')
         queries.setServiceParent(self)
         queries.configure(self.settings)
+        # configure the listener manager
+        listeners = ListenerManager()
+        registry.addComponent(listeners, IManager, 'listeners')
+        listeners.setServiceParent(self)
+        listeners.configure(self.settings)
         # catch SIGINT and SIGTERM
         signal.signal(signal.SIGINT, self._signal)
         signal.signal(signal.SIGTERM, self._signal)

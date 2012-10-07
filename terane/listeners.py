@@ -15,7 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
+from zope.interface import implements
 from twisted.application.service import Service
+from twisted.internet.protocol import ServerFactory
 from terane import IManager, Manager
 from terane.registry import getRegistry
 from terane.protocols import IProtocol
@@ -36,21 +38,24 @@ class Listener(Service):
             self.protocol = factory()
         except:
             raise ConfigureError("no protocol named '%s'" % ptype)
-        self.listenAddress = section.getString("listen address", "")
+        self.listenAddress = section.getString("listen address", "0.0.0.0")
         self.listenPort = section.getInt("listen port", self.protocol.getDefaultPort())
         self.listenBacklog = section.getInt("listen backlog", 50)
 
     def startService(self):
-        self.protocol.startService()
         protoFactory = self.protocol.makeFactory()
-        if not issubclass(protoFactory, ServerFactory):
+        if not isinstance(protoFactory, ServerFactory):
             raise TypeError("protocol returned an unsuitable server factory")
+        from twisted.internet import reactor
         self.listener = reactor.listenTCP(self.listenPort, protoFactory,
             self.listenBacklog, self.listenAddress)
+        logger.info("[listener:%s] started listening on %s:%i" % 
+            (self.name, self.listenAddress, self.listenPort))
 
     def stopService(self):
         self.listener.stopListening()
         self.listener = None
+        logger.info("[listener:%s] stopped listening" % self.name)
 
 class ListenerManager(Manager):
     """
@@ -59,7 +64,7 @@ class ListenerManager(Manager):
     implements(IManager)
 
     def __init__(self):
-        MultiService.__init__(self)
+        Manager.__init__(self)
         self.setName("listeners")
         self._listeners = {}
 
@@ -76,9 +81,9 @@ class ListenerManager(Manager):
                 listener.configure(section)
                 registry.addComponent(listener, Listener, lname)
             except ConfigureError:
+                listener.disownServiceParent()
                 raise
             except Exception, e:
+                listener.disownServiceParent()
                 logger.exception(e)
                 logger.warning("failed to load listener '%s'" % lname)
-            finally:
-                listener.disownServiceParent()
