@@ -41,15 +41,15 @@ class IndexSearcher(object):
         self._segmentSearchers = [SegmentSearcher(s,txn) for s in ix._segments]
         self._txn = txn
 
-    def postingsLength(self, fieldname, term, startId, endId):
+    def postingsLength(self, field, term, startId, endId):
         """
         Returns an estimate of the number of postings in the index within the
         specified period.
 
-        :param fieldname: The name of the field to search within.
-        :type fieldname: str
+        :param field: The field to search within.
+        :type field: :class:`terane.bier.fields.QualifiedField`
         :param term: The term to search for.
-        :type term: unicode
+        :type term: object
         :param startId:
         :type startId: :class:`terane.bier.evid.EVID`
         :param endId:
@@ -59,20 +59,20 @@ class IndexSearcher(object):
         """
         length = 0
         for searcher in self._segmentSearchers:
-            length += searcher.postingsLength(fieldname, term, startId, endId)
+            length += searcher.postingsLength(field, term, startId, endId)
         return length
 
-    def iterPostings(self, fieldname, term, startId, endId):
+    def iterPostings(self, field, term, startId, endId):
         """
         Returns a MergedPostingList which yields postings for the term in the
         specified field.  As a special case, if fieldname and term are None,
         then yield postings for all terms in all fields within the specified
         period.
 
-        :param fieldname: The name of the field to search within.
-        :type fieldname: str
+        :param field: The field to search within.
+        :type field: :class:`terane.bier.fields.QualifiedField`
         :param term: The term to search for.
-        :type term: unicode
+        :type term: object
         :param startId:
         :type startId: :class:`terane.bier.evid.EVID`
         :param endId:
@@ -80,7 +80,7 @@ class IndexSearcher(object):
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
-        iters = [s.iterPostings(fieldname, term, startId, endId) for s in self._segmentSearchers]
+        iters = [s.iterPostings(field, term, startId, endId) for s in self._segmentSearchers]
         if endId < startId:
             compar = lambda d1,d2: cmp(d2,d1)
         else:
@@ -115,7 +115,8 @@ class MergedPostingList(object):
         """
         Returns the next posting, or None if iteration is finished.
 
-        :returns: The next posting, which is a tuple containing the evid, the term value, and the searcher, or (None,None,None)
+        :returns: The next posting, which is a tuple containing the evid, the
+          term value, and the searcher, or (None,None,None)
         :rtype: tuple
         """
         curr = 0
@@ -190,47 +191,51 @@ class SegmentSearcher(object):
         self._segment = segment
         self._txn = txn 
 
-    def postingsLength(self, fieldname, term, startId, endId):
+    def postingsLength(self, field, term, startId, endId):
         """
         Returns an estimate of the number of postings in the segment within the
         specified period.
 
-        :param fieldname: The name of the field to search within.
-        :type fieldname: str
+        :param field: The field to search within.
+        :type field: :class:`terane.bier.fields.QualifiedField`
         :param term: The term to search for.
-        :type term: unicode
+        :type term: object
         :param period: The period within which the search query is constrained.
         :type period: :class:`terane.bier.searching.Period`
         :returns: An estimate of the number of postings.
         :rtype: int
         """
         try:
-            if fieldname == None and term == None:
+            if field == None and term == None:
                 lastUpdate = json_decode(self._segment.get_meta(self._txn, 'last-update'))
                 numDocs = lastUpdate['size']
-                # startId may be greater than endId, but the estimate_doc_postings method doesn't care
-                estimate = self._segment.estimate_doc_postings(self._txn, str(startId), str(endId))
+                # startId may be greater than endId, but the estimate_doc_postings
+                #method doesn't care
+                estimate = self._segment.estimate_doc_postings(self._txn,
+                    str(startId), str(endId))
             else:
-                fieldname = str(fieldname)
+                fieldspec = "%s~%s" % (field.fieldname, field.fieldtype)
                 term = unicode(term)
-                fmeta = json_decode(self._segment.get_field_meta(self._txn, fieldname))
+                fmeta = json_decode(self._segment.get_field_meta(self._txn, fieldspec))
                 numDocs = fmeta['num-docs']
-                # startId may be greater than endId, but the estimate_term_postings method doesn't care
-                estimate = self._segment.estimate_term_postings(self._txn, fieldname, term, str(startId), str(endId))
+                # startId may be greater than endId, but the estimate_term_postings
+                # method doesn't care
+                estimate = self._segment.estimate_term_postings(self._txn,
+                    fieldspec, term, str(startId), str(endId))
             return int(math.ceil(numDocs * estimate))
         except KeyError:
             return 0
 
-    def iterPostings(self, fieldname, term, startId, endId):
+    def iterPostings(self, field, term, startId, endId):
         """
         Returns a PostingList which yields postings for the term in the specified field.
         As a special case, if fieldname and term are None, then yield postings for all
         terms in all fields within the specified period.
 
-        :param fieldname: The name of the field to search within.
-        :type fieldname: str
+        :param field: The field to search within.
+        :type field: :class:`terane.bier.fields.QualifiedField`
         :param term: The term to search for.
-        :type term: unicode
+        :type term: object
         :param startId:
         :type startId: :class:`terane.bier.evid.EVID`
         :param endId:
@@ -238,12 +243,14 @@ class SegmentSearcher(object):
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
-        if fieldname == None and term == None:
-            postings = self._segment.iter_docs_within(self._txn, str(startId), str(endId))
+        if field == None and term == None:
+            postings = self._segment.iter_docs_within(self._txn,
+                str(startId), str(endId))
         else:
-            fieldname = str(fieldname)
+            fieldspec = "%s~%s" % (field.fieldname, field.fieldtype)
             term = unicode(term)
-            postings = self._segment.iter_terms_within(self._txn, fieldname, term, str(startId), str(endId))
+            postings = self._segment.iter_terms_within(self._txn,
+                fieldspec, term, str(startId), str(endId))
         return PostingList(self, postings)
 
     def getEvent(self, evid):

@@ -34,20 +34,22 @@ class StoreOutput(Output):
 
     implements(IOutput, ISearchable)
 
-    def __init__(self):
+    def __init__(self, plugin):
+        self._plugin = plugin
         self._index = None
         self._contract = Contract().sign()
 
     def configure(self, section):
         self._indexName = section.getString("index name", self.name)
+        if self._indexName in self._plugin._outputs:
+            raise Exception("[output:%s] index '%s' is already open" % (self.name,self._indexName))
+        self._plugin._outputs[self._indexName] = self
         self._segRotation = section.getInt("segment rotation policy", 0)
         self._segRetention = section.getInt("segment retention policy", 0)
         self._segOptimize = section.getBoolean("optimize segments", False)
         
     def startService(self):
-        if self._indexName in self.parent._outputs:
-            raise Exception("[output:%s] index '%s' is already open" % (self.name,self._indexName))
-        self._index = Index(self.parent._env, self._indexName)
+        self._index = Index(self._plugin._env, self._indexName)
         logger.debug("[output:%s] opened index '%s'" % (self.name,self._indexName))
         Output.startService(self)
 
@@ -77,7 +79,7 @@ class StoreOutputPlugin(Plugin):
 
     implements(IPlugin)
 
-    factory = StoreOutput
+    components = [(StoreOutput, IOutput, 'store')]
 
     def __init__(self):
         Plugin.__init__(self)
@@ -113,11 +115,6 @@ class StoreOutputPlugin(Plugin):
         Stop the database service, closing all open indices.
         """
         Plugin.stopService(self)
-        # close each open index, and remove reference to it
-        for name,output in self._outputs.items():
-            if output.running:
-                output.stopService()
-            del self._outputs[name]
         # close the DB environment
         self._env.close()
         logger.debug("[%s] closed database environment" % self.name)

@@ -46,12 +46,11 @@ class IndexWriter(object):
         return self
 
     def newEvent(self, evid, fields):
-        # build a dict out of the fields list
         _fields = dict()
-        for fn,ft,v in fields:
+        for f,v in fields.items():
             if not isinstance(v, unicode):
                 raise TypeError("field value %s must be a unicode" % fn)
-            fieldspec = "%s~%s" % (fn,ft.__name__)
+            fieldspec = "%s~%s" % (f.fieldname,f.fieldtype)
             _fields[fieldspec] = v
         fields = _fields
         # serialize the fields dict and write it to the segment
@@ -65,10 +64,10 @@ class IndexWriter(object):
         lastUpdate = {'size': self._currentSize, 'last-id': self._lastId, 'last-modified': self._lastModified}
         segment.set_meta(self._txn, 'last-update', json_encode(lastUpdate))
 
-    def newPosting(self, fieldname, fieldtype, term, evid, value):
+    def newPosting(self, field, term, evid, value):
         segment = self._ix._current
         try:
-            fieldspec = "%s~%s" % (fieldname,fieldtype.__name__)
+            fieldspec = "%s~%s" % (field.fieldname,field.fieldtype)
             tmeta = json_decode(segment.get_term_meta(self._txn, fieldspec, term))
             if not 'num-docs' in tmeta:
                 raise WriterError("term metadata corruption: no such key 'num-docs'")
