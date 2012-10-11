@@ -15,11 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, time
-from zope.interface import Interface, implements
-from twisted.application.service import Service
-from terane import IManager, Manager
-from terane.registry import getRegistry
+import os, datetime
+from zope.interface import implements
+from terane.manager import IManager, Manager
 from terane.settings import ConfigureError
 from terane.bier.interfaces import *
 from terane.bier.event import Event
@@ -27,15 +25,16 @@ from terane.loggers import getLogger
 
 logger = getLogger('terane.bier')
 
-class BierManager(Manager):
+class EventManager(Manager):
     """
     """
 
-    implements(IManager)
+    implements(IManager, IEventFactory, IFieldStore)
 
-    def __init__(self):
+    def __init__(self, pluginstore):
         Manager.__init__(self)
-        self.setName("bier")
+        self.setName("events")
+        self._pluginstore = pluginstore
         self._fields = dict()
         self._idstore = None
         self._idcache = []
@@ -56,7 +55,6 @@ class BierManager(Manager):
         fill the cache with new identifiers.
         """
         Manager.startService(self)
-        logger.debug("started id generator")
         self._idstore = os.open(self._backingfile, os.O_RDWR | os.O_CREAT, 0600)
         self._refillcache()
         logger.debug("loaded %i entries into id cache" % self.cachesize)
@@ -70,7 +68,6 @@ class BierManager(Manager):
         os.close(self._idstore)
         self._idstore = None
         self._idcache = []
-        logger.debug("stopped id generator")
         return Manager.stopService(self)
 
     def getField(self, name):
@@ -82,21 +79,19 @@ class BierManager(Manager):
         """
         if name in self._fields:
             return self._fields[name]
-        factory = getRegistry().getComponent(IField, name)
+        factory = self._pluginstore.getComponent(IField, name)
         field = factory()
         self._fields[name] = field
         return field
 
-    def newEvent(self):
+    def makeEvent(self):
         """
         Returns a new Event with a unique event identifier.
 
         :returns: The new event.
         :rtype: :class:`terane.bier.event.Event`
         """
-        event = Event()
-        event.id = self._allocateOffset()
-        return event
+        return Event(datetime.datetime.now(tzutc()), self._allocateOffset())
 
     def _allocateOffset(self):
         """

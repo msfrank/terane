@@ -18,7 +18,6 @@
 import pickle
 from zope.interface import implements
 from terane.registry import getRegistry
-from terane import IManager
 from terane.bier import IField, ISchema
 from terane.bier.fields import QualifiedField
 from terane.loggers import getLogger
@@ -29,18 +28,18 @@ class Schema(object):
 
     implements(ISchema)
 
-    def __init__(self, index):
+    def __init__(self, index, fieldstore):
         self._index = index
         self._fields = {}
         self._cached = {}
-        self._bier = getRegistry().getComponent(IManager, 'bier')
+        self._fieldstore = fieldstore
         # load schema data from the db
         with self._index.new_txn() as txn:
             for fieldname,fieldspec in self._index.list_fields(txn):
                 self._fields[fieldname] = pickle.loads(fieldspec)
                 # verify that the field type is consistent
                 for fieldtype,instance in self._fields[fieldname].items():
-                    registered = self._bier.getField(fieldtype)
+                    registered = fieldstore.getField(fieldtype)
                     if not instance.__class__ == registered.__class__:
                         raise Exception("schema field %s:%s does not match registered type %s" % (
                             fieldname, fieldtype, registered.__class__.__name__))
@@ -57,7 +56,7 @@ class Schema(object):
             fieldspec = self._fields[fieldname]
         else:
             fieldspec = {}
-        instance = self._bier.getField(fieldtype)
+        instance = self._fieldstore.getField(fieldtype)
         fieldspec[fieldtype] = instance
         with self._index.new_txn() as txn:
             self._index.add_field(txn, fieldname, pickle.dumps(fieldspec))

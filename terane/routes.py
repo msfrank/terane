@@ -15,11 +15,12 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-from zope.interface import implements
+from zope.interface import Interface, implements
 from twisted.application.service import Service
 from twisted.internet.task import cooperate
-from terane import IManager, Manager
-from terane.registry import getRegistry
+from terane.manager import IManager, Manager
+from terane.plugins import IPluginStore
+from terane.bier import IEventFactory, IFieldStore
 from terane.inputs import IInput
 from terane.outputs import IOutput, ISearchable
 from terane.filters import IFilter, StopFiltering
@@ -30,18 +31,19 @@ from terane.loggers import getLogger
 logger = getLogger('terane.routes')
 
 class EventProcessor(object):
-    def __init__(self, event, filters):
+    def __init__(self, event, filters, fieldstore):
         self.event = event
         self._filters = filters
+        self._fieldstore = fieldstore
 
     def next(self):
         if len(self._filters) == 0:
             raise StopIteration()
         filter = self._filters.pop(0)
         contract = filter.getContract()
-        contract.validateEventBefore(self.event)
+        contract.validateEventBefore(self.event, self._fieldstore)
         self.event = filter.filter(self.event)
-        contract.validateEventAfter(self.event)
+        contract.validateEventAfter(self.event, self._fieldstore)
 
 class Route(Service):
     """
@@ -49,13 +51,15 @@ class Route(Service):
     input, zero or more filters, and a single output.
     """
 
+    def __init__(self, name):
+        self.setName(name)
+
     def configure(self, section):
-        manager = self.parent
         # load the route input
         name = section.getString('input')
-        if not name in manager.inputs:
+        if not name in self.parent._inputs:
             raise ConfigureError("route %s requires unknown input %s" % (self.name,name))
-        self._input = manager.inputs[name]
+        self._input = self.parent._inputs[name]
         # load the route filter chain
         self._filters = []
         filters = section.getString('filter', '').strip()
@@ -63,14 +67,14 @@ class Route(Service):
         if len(filters) > 0:
             # verify each referenced filter has been loaded
             for name in filters:
-                if not name in manager.filters:
+                if not name in self.parent._filters:
                     raise ConfigureError("route %s requires unknown filter %s" % (self.name,name))
-                self._filters.append(manager.filters[name])
+                self._filters.append(self.parent._filters[name])
         # load the route output
         name = section.getString('output')
-        if not name in manager.outputs:
+        if not name in self.parent._outputs:
             raise ConfigureError("route %s requires unknown output %s" % (self.name,name))
-        self._output = manager.outputs[name]
+        self._output = self.parent._outputs[name]
         # verify that the route will work
         chain = [self._input] + [f for f in self._filters] + [self._output]
         self._final = chain[0].getContract()
@@ -101,7 +105,7 @@ class Route(Service):
     def _receivedEvent(self, event):
         # run the fields through the filter chain, then reschedule the signal
         self._input.getContract().validateEventAfter(event)
-        task = cooperate(EventProcessor(event, self._filters))
+        task = cooperate(EventProcessor(event, self._filters, self.parent._fieldstore))
         d = task.whenDone()
         d.addCallbacks(self._processedEvent, lambda failure: failure)
         d.addErrback(self._errorProcessingEvent)
@@ -125,52 +129,114 @@ class Route(Service):
             return failure
         logger.debug("[route:%s] dropped event: %s" % (self.name,e))
 
+class IIndexStore(Interface):
+    def getSearchableIndex(name):
+        """
+        Return the searchable index specified by name.
+
+        :param name: The name of the index.
+        :type name: str
+        :returns: The index.
+        :rtype: An object providing :class:`terane.outputs.ISearchable`
+        :raises KeyError: The specified index does not exist.
+        """
+    def iterSearchableIndices():
+        """
+        Iterate the searchable indices.
+
+        :returns: An iterator yielding objects providing :class:`terane.outputs.ISearchable`.
+        :rtype: iter
+        """
+    def iterSearchableNames():
+        """
+        Iterate the searchable index names.
+
+        :returns: An iterator yielding strings containing searchable index names.
+        :rtype: iter
+        """
+
 class RouteManager(Manager):
+    """
+    """
 
-    implements(IManager)
+    implements(IManager, IIndexStore)
 
-    def __init__(self):
+    def __init__(self, pluginstore, eventfactory, fieldstore):
+        if not IPluginStore.providedBy(pluginstore):
+            raise TypeError("pluginstore class does not implement IPluginStore")
+        if not IEventFactory.providedBy(eventfactory):
+            raise TypeError("eventfactory class does not implement IEventFactory")
+        if not IFieldStore.providedBy(fieldstore):
+            raise TypeError("fieldstore class does not implement IFieldStore")
         Manager.__init__(self)
         self.setName("routes")
-        self.routes = {}
-        self.inputs = {}
-        self.filters = {}
-        self.outputs = {}
-        self.searchables = []
+        self._pluginstore = pluginstore
+        self._eventfactory = eventfactory
+        self._fieldstore = fieldstore
+        self._routes = {}
+        self._inputs = {}
+        self._filters = {}
+        self._outputs = {}
+        self._searchables = {}
 
     def configure(self, settings):
-        registry = getRegistry()
-        # configure each input, filter, output
-        for ptype,pname,components in [
-          (IInput, 'input', self.inputs),
-          (IFilter, 'filter', self.filters),
-          (IOutput, 'output', self.outputs)]:
-            for section in settings.sectionsLike("%s:" % pname):
-                cname = section.name.split(':',1)[1]
-                if cname in components:
-                    raise ConfigureError("%s %s was already defined" % (pname, cname))
-                ctype = section.getString('type', None)
-                if ctype == None:
-                    raise ConfigureError("%s %s is missing required parameter 'type'" % (pname,cname))
-                try:
-                    factory = registry.getComponent(ptype, ctype)
-                except KeyError:
-                    raise ConfigureError("no %s found for type '%s'" % (pname,ctype))
-                component = factory()
-                component.setName(cname)
-                component.configure(section)
-                components[cname] = component
-        # find the searchable outputs
-        for output in self.outputs.itervalues():
+        # configure each input
+        for section in settings.sectionsLike("input:"):
+            name = section.name.split(':',1)[1]
+            if name in self._inputs:
+                raise ConfigureError("input %s was already defined" % name)
+            type = section.getString('type', None)
+            if type == None:
+                raise ConfigureError("input %s is missing required parameter 'type'" % name)
+            try:
+                factory = self._pluginstore.getComponent(IInput, type)
+            except KeyError:
+                raise ConfigureError("no input found for type '%s'" % type)
+            input = factory(name, self._eventfactory)
+            input.configure(section)
+            self._inputs[name] = input
+        # configure each filter
+        for section in settings.sectionsLike("filter:"):
+            name = section.name.split(':',1)[1]
+            if name in self._filters:
+                raise ConfigureError("filter %s was already defined" % name)
+            type = section.getString('type', None)
+            if type == None:
+                raise ConfigureError("filter %s is missing required parameter 'type'" % name)
+            try:
+                factory = self._pluginstore.getComponent(IFilter, type)
+            except KeyError:
+                raise ConfigureError("no filter found for type '%s'" % type)
+            filter = factory(name)
+            filter.configure(section)
+            self._filters[name] = filter
+        # configure each output
+        for section in settings.sectionsLike("output:"):
+            name = section.name.split(':',1)[1]
+            if name in self._outputs:
+                raise ConfigureError("output %s was already defined" % name)
+            type = section.getString('type', None)
+            if type == None:
+                raise ConfigureError("output %s is missing required parameter 'type'" % name)
+            try:
+                factory = self._pluginstore.getComponent(IOutput, type)
+            except KeyError:
+                raise ConfigureError("no input found for type '%s'" % type)
+            output = factory(name, self._fieldstore)
+            output.configure(section)
+            self._outputs[name] = output
             if ISearchable.providedBy(output):
-                self.searchables.append(output)
+                self._searchables[name] = output
+        if len(self._searchables) < 1:
+            logger.info("no searchable indices found")
+        else:
+            logger.info("found searchable indices: %s" % ', '.join(self._searchables.keys()))
         # configure each route
         for section in settings.sectionsLike('route:'):
             name = section.name.split(':',1)[1]
-            if name in self.routes:
+            if name in self._routes:
                 raise ConfigureError("route %s was already defined" % name)
-            route = Route()
-            route.setName(name)
+            route = Route(name)
             route.setServiceParent(self)
             try:
                 route.configure(section)
@@ -180,17 +246,44 @@ class RouteManager(Manager):
 
     def startService(self):
         Manager.startService(self)
-        for output in self.outputs.values():
+        for output in self._outputs.values():
             output.startService()
-        for input in self.inputs.values():
+        for input in self._inputs.values():
             input.startService()
 
     def stopService(self):
-        for input in self.inputs.values():
+        for input in self._inputs.values():
             input.stopService()
-        for output in self.outputs.values():
+        for output in self._outputs.values():
             output.stopService()
         return Manager.stopService(self)
 
-    def listSearchables(self):
-        return self.searchables
+    def getSearchableIndex(self, name):
+        """
+        Return the searchable index specified by name.
+
+        :param name: The name of the index.
+        :type name: str
+        :returns: The index.
+        :rtype: An object providing :class:`terane.outputs.ISearchable`
+        :raises KeyError: The specified index does not exist.
+        """
+        return self._searchables[name].getIndex()
+                                        
+    def iterSearchableIndices(self):
+        """
+        Iterate the searchable indices.
+
+        :returns: An iterator yielding objects providing :class:`terane.outputs.ISearchable`.
+        :rtype: iter
+        """
+        return self._searchables.itervalues()
+
+    def iterSearchableNames(self):
+        """
+        Iterate the searchable index names.
+
+        :returns: An iterator yielding strings containing searchable index names.
+        :rtype: iter
+        """
+        return self._searchables.iterkeys() 

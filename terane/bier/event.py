@@ -16,44 +16,67 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import socket, datetime, copy, re
+from collections import MutableMapping
 from dateutil.tz import tzutc
 from zope.interface import implements
-from terane import IManager
-from terane.registry import getRegistry
-from terane.bier.interfaces import IField
 from terane.signals import ICopyable
 
 class Assertion(object):
     """
+    An assertion describes a field and its invariants, pre-conditions and
+    post-conditions with respect to the event processing pipeline.
     """
     def __init__(self, fieldname, fieldtype, expects=False, guarantees=True, ephemeral=False, accepts=None):
         if len(fieldname) < 2:
             raise TypeError("fieldname must be at least two characters")
         if fieldname.startswith('__'):
             raise TypeError("fieldname must not start with two underscores")
+        if not fieldname[0] == '_' and not fieldname[0].isalpha():
+            raise TypeError("fieldname must start with an alphabetic character or underscore")
         if not re.match(r'[a-zA-Z0-9_]+', fieldname):
             raise TypeError("fieldname must consist of only alphanumeric characters or underscores")
-        field = getRegistry().getComponent(IManager, "bier").getField(fieldtype)
         self.fieldname = fieldname
         self.fieldtype = fieldtype
-        self.field = field
         self.expects = bool(expects)
         self.guarantees = bool(guarantees)
         self.ephemeral = bool(ephemeral)
         self.accepts = accepts
 
+_assertion_input = Assertion('input', 'literal', guarantees=True, ephemeral=False)
+_assertion_hostname = Assertion('input', 'literal', guarantees=True, ephemeral=False)
+_assertion_message = Assertion('message', 'text', guarantees=True, ephemeral=False)
+
 class Contract(object):
     """
+    A Contract is comprised of Assertions and describes an events invariants,
+    pre-conditions and post-conditions with respect to the event processing
+    pipeline.  A Contract has a state of signed or unsigned; when it is unsigned,
+    its Assertions may be added, removed, or modified.  Once the Contract has
+    been signed, it is no longer mutable, but only signed Contracts may be used
+    to validate events.
     """
 
     def __init__(self):
         self.signed = False
-        self._assertions = {}
-        self.addAssertion('input', 'literal', guarantees=True, ephemeral=False)
-        self.addAssertion('hostname', 'literal', guarantees=True, ephemeral=False)
-        self.addAssertion('message', 'text', guarantees=True, ephemeral=False)
+        self._assertions = {
+            'message': _assertion_message,
+            'input': _assertion_input,
+            'hostname': _assertion_hostname
+            }
 
     def addAssertion(self, fieldname, fieldtype, **kwds):
+        """
+        Add an assertion to the contract.
+
+        :param fieldname: The name of the field.
+        :type fieldname: str
+        :param fieldtype: The type of the field.
+        :type fieldtype: str
+        :param kwds: keyword parameters which further describe the assertion.
+        :type kwds: dict
+        :returns: A reference to the contract, so methods can be chained.
+        :rtype: :class:`terane.bier.event.Contract`
+        """
         if self.signed:
             raise Exception("writing to a signed Contract is not allowed")
         if fieldname in self._assertions:
@@ -62,10 +85,13 @@ class Contract(object):
         self._assertions[fieldname] = assertion
         return self
 
-    def fields(self):
-        return self._assertions.iteritems()
-
     def sign(self):
+        """
+        Sign the contract, which will prevent any further modification.
+
+        :returns: A reference to the contract, so methods can be chained.
+        :rtype: :class:`terane.bier.event.Contract`
+        """
         if self.signed == True:
             raise ValueError("Contract is already signed")
         self.signed = True
@@ -99,7 +125,7 @@ class Contract(object):
         contract._assertions.update(self._assertions)
         return contract.sign()
 
-    def validateEventBefore(self, event):
+    def validateEventBefore(self, event, fieldstore):
         """
         Validate the specified event against the contract before it is processed.
 
@@ -107,9 +133,11 @@ class Contract(object):
         :type event: :class:`terane.bier.event.Event`
         :raises Exception: The validation failed.
         """
-        pass
+        for assertion in self._assertions.itervalues():
+            if assertion.expects and not assertion in event:
+                raise Exception("expected field %s is not present" % assertion.fieldname)
 
-    def validateEventAfter(self, event):
+    def validateEventAfter(self, event, fieldstore):
         """
         Validate the specified event against the contract after it is processed.
 
@@ -117,7 +145,14 @@ class Contract(object):
         :type event: :class:`terane.bier.event.Event`
         :raises Exception: The validation failed.
         """
-        pass
+        for assertion in self._assertions:
+            hasvalue = assertion in event
+            if not assertion.guarantees and not hasvalue:
+                continue
+            if assertion.guarantees and not hasvalue:
+                raise Exception("guaranteed field %s is not present" % assertion.fieldname)
+            field = fieldstore.getField(assertion.fieldtype)
+            event[assertion] = field.validateValue(event[assertion])
 
     def finalizeEvent(self, event):
         """
@@ -153,47 +188,48 @@ class Contract(object):
     def __iter__(self):
         return self._assertions.itervalues()
 
-class Event(object):
+class Event(MutableMapping):
     """
     """
 
     implements(ICopyable)
 
-    _contract = None
+    def __init__(self, ts, id):
+        self._values = dict()
+        self.ts = ts
+        self.id = id
 
-    def __init__(self):
-        if not Event._contract:
-            Event._contract = Contract()
-        self._fields = dict()
-        # set ts and id
-        self.ts = datetime.datetime.now(tzutc())
-        self.id = None
-        # set default values for basic fields
-        self[Event._contract.field_hostname] = socket.gethostname()
-        self[Event._contract.field_input] = ''
-        self[Event._contract.field_message] = ''
+    def copy(self):
+        return copy.deepcopy(self)
 
     def __str__(self):
-        return "<Event %s>" % ' '.join(["%s:%s='%s'" %(n,t,v) for n,t,v in self.fields()])
+        fields = ' '.join(["%s:%s='%s'" %(n,t,v) for n,t,v in self.fields()])
+        return "<Event ts=%i id=%i %s>" % (self.ts, self.id, fields)
+
+    def __len__(self):
+        return len(self._values)
+
+    def __iter__(self):
+        return self._values.iteritems()
 
     def __contains__(self, assertion):
-        if (assertion.fieldname,assertion.fieldtype) in self._fields:
+        if not isinstance(assertion, Assertion):
+            raise TypeError("parameter must be of type Assertion")
+        if (assertion.fieldname,assertion.fieldtype) in self._values:
             return True
         return False
 
     def __getitem__(self, assertion):
-        return self._fields[(assertion.fieldname,assertion.fieldtype)]
+        if not isinstance(assertion, Assertion):
+            raise TypeError("parameter must be of type Assertion")
+        return self._values[(assertion.fieldname,assertion.fieldtype)]
 
     def __setitem__(self, assertion, value):
-        value = assertion.field.validateValue(value)
-        self._fields[(assertion.fieldname,assertion.fieldtype)] = value
+        if not isinstance(assertion, Assertion):
+            raise TypeError("parameter must be of type Assertion")
+        self._values[(assertion.fieldname,assertion.fieldtype)] = value
 
     def __delitem__(self, assertion):
-        del self._fields[(assertion.fieldname,assertion.fieldtype)]
-
-    def fields(self):
-        for (fieldname,fieldtype),value in self._fields.items():
-            yield fieldname, fieldtype, value
-
-    def copy(self):
-        return copy.deepcopy(self)
+        if not isinstance(assertion, Assertion):
+            raise TypeError("parameter must be of type Assertion")
+        del self._values[(assertion.fieldname,assertion.fieldtype)]

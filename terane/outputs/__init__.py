@@ -36,8 +36,9 @@ class Output(Service):
     The Output base implementation.
     """
 
-    def __init__(self, plugin):
-        pass
+    def __init__(self, plugin, name, fieldstore):
+        self.plugin = plugin
+        self.name = name
 
     def configure(self, section):
         pass

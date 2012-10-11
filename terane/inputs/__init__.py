@@ -33,8 +33,9 @@ class Input(Service):
     The Input base implementation.
     """
 
-    def __init__(self, plugin):
-        pass
+    def __init__(self, plugin, name, eventfactory):
+        self.plugin = plugin
+        self.name = name
 
     def configure(self, section):
         pass

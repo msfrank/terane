@@ -19,7 +19,6 @@ import os, sys
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred
 from zope.interface import implements
-from terane import IManager
 from terane.plugins import Plugin, IPlugin
 from terane.inputs import Input, IInput
 from terane.registry import getRegistry
@@ -33,8 +32,10 @@ class FileInput(Input):
 
     implements(IInput)
 
-    def __init__(self, plugin):
-        self._evgen = getRegistry().getComponent(IManager, "bier")
+    def __init__(self, plugin, name, evfactory):
+        self._plugin = plugin
+        self.setName(name)
+        self._evfactory = evfactory
         self._dispatcher = Signal()
         self._delayed = None
         self._deferred = None
@@ -251,7 +252,7 @@ class FileInput(Input):
         if line.isspace():
             return
         logger.trace("[input:%s] received line: %s" % (self.name,line))
-        event = self._evgen.newEvent()
+        event = self._evfactory.newEvent()
         event[self._contract.field_input] = self.name
         event[self._contract.field_message] = line
         event[self._contract.field__raw] = line

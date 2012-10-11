@@ -28,14 +28,6 @@ class SyslogFilter(Filter):
 
     implements(IFilter)
 
-    def __init__(self, plugin):
-        self._contract = Contract()
-        self._contract.addAssertion('syslog_facility', 'literal', guarantees=True)
-        self._contract.addAssertion('syslog_severity', 'literal', guarantees=True)
-        self._contract.addAssertion('syslog_pid', 'literal', guarantees=False)
-        self._contract.addAssertion('syslog_tag', 'text', guarantees=False)
-        self._contract.sign()
-
     def _updateselected(self, selector):
             # split the selector into the facility list and serverity
             facilities,severity = selector.split('.', 1)
@@ -111,6 +103,12 @@ class SyslogFilter(Filter):
         if not selectors == '':
             for selector in [s.strip() for s in selectors.split(';') if not s == '']:
                 self._updateselected(selector)
+        self._contract = Contract()
+        self._contract.addAssertion('syslog_facility', 'literal', guarantees=True)
+        self._contract.addAssertion('syslog_severity', 'literal', guarantees=True)
+        self._contract.addAssertion('syslog_pid', 'literal', guarantees=False)
+        self._contract.addAssertion('syslog_tag', 'text', guarantees=False)
+        self._contract.sign()
 
     def getContract(self):
         return self._contract

@@ -257,3 +257,24 @@ class IIndex(Interface):
         """
         Returns a dict with Index statistics.
         """
+
+class IEventFactory(Interface):
+    def makeEvent():
+        """
+        Return a new Event with ts and id set, and message, hostname, and input
+        fields set to empty values.
+
+        :returns: A new Event.
+        :rtype: :class:`terane.bier.event.Event`
+        """
+
+class IFieldStore(Interface):
+    def getField(name):
+        """
+        Returns a field object corresponding to the specified name.
+
+        :param name: The field name.
+        :type name: string
+        :returns: The field object.
+        :rtype: An object providing :class:`terane.bier.interfaces.IField`
+        """

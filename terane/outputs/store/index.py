@@ -43,17 +43,17 @@ class Index(backend.Index):
 
     implements(IIndex)
 
-    def __init__(self, env, name):
+    def __init__(self, env, name, fieldstore):
+        self.name = name
+        self._segments = []
+        self._indexSize = 0
+        self._currentSize = 0
+        self._lastModified = 0
+        self._lastId = 0
         backend.Index.__init__(self, env, name)
         try:
-            self.name = name
-            self._segments = []
-            self._indexSize = 0
-            self._currentSize = 0
-            self._lastModified = 0
-            self._lastId = 0
             # load schema
-            self._schema = Schema(self)
+            self._schema = Schema(self, fieldstore)
             # load data segments
             with self.new_txn() as txn:
                 for segmentId in self.iter_segments(txn):

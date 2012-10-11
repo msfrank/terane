@@ -18,8 +18,10 @@
 from zope.interface import implements
 from twisted.application.service import Service
 from twisted.internet.protocol import ServerFactory
-from terane import IManager, Manager
-from terane.registry import getRegistry
+from terane.manager import IManager, Manager
+from terane.plugins import IPluginStore
+from terane.auth import IAuthManager
+from terane.queries import IQueryManager
 from terane.protocols import IProtocol
 from terane.settings import ConfigureError
 from terane.loggers import getLogger
@@ -28,22 +30,17 @@ logger = getLogger('terane.listeners')
 
 class Listener(Service):
 
+    def __init__(self, name, protocol):
+        self.setName(name)
+        self._protocol = protocol
+
     def configure(self, section):
-        ptype = section.getString('type', None)
-        if ptype == None:
-            raise ConfigureError("[listener:%s] missing required option 'type'" % self.name)
-        try:
-            registry = getRegistry()
-            factory = registry.getComponent(IProtocol, ptype)
-            self.protocol = factory()
-        except:
-            raise ConfigureError("no protocol named '%s'" % ptype)
         self.listenAddress = section.getString("listen address", "0.0.0.0")
-        self.listenPort = section.getInt("listen port", self.protocol.getDefaultPort())
+        self.listenPort = section.getInt("listen port", self._protocol.getDefaultPort())
         self.listenBacklog = section.getInt("listen backlog", 50)
 
     def startService(self):
-        protoFactory = self.protocol.makeFactory()
+        protoFactory = self._protocol.makeFactory()
         if not isinstance(protoFactory, ServerFactory):
             raise TypeError("protocol returned an unsuitable server factory")
         from twisted.internet import reactor
@@ -63,23 +60,37 @@ class ListenerManager(Manager):
 
     implements(IManager)
 
-    def __init__(self):
+    def __init__(self, pluginstore, authmanager, querymanager):
+        if not IPluginStore.providedBy(pluginstore):
+            raise TypeError("authmanager class does not implement IAuthManager")
+        if not IAuthManager.providedBy(authmanager):
+            raise TypeError("authmanager class does not implement IAuthManager")
+        if not IQueryManager.providedBy(querymanager):
+            raise TypeError("querymanager class does not implement IQueryManager")
         Manager.__init__(self)
         self.setName("listeners")
+        self._pluginstore = pluginstore
+        self._authmanager = authmanager
+        self._querymanager = querymanager
         self._listeners = {}
 
     def configure(self, settings):
         """
         """
-        registry = getRegistry()
         for section in settings.sectionsLike("listener:"):
-            lname = section.name.split(':',1)[1]
-            listener = Listener()
-            listener.setName(lname)
+            name = section.name.split(':',1)[1]
+            type = section.getString('type', None)
+            if type == None:
+                raise ConfigureError("listener %s missing required parameter 'type'" % name)
+            try:
+                factory = self._pluginstore.getComponent(IProtocol, type)
+            except KeyError:
+                raise ConfigureError("no protocol found for type '%s'" % type)
+            protocol = factory(self._authmanager, self._querymanager)
+            listener = Listener(name, protocol)
             listener.setServiceParent(self)
             try:
                 listener.configure(section)
-                registry.addComponent(listener, Listener, lname)
             except ConfigureError:
                 listener.disownServiceParent()
                 raise

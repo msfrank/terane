@@ -36,8 +36,8 @@ class IProtocol(ILoadable):
             
 class Protocol(object):
 
-    def __init__(self, plugin):
-        pass
+    def __init__(self, plugin, authmanager, querymanager):
+        self.plugin = plugin
 
     def getDefaultPort(self):
         return None

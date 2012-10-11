@@ -24,8 +24,6 @@ class StopFiltering(Exception):
     pass
 
 class IFilter(ILoadable):
-    def setName(name):
-        "Set the name of the filter."
     def configure(section):
         "Configure the filter."
     def getContract():
@@ -35,10 +33,8 @@ class IFilter(ILoadable):
 
 class Filter(object):
 
-    def __init__(self, plugin):
-        pass
-
-    def setName(self, name):
+    def __init__(self, plugin, name):
+        self.plugin = plugin
         self.name = name
 
     def configure(self, section):
@@ -48,4 +44,4 @@ class Filter(object):
         raise NotImplementedError()
 
     def filter(self, event):
-        raise FilterError("filter() not implemented for filter %s" % self.name)
+        raise NotImplementedError()

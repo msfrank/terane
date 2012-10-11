@@ -1,4 +1,4 @@
-# Copyright 2010,2011 Michael Frank <msfrank@syntaxjockey.com>
+# Copyright 2012 Michael Frank <msfrank@syntaxjockey.com>
 #
 # This file is part of Terane.
 #
@@ -15,10 +15,29 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-__version__ = (0, 2, 2)
+from twisted.application.service import IServiceCollection, MultiService
 
-def versionstring():
+class IManager(IServiceCollection):
+    def configure(settings):
+        """
+        Configure the manager.
+
+        :param settings: The settings object.
+        :type settings: :class:`terane.settings.Settings`
+        """
+
+class Manager(MultiService):
     """
-    Return the version number as a string.
     """
-    return "%i.%i.%i" % __version__
+
+    def __init__(self):
+        MultiService.__init__(self)
+
+    def configure(self, settings):
+        pass
+
+    def startService(self):
+        MultiService.startService(self)
+
+    def stopService(self):
+        MultiService.stopService(self)

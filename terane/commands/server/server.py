@@ -20,15 +20,14 @@ from logging import StreamHandler, FileHandler, Formatter
 from twisted.internet import reactor
 from twisted.application.service import MultiService
 from twisted.internet.defer import maybeDeferred
-from terane import IManager
 from terane.registry import getRegistry
-from terane.stats import StatsManager
 from terane.plugins import PluginManager
+from terane.bier import EventManager
 from terane.auth import AuthManager
-from terane.bier import BierManager
 from terane.routes import RouteManager
 from terane.queries import QueryManager
 from terane.listeners import ListenerManager
+from terane.stats import stats
 from terane.loggers import getLogger, startLogging, StdoutHandler, FileHandler
 from terane.loggers import ERROR, WARNING, INFO, DEBUG
 
@@ -136,38 +135,30 @@ class Server(MultiService):
         atexit.register(self._removePid)
         registry = getRegistry()
         # configure the statistics manager
-        stats = StatsManager()
-        registry.addComponent(stats, IManager, 'stats')
         stats.setServiceParent(self)
         stats.configure(self.settings)
         # configure the plugin manager
         plugins = PluginManager()
-        registry.addComponent(plugins, IManager, 'plugins')
         plugins.setServiceParent(self)
         plugins.configure(self.settings)
         # configure the auth manager
         auth = AuthManager()
-        registry.addComponent(auth, IManager, 'auth')
         auth.setServiceParent(self)
         auth.configure(self.settings)
         # configure the bier manager
-        bier = BierManager()
-        registry.addComponent(bier, IManager, 'bier')
-        bier.setServiceParent(self)
-        bier.configure(self.settings)
+        events = EventManager(plugins)
+        events.setServiceParent(self)
+        events.configure(self.settings)
         # configure the route manager
-        routes = RouteManager()
-        registry.addComponent(routes, IManager, 'routes')
+        routes = RouteManager(plugins, events, events)
         routes.setServiceParent(self)
         routes.configure(self.settings)
         # configure the query manager
-        queries = QueryManager()
-        registry.addComponent(queries, IManager, 'queries')
+        queries = QueryManager(routes)
         queries.setServiceParent(self)
         queries.configure(self.settings)
         # configure the listener manager
-        listeners = ListenerManager()
-        registry.addComponent(listeners, IManager, 'listeners')
+        listeners = ListenerManager(plugins, auth, queries)
         listeners.setServiceParent(self)
         listeners.configure(self.settings)
         # catch SIGINT and SIGTERM

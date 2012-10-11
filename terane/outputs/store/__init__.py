@@ -34,8 +34,10 @@ class StoreOutput(Output):
 
     implements(IOutput, ISearchable)
 
-    def __init__(self, plugin):
+    def __init__(self, plugin, name, fieldstore):
         self._plugin = plugin
+        self.setName(name)
+        self._fieldstore = fieldstore
         self._index = None
         self._contract = Contract().sign()
 
@@ -49,7 +51,7 @@ class StoreOutput(Output):
         self._segOptimize = section.getBoolean("optimize segments", False)
         
     def startService(self):
-        self._index = Index(self._plugin._env, self._indexName)
+        self._index = Index(self._plugin._env, self._indexName, self._fieldstore)
         logger.debug("[output:%s] opened index '%s'" % (self.name,self._indexName))
         Output.startService(self)
 

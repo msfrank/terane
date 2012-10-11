@@ -28,7 +28,7 @@ class NagiosFilter(Filter):
 
     implements(IFilter)
 
-    def __init__(self, plugin):
+    def configure(self, section):
         self._contract = Contract()
         self._contract.addAssertion('nagios_evtype', 'literal', guarantees=True)
         self._contract.addAssertion('nagios_host', 'text', guarantees=False)
@@ -37,9 +37,6 @@ class NagiosFilter(Filter):
         self._contract.addAssertion('nagios_state', 'text', guarantees=False)
         self._contract.addAssertion('nagios_attempt', 'text', guarantees=False)
         self._contract.sign()
-
-    def configure(self, section):
-        pass
 
     def getContract(self):
         return self._contract

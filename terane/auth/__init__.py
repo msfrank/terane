@@ -15,9 +15,9 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import time, os
-from twisted.application.service import Service
+from zope.interface import Interface, implements
 from twisted.cred.portal import Portal
+from terane.manager import IManager, Manager
 from terane.settings import ConfigureError
 from terane.auth.credentials import PasswdFile, AnonymousOnly
 from terane.auth.acl import ACL, Permission
@@ -25,9 +25,42 @@ from terane.loggers import getLogger
 
 logger = getLogger('terane.auth')
 
-class AuthManager(Service):
+class IAuthManager(Interface):
+    def getPortal(realm):
+        """
+        Return a Portal integrating the specified realm with the credentials loaded
+        into the authorization manager.
+
+        :param realm: The realm.
+        :type realm: An object providing :class:`twisted.cred.portal.IRealm`
+        :returns: The portal.
+        :rtype: :class:`twisted.cred.portal.Portal`
+        """
+    def canAccess(userName, objectType, objectName, *perms):
+        """
+        Returns a boolean indicating whether or not the specified userName has the
+        specified permissions on the specified object.
+
+        :param userName: The user identifier.
+        :type userName: str
+        :param objectType: The object type name.
+        :type objectType: str
+        :param objectName: The object name.
+        :type objectName: str
+        :param perms: The list of permission names.
+        :type perms: list
+        """
+
+class AuthManager(Manager):
+    """
+    The AuthManager loads authentication and authorization data and provides methods
+    to validate users and mediate access to objects.
+    """
+
+    implements(IManager, IAuthManager)
 
     def __init__(self):
+        Manager.__init__(self)
         self._creds = None
         self._roles = {}
 
@@ -85,12 +118,6 @@ class AuthManager(Service):
             acl.append(Permission.fromSpec(p))
         self._roles[role] = acl
 
-    def startService(self):
-        Service.startService(self)
-
-    def stopService(self):
-        return Service.stopService(self)
-
     def getPortal(self, realm):
         return Portal(realm, [self._creds])
 
@@ -114,11 +141,3 @@ class AuthManager(Service):
             if _check(perm) == False:
                 return False
         return True
-
-
-auth = AuthManager()
-"""
-`auth` is a singleton instance of a :class:`AuthManager`.  All interaction
-with the auth infrastructure must occur through this instance; do *not* instantiate
-new :class:`AuthManager` instances!
-"""
