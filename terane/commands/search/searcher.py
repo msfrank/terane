@@ -44,9 +44,6 @@ class Searcher(object):
             self.tz = dateutil.tz.gettz(self.tz)
         # get the list of fields to display
         self.fields = section.getList(str, "display fields", None)
-        if not self.fields == None:
-            if not 'default' in self.fields: self.fields.append('default')
-            if not 'ts' in self.fields: self.fields.append('ts')
         # concatenate the command args into the query string
         self.query = ' '.join(settings.args())
         # configure server logging
@@ -59,30 +56,29 @@ class Searcher(object):
     def run(self):
         proxy = Proxy("http://%s/XMLRPC" % self.host, user=self.username,
             password=self.password, allowNone=True)
-        deferred = proxy.callRemote('iter', self.query, None, self.indices,
+        deferred = proxy.callRemote('iterEvents', self.query, None, self.indices,
             self.limit, self.reverse, self.fields)
         deferred.addCallback(self.printResult)
         deferred.addErrback(self.printError)
         reactor.run()
         return 0
 
-    def printResult(self, results):
-        logger.debug("XMLRPC result: %s" % str(results))
-        meta = results['meta']
-        data = results['data']
-        if len(data) > 0:
-            for evid,event in data:
+    def printResult(self, result):
+        logger.debug("XMLRPC result: %s" % str(result))
+        if len(result) > 0:
+            meta = result['meta']
+            data = result['data']
+            for evid,defaultfield,defaultvalue,fields in data:
                 evid = EVID.fromString(evid)
                 ts = datetime.datetime.fromtimestamp(evid.ts, dateutil.tz.tzutc())
                 if self.tz:
                     ts = ts.astimezone(self.tz)
-                print "%s: %s" % (ts.strftime("%d %b %Y %H:%M:%S %Z"), event['default'])
+                print "%s: %s" % (ts.strftime("%d %b %Y %H:%M:%S %Z"), defaultvalue)
                 if self.longfmt:
-                    del event['default']
-                    for field,value in sorted(event.items(), key=lambda x: x[0]):
-                        if self.fields and field not in self.fields:
+                    for fieldname,value in sorted(fields.items(), key=lambda x: x[0]):
+                        if self.fields and fieldname not in self.fields:
                             continue
-                        print "\t%s=%s" % (field,value)
+                        print "\t%s=%s" % (fieldname,value)
             print ""
             print "found %i matches in %f seconds." % (len(data), meta['runtime'])
         else:

@@ -152,16 +152,18 @@ class ResultSet(object):
             # retrieve the event
             if not IEventStore.providedBy(store):
                 raise TypeError("store does not implement IEventStore")
-            event = store.getEvent(evid)
+            defaultfield, defaultvalue, fields = store.getEvent(evid)
+            if defaultfield not in self.fields:
+                self.fields.append(defaultfield)
             # keep a record of all field names found in the results.
-            for fieldname in event.keys():
+            for fieldname in fields.keys():
                 if fieldname not in self.fields:
                     self.fields.append(fieldname)
             # filter out unwanted fields
             if self._fields != None:
-                event = dict([(k,v) for k,v in event.items() if k in self._fields])
-            self.events.append((str(evid), event))
-            logger.trace("added event to resultset")
+                fields = dict([(k,v) for k,v in fields.items() if k in self._fields])
+            self.events.append((str(evid), defaultfield, defaultvalue, fields))
+            logger.trace("added event %s to resultset" % evid)
             # if we have reached our limit
             self._count += 1
             if self._count == self._limit:

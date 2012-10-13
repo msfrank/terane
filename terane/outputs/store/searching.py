@@ -262,7 +262,11 @@ class SegmentSearcher(object):
         :returns: A dict mapping fieldnames to values.
         :rtype: dict
         """
-        return json_decode(self._segment.get_doc(self._txn, str(evid)))
+        fields = json_decode(self._segment.get_doc(self._txn, str(evid)))
+        defaultfield = 'message'
+        defaultvalue = fields[defaultfield]
+        del fields[defaultfield]
+        return defaultfield, defaultvalue, fields
 
     def close(self):
         self._txn = None
