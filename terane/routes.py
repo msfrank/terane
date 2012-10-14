@@ -104,7 +104,7 @@ class Route(Service):
 
     def _receivedEvent(self, event):
         # run the fields through the filter chain, then reschedule the signal
-        self._input.getContract().validateEventAfter(event)
+        self._input.getContract().validateEventAfter(event, self.parent._fieldstore)
         task = cooperate(EventProcessor(event, self._filters, self.parent._fieldstore))
         d = task.whenDone()
         d.addCallbacks(self._processedEvent, lambda failure: failure)
@@ -119,7 +119,7 @@ class Route(Service):
 
     def _processedEvent(self, processor):
         logger.debug("[route:%s] processed event" % self.name)
-        self._output.getContract().validateEventBefore(processor.event)
+        self._output.getContract().validateEventBefore(processor.event, self.parent._fieldstore)
         event = self._final.finalizeEvent(processor.event)
         self._output.receiveEvent(event)
 
