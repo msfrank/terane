@@ -16,6 +16,7 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import os, datetime
+from dateutil.tz import tzutc
 from zope.interface import implements
 from terane.manager import IManager, Manager
 from terane.settings import ConfigureError

@@ -31,47 +31,52 @@ class Schema(object):
     def __init__(self, index, fieldstore):
         self._index = index
         self._fields = {}
-        self._cached = {}
         self._fieldstore = fieldstore
         # load schema data from the db
         with self._index.new_txn() as txn:
             for fieldname,fieldspec in self._index.list_fields(txn):
                 self._fields[fieldname] = pickle.loads(fieldspec)
                 # verify that the field type is consistent
-                for fieldtype,instance in self._fields[fieldname].items():
-                    registered = fieldstore.getField(fieldtype)
-                    if not instance.__class__ == registered.__class__:
+                for fieldtype,stored in self._fields[fieldname].items():
+                    field = fieldstore.getField(fieldtype)
+                    if not stored.field.__class__ == field.__class__:
                         raise Exception("schema field %s:%s does not match registered type %s" % (
-                            fieldname, fieldtype, registered.__class__.__name__))
-        # create the field cache
-        for fieldname,fieldspec in self._fields.items():
-            for fieldtype,instance in fieldspec.items():
-                field = QualifiedField(fieldname, fieldtype, instance)
-                self._cached[(fieldname,fieldtype)] = field
+                            fieldname, fieldtype, field.__class__.__name__))
 
     def addField(self, fieldname, fieldtype):
-        if (fieldname,fieldtype) in self._cached:
+        if self.hasField(fieldname, fieldtype):
             raise KeyError("field %s:%s already exists in Schema" % (fieldname,fieldtype))
         if fieldname in self._fields:
             fieldspec = self._fields[fieldname]
         else:
             fieldspec = {}
-        instance = self._fieldstore.getField(fieldtype)
-        fieldspec[fieldtype] = instance
+        field = self._fieldstore.getField(fieldtype)
+        stored = QualifiedField(fieldname, fieldtype, field)
+        fieldspec[fieldtype] = stored
         with self._index.new_txn() as txn:
             self._index.add_field(txn, fieldname, pickle.dumps(fieldspec))
         self._fields[fieldname] = fieldspec
-        field = QualifiedField(fieldname, fieldtype, instance)
-        self._cached[(fieldname,fieldtype)] = field
-        return field
+        return stored
 
     def getField(self, fieldname, fieldtype):
-        return self._cached[(fieldname,fieldtype)]
+        if fieldname == None and fieldtype == None:
+            return self.getField('message', None)
+        if fieldname not in self._fields:
+            raise KeyError("%s:%s" % (fieldname, fieldtype))
+        fieldspec = self._fields[fieldname]
+        if fieldtype in fieldspec:
+            return fieldspec[fieldtype]
+        if len(fieldspec) == 1:
+            return fieldspec.values()[0]
+        raise KeyError("%s:%s" % (fieldname, fieldtype))
 
     def hasField(self, fieldname, fieldtype):
-        if (fieldname,fieldtype) in self._cached:
-            return True
-        return False
+        if fieldname not in self._fields:
+            return False
+        fieldspec = self._fields[fieldname]
+        if fieldtype not in fieldspec:
+            return False
+        return True
 
     def listFields(self):
         return self._cached.itervalues()

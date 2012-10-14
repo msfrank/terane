@@ -53,15 +53,17 @@ def writeEventToIndex(event, index):
         # create a new event identifier
         evid = EVID.fromEvent(event)
         # process the value of each field in the event
-        for assertion,value in event:
-            if not schema.hasField(assertion.fieldname, assertion.fieldtype):
-                schema.addField(assertion.fieldname, assertion.fieldtype)
-            field = schema.getField(assertion.fieldname, assertion.fieldtype)
+        fields = {}
+        for fieldname, fieldtype, value in event:
+            if not schema.hasField(fieldname, fieldtype):
+                schema.addField(fieldname, fieldtype)
+            field = schema.getField(fieldname, fieldtype)
             # update the field with the event value
             for term,meta in field.parseValue(value):
                 writer.newPosting(field, term, evid, meta)
+            fields[fieldname] = value
         # store the document data
-        writer.newEvent(event, evid)
+        writer.newEvent(fields, evid)
     # if an exception was raised, then abort the transaction
     except:
         writer.abort()

@@ -45,14 +45,7 @@ class IndexWriter(object):
         self._txn = self._ix.new_txn()
         return self
 
-    def newEvent(self, evid, fields):
-        _fields = dict()
-        for f,v in fields.items():
-            if not isinstance(v, unicode):
-                raise TypeError("field value %s must be a unicode" % fn)
-            fieldspec = "%s~%s" % (f.fieldname,f.fieldtype)
-            _fields[fieldspec] = v
-        fields = _fields
+    def newEvent(self, fields, evid):
         # serialize the fields dict and write it to the segment
         segment = self._ix._current
         segment.set_doc(self._txn, str(evid), json_encode(fields))
@@ -64,7 +57,7 @@ class IndexWriter(object):
         lastUpdate = {'size': self._currentSize, 'last-id': self._lastId, 'last-modified': self._lastModified}
         segment.set_meta(self._txn, 'last-update', json_encode(lastUpdate))
 
-    def newPosting(self, field, term, evid, value):
+    def newPosting(self, field, term, evid, meta):
         segment = self._ix._current
         try:
             fieldspec = "%s~%s" % (field.fieldname,field.fieldtype)
@@ -85,10 +78,10 @@ class IndexWriter(object):
             fmeta = {'num-docs': 1}
         # increment the document count for this field
         segment.set_field_meta(self._txn, fieldspec, json_encode(fmeta))
-        if value == None:
-            value = dict()
+        if meta == None:
+            meta = dict()
         # add the term to the reverse index
-        segment.set_term(self._txn, fieldspec, term, str(evid), json_encode(value))
+        segment.set_term(self._txn, fieldspec, term, str(evid), json_encode(meta))
 
     def commit(self):
         self._txn.commit()

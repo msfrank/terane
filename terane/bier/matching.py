@@ -42,18 +42,19 @@ class QueryTerm(object):
 
     def __str__(self):
         if self.fieldname and self.fieldtype and self.fieldfunc:
-            return "<Term %s=%s:%s(%s)>" % (self.fieldname,self.fieldtype,self.fieldfunc,self.value)
+            return "<QueryTerm %s=%s:%s(%s)>" % (self.fieldname,self.fieldtype,self.fieldfunc,self.value)
         if self.fieldname and self.fieldfunc:
-            return "<Term %s=%s(%s)>" % (self.fieldname,self.fieldfunc,self.value)
+            return "<QueryTerm %s=%s(%s)>" % (self.fieldname,self.fieldfunc,self.value)
         if self.fieldname :
-            return "<Term %s='%s'>" % (self.fieldname,self.value)
-        return "<Term '%s'>" % self.value
+            return "<QueryTerm %s='%s'>" % (self.fieldname,self.value)
+        return "<QueryTerm '%s'>" % self.value
 
     def optimizeMatcher(self, index):
         schema = index.getSchema()
-        if not schema.hasField(self.fieldname, self.fieldtype):
+        try:
+            field = schema.getField(self.fieldname, self.fieldtype)
+        except KeyError:
             return None
-        field = schema.getField(self.fieldname, self.fieldtype)
         matcher = field.makeMatcher(self.fieldfunc, self.value)
         if not matcher:
             return None

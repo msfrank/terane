@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import socket, datetime, copy, re
+import datetime, copy, re
 from collections import MutableMapping
 from dateutil.tz import tzutc
 from zope.interface import implements
@@ -43,7 +43,7 @@ class Assertion(object):
         self.accepts = accepts
 
 _assertion_input = Assertion('input', 'literal', guarantees=True, ephemeral=False)
-_assertion_hostname = Assertion('input', 'literal', guarantees=True, ephemeral=False)
+_assertion_hostname = Assertion('hostname', 'literal', guarantees=True, ephemeral=False)
 _assertion_message = Assertion('message', 'text', guarantees=True, ephemeral=False)
 
 class Contract(object):
@@ -145,7 +145,7 @@ class Contract(object):
         :type event: :class:`terane.bier.event.Event`
         :raises Exception: The validation failed.
         """
-        for assertion in self._assertions:
+        for assertion in self._assertions.itervalues():
             hasvalue = assertion in event
             if not assertion.guarantees and not hasvalue:
                 continue
@@ -203,33 +203,35 @@ class Event(MutableMapping):
         return copy.deepcopy(self)
 
     def __str__(self):
-        fields = ' '.join(["%s:%s='%s'" %(n,t,v) for n,t,v in self.fields()])
+        fields = ' '.join(["%s=%s(%s)" %(n,t,v) for n,t,v in self])
         return "<Event ts=%i id=%i %s>" % (self.ts, self.id, fields)
 
     def __len__(self):
         return len(self._values)
 
     def __iter__(self):
-        return self._values.iteritems()
+        for fieldname,(fieldtype,fieldvalue) in self._values.iteritems():
+            yield fieldname,fieldtype,fieldvalue
 
     def __contains__(self, assertion):
         if not isinstance(assertion, Assertion):
             raise TypeError("parameter must be of type Assertion")
-        if (assertion.fieldname,assertion.fieldtype) in self._values:
+        if assertion.fieldname in self._values:
             return True
         return False
 
     def __getitem__(self, assertion):
         if not isinstance(assertion, Assertion):
             raise TypeError("parameter must be of type Assertion")
-        return self._values[(assertion.fieldname,assertion.fieldtype)]
+        fieldtype,value = self._values[assertion.fieldname]
+        return value
 
     def __setitem__(self, assertion, value):
         if not isinstance(assertion, Assertion):
             raise TypeError("parameter must be of type Assertion")
-        self._values[(assertion.fieldname,assertion.fieldtype)] = value
+        self._values[assertion.fieldname] = (assertion.fieldtype, value)
 
     def __delitem__(self, assertion):
         if not isinstance(assertion, Assertion):
             raise TypeError("parameter must be of type Assertion")
-        del self._values[(assertion.fieldname,assertion.fieldtype)]
+        del self._values[assertion.fieldname]
