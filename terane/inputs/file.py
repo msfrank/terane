@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, sys
+import os, sys, socket
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred
 from zope.interface import implements
@@ -44,9 +44,7 @@ class FileInput(Input):
         self._position = None
         self._skipcount = 0
         self._errno = None
-        self._contract = Contract()
-        self._contract.addAssertion('_raw', 'literal', expects=False, guarantees=True, ephemeral=True)
-        self._contract.sign() 
+        self._contract = Contract().sign() 
 
     def configure(self, section):
         self._path = section.getString('file path', None)
@@ -92,14 +90,14 @@ class FileInput(Input):
         self._deferred.addCallbacks(self._schedule, self._tailError)
         self._deferred.addErrback(self._scheduleError)
         if value == True:
-            self._delayed = reactor.callLater(0, self._deferred.callback, None)
+            self._delayed = reactor.callLater(0.00000001, self._deferred.callback, None)
         else:
             self._delayed = reactor.callLater(self._interval, self._deferred.callback, None)
         logger.trace("[input:%s] rescheduled tail" % self.name)
 
     def _tailError(self, failure):
         logger.debug("[input:%s] error tailing file: %s" % (self.name,str(failure)))
-        self._schedule()
+        self._schedule(False)
         return failure
 
     def _scheduleError(self, failure):
@@ -252,10 +250,10 @@ class FileInput(Input):
         if line.isspace():
             return
         logger.trace("[input:%s] received line: %s" % (self.name,line))
-        event = self._evfactory.newEvent()
-        event[self._contract.field_input] = self.name
+        event = self._evfactory.makeEvent()
         event[self._contract.field_message] = line
-        event[self._contract.field__raw] = line
+        event[self._contract.field_hostname] = socket.gethostname()
+        event[self._contract.field_input] = self.name
         self._dispatcher.emitSignal(event)
 
     def stopService(self):
