@@ -46,10 +46,6 @@ class QueryResult(object):
         self.meta = meta
         self.data = data
 
-    @classmethod
-    def fromData(cls, data):
-        pass
-
     def __str__(self):
         return "<QueryResult meta=%s, data=%s>" % (self.meta, self.data)
 
@@ -168,8 +164,10 @@ class QueryManager(Manager):
         except SearcherError, e:
             raise QueryExecutionError(str(e))
         def _returnIterResult(result):
-            if isinstance(result, Failure) and result.check(SearcherError):
-                raise QueryExecutionError(str(e))
+            if isinstance(result, Failure): 
+                if result.check(SearcherError):
+                    raise QueryExecutionError(result.getErrorMessage())
+                result.raiseException()
             return QueryResult({'runtime': result.runtime, 'fields': result.fields}, result.events)
         return task.whenDone().addBoth(_returnIterResult)
 
