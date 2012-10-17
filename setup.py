@@ -11,6 +11,17 @@ from os.path import abspath, dirname
 sys.path.insert(0, abspath(dirname(__file__)))
 from terane import versionstring
 
+# set extension module build parameters
+extra_include_dirs = []
+if 'TERANE_EXTRA_INCLUDE_PATH' in os.environ:
+    extra_include_dirs = os.environ['TERANE_EXTRA_INCLUDE_PATH'].split(':')
+extra_library_dirs = []
+if 'TERANE_EXTRA_LIBRARY_PATH' in os.environ:
+    extra_library_dirs = os.environ['TERANE_EXTRA_LIBRARY_PATH'].split(':')
+extra_runtime_dirs = []
+if 'TERANE_EXTRA_RUNTIME_PATH' in os.environ:
+    extra_runtime_dirs = os.environ['TERANE_EXTRA_RUNTIME_PATH'].split(':')
+
 setup(
     # package description
     name = "Terane",
@@ -82,6 +93,10 @@ setup(
             ],
             # link against libdb and libmsgpack
             libraries=['db', 'msgpack'],
+            # set search paths for headers and libraries
+            include_dirs=extra_include_dirs,
+            library_dirs=extra_library_dirs,
+            runtime_library_dirs=extra_runtime_dirs,
             # turn off optimization for better stack traces
             extra_compile_args=['-O0', '-Wall']
             )
