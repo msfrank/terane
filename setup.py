@@ -71,6 +71,8 @@ setup(
             'terane/outputs/store/backend-index-segment.c',
             'terane/outputs/store/backend-iter.c',
             'terane/outputs/store/backend-logfd.c',
+            'terane/outputs/store/backend-msgpack-dump.c',
+            'terane/outputs/store/backend-msgpack-load.c',
             'terane/outputs/store/backend-segment.c',
             'terane/outputs/store/backend-segment-doc.c',
             'terane/outputs/store/backend-segment-field.c',
@@ -78,9 +80,10 @@ setup(
             'terane/outputs/store/backend-segment-term.c',
             'terane/outputs/store/backend-txn.c',
             ],
-            libraries=['db',],
+            # link against libdb and libmsgpack
+            libraries=['db', 'msgpack'],
             # turn off optimization for better stack traces
-            extra_compile_args=['-O0']
+            extra_compile_args=['-O0', '-Wall']
             )
         ],
     entry_points={

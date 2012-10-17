@@ -17,15 +17,15 @@
  * along with Terane.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef TERANE_STORAGE_H
-#define TERANE_STORAGE_H
+#ifndef TERANE_OUTPUTS_STORE_BACKEND_H
+#define TERANE_OUTPUTS_STORE_BACKEND_H
 
 #include <Python.h>
 #include <unistd.h>
 #include <db.h>
 #include <pthread.h>
 #include <assert.h>
-
+#include <msgpack.h>
 
 /*
  * class object declarations
@@ -156,6 +156,14 @@ void       terane_log_msg (int level, const char *logger, const char *fmt, ...);
 PyObject * terane_Module_log_fd (PyObject *self);
 
 /*
+ * msgpack serialization declarations
+ */
+int        _terane_msgpack_dump (PyObject *obj, char **buf, uint32_t *len);
+PyObject * terane_msgpack_dump (PyObject *self, PyObject *args);
+int        _terane_msgpack_load (const char *buf, uint32_t len, PyObject **dest);
+PyObject * terane_msgpack_load (PyObject *self, PyObject *args);
+
+/*
  * class type declarations
  */
 extern PyTypeObject terane_IterType;
@@ -193,4 +201,5 @@ extern PyObject *terane_Exc_Error;
 #define TERANE_LOG_DEBUG            40
 #define TERANE_LOG_TRACE            50
 
+/* TERANE_OUTPUTS_STORE_BACKEND_H */
 #endif

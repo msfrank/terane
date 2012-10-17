@@ -5,6 +5,10 @@ static PyMethodDef backend_functions[] =
 {
     { "log_fd", (PyCFunction) terane_Module_log_fd, METH_NOARGS,
         "Return the reading end of the logger channel." },
+    { "msgpack_dump", (PyCFunction) terane_msgpack_dump, METH_VARARGS,
+        "Serialize the object." },
+    { "msgpack_load", (PyCFunction) terane_msgpack_load, METH_VARARGS,
+        "Deserialize the object." },
     { NULL, NULL, 0, NULL }
 };
 
