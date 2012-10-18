@@ -60,7 +60,7 @@ terane_Index_get_meta (terane_Index *self, PyObject *args)
     switch (dbret) {
         case 0:
             /* create a python string from the data */
-            metadata = PyString_FromString ((char *) data.data);
+            _terane_msgpack_load ((const char *) data.data, data.size, &metadata);
             break;
         case DB_NOTFOUND:
         case DB_KEYEMPTY:
@@ -88,7 +88,7 @@ terane_Index_get_meta (terane_Index *self, PyObject *args)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  *   id (string): The metadata id
- *   value (string): Metadata to store
+ *   value (object): Metadata to store
  * returns: None
  * exceptions:
  *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
@@ -98,20 +98,21 @@ terane_Index_set_meta (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     const char *id = NULL;
-    const char *metadata = NULL;
+    PyObject *metadata = NULL;
     DBT key, data;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!ss", &terane_TxnType, &txn, &id, &metadata))
+    if (!PyArg_ParseTuple (args, "O!sO", &terane_TxnType, &txn, &id, &metadata))
         return NULL;
-
+    /*  set the key */
     memset (&key, 0, sizeof (DBT));
-    memset (&data, 0, sizeof (DBT));
     key.data = (char *) id;
     key.size = strlen (id) + 1;
-    data.data = (char *) metadata;
-    data.size = strlen(metadata) + 1;
+    /* serialize the metadata */
+    memset (&data, 0, sizeof (DBT));
+    if (!_terane_msgpack_dump (metadata, (char **) &data.data, &data.size))
+        return NULL;
     /* set the record */
     dbret = self->metadata->put (self->metadata, txn->txn, &key, &data, 0);
     /* db error, raise Exception */
@@ -123,5 +124,7 @@ terane_Index_set_meta (terane_Index *self, PyObject *args)
                 (char *) key.data, db_strerror (dbret));
             break;
     }
+    if (data.data)
+        PyMem_Free (data.data);
     Py_RETURN_NONE;
 }

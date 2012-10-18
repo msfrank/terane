@@ -26,7 +26,7 @@
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   fieldname (string): The field name
- * returns: string representing the pickled FieldType.
+ * returns: The field specification.
  * exceptions:
  *   terane.outputs.store.backend.Error: A db error occurred when trying to get the field
  */
@@ -58,8 +58,8 @@ terane_Index_get_field (terane_Index *self, PyObject *args)
     dbret = self->schema->get (self->schema, txn? txn->txn : NULL, &key, &data, 0);
     switch (dbret) {
         case 0:
-            /* create a python string from the data */
-            fieldspec = PyString_FromString ((char *) data.data);
+            /* deserialize the data */
+            _terane_msgpack_load ((const char *) data.data, data.size, &fieldspec);
             break;
         case DB_NOTFOUND:
         case DB_KEYEMPTY:
@@ -87,7 +87,7 @@ terane_Index_get_field (terane_Index *self, PyObject *args)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  *   fieldname (string): The field name
- *   pickledfield (string): String representing the pickled FieldType
+ *   fieldspec (object): The field specification.
  * returns: None
  * exceptions:
  *   terane.outputs.store.backend.Error: A db error occurred when trying to add the field
@@ -97,25 +97,29 @@ terane_Index_add_field (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     char *fieldname = NULL;
-    char *pickledfield = NULL;
+    PyObject *fieldspec = NULL;
     DBT key, data;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!ss", &terane_TxnType, &txn,
-        &fieldname, &pickledfield))
+    if (!PyArg_ParseTuple (args, "O!sO", &terane_TxnType, &txn,
+        &fieldname, &fieldspec))
         return NULL;
 
     /* add the fieldspec to the schema */
     memset (&key, 0, sizeof (DBT));
-    memset (&data, 0, sizeof (DBT));
     key.data = fieldname;
     key.size = strlen (fieldname) + 1;
-    data.data = pickledfield;
-    data.size = strlen (pickledfield) + 1;
+    /* serialize fieldspec */
+    memset (&data, 0, sizeof (DBT));
+    if (_terane_msgpack_dump (fieldspec, (char **) &data.data, &data.size) < 0)
+        return NULL;
+    /* set the record */
     dbret = self->schema->put (self->schema, txn->txn, &key, &data, DB_NOOVERWRITE);
     switch (dbret) {
         case 0:
+            /* increment the internal field count */
+            self->nfields += 1;
             break;
         case DB_KEYEXIST:
             PyErr_Format (PyExc_KeyError, "Field %s already exists", fieldname);
@@ -125,8 +129,8 @@ terane_Index_add_field (terane_Index *self, PyObject *args)
                 fieldname, db_strerror (dbret));
             break;
     }
-    /* increment the internal field count */
-    self->nfields += 1;
+    if (data.data)
+        PyMem_Free (data.data);
     Py_RETURN_NONE;
 }
 
@@ -207,7 +211,7 @@ terane_Index_list_fields (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     DBC *cursor = NULL;
-    PyObject *fields = NULL, *tuple = NULL, *fieldname = NULL, *pickledfield = NULL;
+    PyObject *fields = NULL, *tuple = NULL, *fieldname = NULL, *fieldspec = NULL;
     DBT key, data;
     int dbret;
 
@@ -246,18 +250,17 @@ terane_Index_list_fields (terane_Index *self, PyObject *args)
                 fieldname = PyString_FromStringAndSize (key.data, key.size - 1);
                 if (fieldname == NULL)
                     goto error;
-                pickledfield = PyString_FromStringAndSize (data.data, data.size - 1);
-                if (pickledfield == NULL)
+                if (_terane_msgpack_load ((const char *) data.data, data.size, &fieldspec) < 0)
                     goto error;
-                tuple = PyTuple_Pack (2, fieldname, pickledfield);
+                tuple = PyTuple_Pack (2, fieldname, fieldspec);
                 if (tuple == NULL)
                     goto error;
                 if (PyList_Append (fields, tuple) < 0)
                     goto error;
                 Py_DECREF (fieldname);
                 fieldname = NULL;
-                Py_DECREF (pickledfield);
-                pickledfield = NULL;
+                Py_DECREF (fieldspec);
+                fieldspec = NULL;
                 Py_DECREF (tuple);
                 tuple = NULL;
                 if (key.data)
@@ -283,8 +286,8 @@ error:
         cursor->close (cursor);
     if (fieldname != NULL)
         Py_DECREF (fieldname);
-    if (pickledfield != NULL)
-        Py_DECREF (pickledfield);
+    if (fieldspec != NULL)
+        Py_DECREF (fieldspec);
     if (tuple != NULL)
         Py_DECREF (tuple);
     if (fields != NULL)
