@@ -47,10 +47,9 @@ terane_Index_get_field (terane_Index *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    /* use the document id as the record number */
     memset (&key, 0, sizeof (DBT));
     key.data = (char *) fieldname;
-    key.size = strlen(fieldname) + 1;
+    key.size = strlen (fieldname) + 1;
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
 
@@ -106,14 +105,13 @@ terane_Index_add_field (terane_Index *self, PyObject *args)
         &fieldname, &fieldspec))
         return NULL;
 
-    /* add the fieldspec to the schema */
     memset (&key, 0, sizeof (DBT));
     key.data = fieldname;
     key.size = strlen (fieldname) + 1;
-    /* serialize fieldspec */
     memset (&data, 0, sizeof (DBT));
     if (_terane_msgpack_dump (fieldspec, (char **) &data.data, &data.size) < 0)
         return NULL;
+
     /* set the record */
     dbret = self->schema->put (self->schema, txn->txn, &key, &data, DB_NOOVERWRITE);
     switch (dbret) {
@@ -166,12 +164,12 @@ PyObject *
 terane_Index_contains_field (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    PyObject *fieldname = NULL;
+    char *fieldname = NULL;
     DBT key;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OO!", &txn, &PyString_Type, &fieldname))
+    if (!PyArg_ParseTuple (args, "Os", &txn, &fieldname))
         return NULL;
     if ((PyObject *)txn == Py_None)
         txn = NULL;
@@ -180,8 +178,8 @@ terane_Index_contains_field (terane_Index *self, PyObject *args)
 
     /* see if fieldname exists in the schema */
     memset (&key, 0, sizeof (key));
-    key.data = PyString_AsString (fieldname);
-    key.size = PyString_Size (fieldname) + 1;
+    key.data = fieldname;
+    key.size = strlen (fieldname) + 1;
     dbret = self->schema->exists (self->schema, txn? txn->txn : NULL, &key, 0);
     switch (dbret) {
         case 0:
@@ -190,7 +188,7 @@ terane_Index_contains_field (terane_Index *self, PyObject *args)
             Py_RETURN_FALSE;
         default:
             PyErr_Format (terane_Exc_Error, "Failed to lookup field %s in schema: %s",
-                PyString_AsString (fieldname), db_strerror (dbret));
+                fieldname, db_strerror (dbret));
             break;
     }
     return NULL;
