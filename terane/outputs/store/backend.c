@@ -3,7 +3,7 @@
 /* backend module function table */
 static PyMethodDef backend_functions[] =
 {
-    { "log_fd", (PyCFunction) terane_Module_log_fd, METH_NOARGS,
+    { "log_fd", (PyCFunction) terane_log_fd, METH_NOARGS,
         "Return the reading end of the logger channel." },
     { "msgpack_dump", (PyCFunction) terane_msgpack_dump, METH_VARARGS,
         "Serialize the object." },

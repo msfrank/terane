@@ -26,7 +26,7 @@ static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
  * terane_log_fd: return the fd where log messages are written to.
  */
 PyObject *
-terane_Module_log_fd (PyObject *self)
+terane_log_fd (PyObject *self)
 {
     int fd;
 
