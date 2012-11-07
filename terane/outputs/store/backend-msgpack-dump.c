@@ -19,95 +19,122 @@
 
 #include "backend.h"
 
-/*
- * _msgpack_dump_object:
- */
-static int
-_msgpack_dump_object (PyObject *obj, msgpack_packer *packer)
-{
-    int32_t i32;
-    uint64_t u64;
-    int64_t i64;
-    double d;
-    char *s;
-    PyObject *utf8, *seq, **items, *key, *value;
-    Py_ssize_t size, i = 0;
+#define HTONS(s)        htons(s)
+#define HTONL(l)        htonl(l)
+#define HTONQ(q)        htobe64(q)
 
-    if (obj == NULL)
-        return 0;
-    /* None */
+/*
+ * _terane_msgpack_make_value:
+ */
+terane_value *
+_terane_msgpack_make_value (PyObject *obj)
+{
+    terane_value *value = NULL;
+
+    value = PyMem_Malloc (sizeof (terane_value));
+    if (value == NULL)
+        return NULL;
+
     if (obj == Py_None) {
-        msgpack_pack_nil (packer);
+        value->type = TERANE_MSGPACK_TYPE_NONE;
+        return value;
     }
-    /* True */
-    else if (obj == Py_True) {
-        msgpack_pack_true (packer);
-    }
-    /* False */
     else if (obj == Py_False) {
-        msgpack_pack_false (packer);
+        value->type = TERANE_MSGPACK_TYPE_FALSE;
+        return value;
     }
-    /* int */
-    else if (PyInt_CheckExact (obj)) {
-        i32 = PyInt_AsLong (obj);
-        msgpack_pack_int32 (packer, i32);
+    else if (obj == Py_True) {
+        value->type = TERANE_MSGPACK_TYPE_TRUE;
+        return value;
     }
-    /* long */
-    else if (PyLong_CheckExact (obj)) {
+    else if (PyInt_CheckExact (obj) || PyLong_CheckExact (obj)) {
+        PY_LONG_LONG i64;
+        unsigned PY_LONG_LONG u64;
+
+        /* most likely the val is within the int64 range */
         i64 = PyLong_AsLongLong (obj);
-        if (!PyErr_Occurred())
-            msgpack_pack_int64 (packer, i64);
-        else {
-            if (!PyErr_ExceptionMatches (PyExc_OverflowError))
-                return -1;
-            PyErr_Clear ();
+        if (PyErr_Occurred ()) {
+            /* bail if we got an exception other than overflow */
+            if (PyErr_ExceptionMatches (PyExc_OverflowError)) {
+                PyMem_Free (value);
+                return NULL;
+            }
             u64 = PyLong_AsUnsignedLongLong (obj);
-            if (PyErr_Occurred())
-                return -1;
-            msgpack_pack_uint64 (packer, u64);
+            /* this shouldn't happen, but semper paratus */
+            if (PyErr_Occurred ()) {
+                PyMem_Free (value);
+                return NULL;
+            }
+            if (u64 > INT32_MAX) {
+                value->type = TERANE_MSGPACK_TYPE_UINT64;
+                value->data.u64 = u64;
+                return value;
+            }
+            value->type = TERANE_MSGPACK_TYPE_UINT32;
+            value->data.i32 = (uint32_t) u64;
+            return value;
         }
+        /* obj is negative */
+        if (i64 < 0) {
+            if (i64 < INT32_MIN) {
+                value->type = TERANE_MSGPACK_TYPE_INT64;
+                value->data.i64 = i64;
+                return value;
+            }
+            value->type = TERANE_MSGPACK_TYPE_INT32;
+            value->data.i32 = (int32_t) i64;
+            return value;
+        }
+        /* obj is positive */
+        else {
+            if (i64 > INT32_MAX) {
+                value->type = TERANE_MSGPACK_TYPE_UINT64;
+                value->data.u64 = (uint64_t) i64;
+                return value;
+            }
+            value->type = TERANE_MSGPACK_TYPE_UINT32;
+            value->data.i32 = (uint32_t) i64;
+            return value;
+        }
+        return NULL;
     }
-    /* float */
     else if (PyFloat_CheckExact (obj)) {
-        d = PyFloat_AsDouble (obj);
-        msgpack_pack_double (packer, d);
+        PyMem_Free (value);
+        return NULL;
     }
-    /* unicode */
     else if (PyUnicode_CheckExact (obj)) {
+        PyObject *utf8;
+        char *buf = NULL;
+        Py_ssize_t len = 0;
+
         utf8 = PyUnicode_AsUTF8String (obj);
-        PyString_AsStringAndSize (utf8, &s, &size);
-        msgpack_pack_raw (packer, size);
-        msgpack_pack_raw_body (packer, s, size);
+        if (utf8 == NULL) {
+            PyMem_Free (value);
+            return NULL;
+        }
+        value->type = TERANE_MSGPACK_TYPE_RAW;
+        if (PyString_AsStringAndSize (utf8, &buf, &len) < 0) {
+            Py_DECREF (utf8);
+            PyMem_Free (value);
+            return NULL;
+        }
+        value->data.raw.bytes = PyMem_Malloc (len + 1);
+        if (value->data.raw.bytes == NULL) {
+            Py_DECREF (utf8);
+            PyMem_Free (value);
+            return NULL;
+        }
+        memcpy (value->data.raw.bytes, buf, len);
+        value->data.raw.bytes[len] = 0;
+        value->data.raw.size = len;
         Py_DECREF (utf8);
+        return value;
     }
-    /* list */
-    else if (PyList_CheckExact (obj)) {
-        seq = PySequence_Fast (obj, NULL);
-        size = PySequence_Fast_GET_SIZE (seq);
-        items = PySequence_Fast_ITEMS (seq);
-        msgpack_pack_array (packer, size);
-        for (i = 0; i < size; i++) {
-            if (_msgpack_dump_object (items[i], packer) < 0)
-                return -1;
-        }
-    }
-    /* dict */
-    else if (PyDict_CheckExact (obj)) {
-        size = PyDict_Size (obj);
-        msgpack_pack_map (packer, size);
-        while (PyDict_Next (obj, &i, &key, &value)) {
-            if (_msgpack_dump_object (key, packer) < 0)
-                return -1;
-            if (_msgpack_dump_object (value, packer) < 0)
-                return -1;
-        }
-    }
-    /* unknown type */
-    else {
-        PyErr_Format (PyExc_ValueError, "can't serialize type %s", obj->ob_type->tp_name);
-        return -1;
-    }
-    return 0;
+
+    PyMem_Free (value);
+    PyErr_Format (PyExc_ValueError, "can't dump value of type %s",
+        obj->ob_type->tp_name);
+    return NULL;
 }
 
 struct _buffer {
@@ -132,30 +159,298 @@ _buffer_write (struct _buffer *buffer, const char *buf, unsigned int len)
 }
 
 /*
+ * _msgpack_dump_value:
+ */
+static int
+_msgpack_dump_value (PyObject *obj, struct _buffer *buffer)
+{
+    terane_value *value = NULL;
+    terane_conv conv;
+    int ret = -1;
+
+    value = _terane_msgpack_make_value (obj);
+    if (value == NULL)
+        return -1;
+
+    switch (value->type) {
+        /* None */
+        case TERANE_MSGPACK_TYPE_NONE:
+            if (_buffer_write (buffer, "\xc0", 1) < 0)
+                goto error;
+            break;
+        /* False */
+        case TERANE_MSGPACK_TYPE_FALSE: 
+            if (_buffer_write (buffer, "\xc2", 1) < 0)
+                goto error;
+            break;
+        /* True */
+        case TERANE_MSGPACK_TYPE_TRUE:
+            if (_buffer_write (buffer, "\xc3", 1) < 0)
+                goto error;
+            break;
+        /* int 64 */
+        case TERANE_MSGPACK_TYPE_INT64:
+            if (value->data.i64 >= 0 || value->data.i64 < -2147483648LL) {
+                PyErr_Format (PyExc_ValueError, "int64 value is out of range (%lld)",
+                    value->data.i64);
+                goto error;
+            }
+            if (_buffer_write (buffer, "\xd3", 1) < 0)
+                goto error;
+            conv.i64 = HTONQ(value->data.i64);
+            if (_buffer_write (buffer, (char *) &conv.i64, 8) < 0)
+                goto error;
+            break;
+        case TERANE_MSGPACK_TYPE_INT32:
+            if (value->data.i32 >= 0) {
+                PyErr_Format (PyExc_ValueError, "int32 value is out of range (%ld)",
+                    (long int) value->data.i32);
+                goto error;
+            }
+            /* negative fixnum */
+            if (value->data.i32 >= -32) {
+                conv.i8 = (int8_t) value->data.i32;
+                if (_buffer_write (buffer, (char *) &conv.i8, 1) < 0)
+                    goto error;
+            }
+            /* int 8 */
+            else if (value->data.i32 >= -128) {
+                if (_buffer_write (buffer, "\xd0", 1) < 0)
+                    goto error;
+                conv.i8 = (int8_t) value->data.i32;
+                if (_buffer_write (buffer, (char *) &conv.i8, 1) < 0)
+                    goto error;
+            }
+            /* int 16 */
+            else if (value->data.i32 >= 32768) {
+                if (_buffer_write (buffer, "\xd1", 1) < 0)
+                    goto error;
+                conv.i16 = HTONS((int16_t) value->data.i32);
+                if (_buffer_write (buffer, (char *) &conv.i16, 2) < 0)
+                    goto error;
+            }
+            /* int 32 */
+            else {
+                if (_buffer_write (buffer, "\xd2", 1) < 0)
+                    goto error;
+                conv.i32 = HTONL(value->data.i32);
+                if (_buffer_write (buffer, (char *) &conv.i32, 4) < 0)
+                    goto error;
+            }
+            break;
+        case TERANE_MSGPACK_TYPE_UINT32:
+            /* positive fixnum */
+            if (value->data.u32 < 128) {
+                conv.u8 = (uint8_t) value->data.u32;
+                if (_buffer_write (buffer, (char *) &conv.u8, 1) < 0)
+                    goto error;
+            }
+            /* uint 8 */
+            else if (value->data.u32 < 256) {
+                if (_buffer_write (buffer, "\xcc", 1) < 0)
+                    goto error;
+                conv.u8 = (uint8_t) value->data.u32;
+                if (_buffer_write (buffer, (char *) &conv.u8, 1) < 0)
+                    goto error;
+            }
+            /* uint 16 */
+            else if (value->data.i32 < 32768) {
+                if (_buffer_write (buffer, "\xcd", 1) < 0)
+                    goto error;
+                conv.u16 = HTONS((uint16_t) value->data.u32);
+                if (_buffer_write (buffer, (char *) &conv.u16, 2) < 0)
+                    goto error;
+            }
+            /* uint 32 */
+            else {
+                if (_buffer_write (buffer, "\xde", 1) < 0)
+                    goto error;
+                conv.u32 = HTONL(value->data.u32);
+                if (_buffer_write (buffer, (char *) &conv.u32, 4) < 0)
+                    goto error;
+            }
+            break;
+        /* uint 64 */
+        case TERANE_MSGPACK_TYPE_UINT64:
+            if (value->data.u64 < 2147483648LL) {
+                PyErr_Format (PyExc_ValueError, "int64 value is out of range (%llu)",
+                    value->data.u64);
+                goto error;
+            }
+            if (_buffer_write (buffer, "\xcf", 1) < 0)
+                return -1;
+            conv.u64 = HTONQ(value->data.u64);
+            if (_buffer_write (buffer, (char *) &conv.u64, 8) < 0)
+                return -1;
+            break;
+        /* double */
+        case TERANE_MSGPACK_TYPE_DOUBLE:
+            goto error;
+        case TERANE_MSGPACK_TYPE_RAW:
+            /* fixraw */
+            if (value->data.raw.size < 32) {
+                conv.u8 = ((uint8_t) value->data.raw.size) | 0xa0;
+                if (_buffer_write (buffer, (char *) &conv.u8, 1) < 0)
+                    goto error;
+                if (_buffer_write (buffer, value->data.raw.bytes, value->data.raw.size) < 0)
+                    goto error;
+            }
+            /* raw 16 */
+            else if (value->data.raw.size < 32768) {
+                if (_buffer_write (buffer, "\xda", 1) < 0)
+                    goto error;
+                conv.u16 = HTONS((uint16_t) value->data.raw.size);
+                if (_buffer_write (buffer, (char *) &conv.u16, 2) < 0)
+                    goto error;
+                if (_buffer_write (buffer, value->data.raw.bytes, value->data.raw.size) < 0)
+                    goto error;
+            }
+            /* raw 32 */
+            else {
+                if (_buffer_write (buffer, "\xdb", 1) < 0)
+                    goto error;
+                conv.u32 = HTONL(value->data.raw.size);
+                if (_buffer_write (buffer, (char *) &conv.u32, 4) < 0)
+                    goto error;
+                if (_buffer_write (buffer, value->data.raw.bytes, value->data.raw.size) < 0)
+                    goto error;
+            }
+            break;
+        /* unknown type */
+        default:
+            PyErr_Format (PyExc_ValueError, "can't dump value of type %s",
+                obj->ob_type->tp_name);
+            goto error;
+    }
+    /* if we reach here, then we have succeeded in writing a value */
+    ret = 1;
+
+error:
+    if (value)
+        _terane_msgpack_free_value (value);
+    return ret;
+}
+
+/*
+ * _msgpack_dump_object:
+ */
+static int
+_msgpack_dump_object (PyObject *obj, struct _buffer *buffer)
+{
+    uint8_t u8;
+    uint16_t u16;
+    uint32_t u32;
+    PyObject **items, *key, *value;
+    Py_ssize_t size, i = 0;
+
+    if (obj == NULL)
+        return 0;
+
+    /* list */
+    else if (PyTuple_CheckExact (obj)) {
+        size = PySequence_Fast_GET_SIZE (obj);
+        items = PySequence_Fast_ITEMS (obj);
+
+        /* fix array */
+        if (size < 16) {
+            u8 = (uint8_t) size | 0x90;
+            if (_buffer_write (buffer, (char *) &u8, 1) < 0)
+                return -1;
+        }
+        /* array 16 */
+        else if (size < 65536) {
+            u8 = 0xdc;
+            u16 = (uint16_t) size;
+            u16 = HTONS(u16);
+            if (_buffer_write (buffer, (char *) &u8, 1) < 0)
+                return -1;
+            if (_buffer_write (buffer, (char *) &u16, 2) < 0)
+                return -1;
+        }
+        /* array 32 */
+        else {
+            u8 = 0xdc;
+            u32 = (uint32_t) size;
+            u32 = HTONL(u32);
+            if (_buffer_write (buffer, (char *) &u8, 1) < 0)
+                return -1;
+            if (_buffer_write (buffer, (char *) &u32, 4) < 0)
+                return -1;
+        }
+        /* write each tuple item */
+        for (i = 0; i < size; i++) {
+            if (_msgpack_dump_object (items[i], buffer) < 0)
+                return -1;
+        }
+        return 1;
+    }
+    /* dict */
+    else if (PyDict_CheckExact (obj)) {
+        size = PyDict_Size (obj);
+
+        /* fix map */
+        if (size < 16) {
+            u8 = (uint8_t) size | 0x80;
+            if (_buffer_write (buffer, (char *) &u8, 1) < 0)
+                return -1;
+        }
+        /* map 16 */
+        else if (size < 65536) {
+            u8 = 0xde;
+            u16 = (uint16_t) size;
+            u16 = HTONS(u16);
+            if (_buffer_write (buffer, (char *) &u8, 1) < 0)
+                return -1;
+            if (_buffer_write (buffer, (char *) &u16, 2) < 0)
+                return -1;
+        }
+        /* map 32 */
+        else {
+            u8 = 0xdf;
+            u32 = (uint32_t) size;
+            u32 = HTONL(u32);
+            if (_buffer_write (buffer, (char *) &u8, 1) < 0)
+                return -1;
+            if (_buffer_write (buffer, (char *) &u32, 4) < 0)
+                return -1;
+        }
+
+        /* write each dict item */
+        while (PyDict_Next (obj, &i, &key, &value)) {
+            if (_msgpack_dump_object (key, buffer) < 0)
+                return -1;
+            if (_msgpack_dump_object (value, buffer) < 0)
+                return -1;
+        }
+        return 1;
+    }
+
+    return _msgpack_dump_value (obj, buffer);
+}
+
+/*
  * _terane_msgpack_dump: serialize a python object into a buffer.
  */
 int
 _terane_msgpack_dump (PyObject *obj, char **buf, uint32_t *len)
 {
     struct _buffer buffer;
-    msgpack_packer packer;
     PyObject *seq, **items;
     Py_ssize_t nitems, i;
 
     memset (&buffer, 0, sizeof (buffer));
-    msgpack_packer_init (&packer, &buffer, (msgpack_packer_write) _buffer_write);
 
     if (PyList_CheckExact (obj)) {
         seq = PySequence_Fast (obj, NULL);
         nitems = PySequence_Fast_GET_SIZE (seq);
         items = PySequence_Fast_ITEMS (seq);
         for (i = 0; i < nitems; i++) {
-            if (_msgpack_dump_object (items[i], &packer) < 0)
+            if (_msgpack_dump_object (items[i], &buffer) < 0)
                 goto error;
         }
     }
     else {
-        if (_msgpack_dump_object (obj, &packer) < 0)
+        if (_msgpack_dump_object (obj, &buffer) < 0)
             goto error;
     }
     *buf = buffer.data;
@@ -195,4 +490,19 @@ terane_msgpack_dump (PyObject *self, PyObject *args)
     if (buf)
         PyMem_Free (buf);
     return str;
+}
+
+/*
+ * _terane_msgpack_free_value:
+ */
+void
+_terane_msgpack_free_value (terane_value *value)
+{
+    assert (value != NULL);
+
+    if (value->type == TERANE_MSGPACK_TYPE_RAW) {
+        if (value->data.raw.bytes != NULL)
+            PyMem_Free (value->data.raw.bytes);
+    }
+    PyMem_Free (value);
 }
