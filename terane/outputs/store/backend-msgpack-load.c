@@ -169,7 +169,7 @@ _terane_msgpack_load_value (char *          buf,
             conv = (terane_conv *) *pos;
             val->type = TERANE_MSGPACK_TYPE_RAW;
             val->data.raw.size = NTOHL(conv->u32);
-            *pos += 2;
+            *pos += 4;
             if (!CONTAINS_BYTES(buf, len, pos, val->data.raw.size))
                 return -1;
             val->data.raw.bytes = *pos;
@@ -186,7 +186,7 @@ _terane_msgpack_load_value (char *          buf,
         return 1;
     }
     /* Negative FixNum */
-    if (type & 0xe0) {
+    if ((type & 0xe0) == 0xe0) {
         val->type = TERANE_MSGPACK_TYPE_INT32;
         val->data.i32 = (int8_t) type;
         return 1;

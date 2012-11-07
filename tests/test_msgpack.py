@@ -94,8 +94,20 @@ class Msgpack_Tests(unittest.TestCase):
         v = str("hello, world!")
         self.failUnlessRaises(ValueError, msgpack_dump, v)
 
-    def test_unicode(self):
+    def test_fixraw(self):
         v = unicode("hello, world!")
+        s = msgpack_dump(v)
+        o = msgpack_load(s)
+        self.failUnless(o == v, "o=%s, v=%s" % (o,v))
+
+    def test_raw16(self):
+        v = unicode("helloworld") * 10
+        s = msgpack_dump(v)
+        o = msgpack_load(s)
+        self.failUnless(o == v, "o=%s, v=%s" % (o,v))
+
+    def test_raw32(self):
+        v = unicode("helloworld") * 10000
         s = msgpack_dump(v)
         o = msgpack_load(s)
         self.failUnless(o == v, "o=%s, v=%s" % (o,v))

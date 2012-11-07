@@ -263,7 +263,7 @@ _msgpack_dump_value (PyObject *obj, struct _buffer *buffer)
             }
             /* uint 32 */
             else {
-                if (_buffer_write (buffer, "\xde", 1) < 0)
+                if (_buffer_write (buffer, "\xce", 1) < 0)
                     goto error;
                 conv.u32 = HTONL(value->data.u32);
                 if (_buffer_write (buffer, (char *) &conv.u32, 4) < 0)
