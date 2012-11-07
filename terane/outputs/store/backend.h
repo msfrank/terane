@@ -22,10 +22,11 @@
 
 #include <Python.h>
 #include <unistd.h>
+#include <arpa/inet.h>
+#include <endian.h>
 #include <db.h>
 #include <pthread.h>
 #include <assert.h>
-#include <msgpack.h>
 
 /*
  * class object declarations
@@ -46,21 +47,57 @@ typedef struct _terane_Index {
     unsigned long nfields;
 } terane_Index;
 
+typedef struct {
+    int type;
+    union {
+        uint32_t u32;
+        int32_t i32;
+        uint64_t u64;
+        int64_t i64;
+        double f64;
+        struct {
+            char *bytes;
+            Py_ssize_t size;
+        } raw;
+    } data;
+} terane_value;
+
+typedef union {
+    uint8_t u8;
+    int8_t i8;
+    uint16_t u16;
+    int16_t i16;
+    uint32_t u32;
+    int32_t i32;
+    uint64_t u64;
+    int64_t i64;
+    struct {
+        char *bytes;
+        uint32_t size;
+    } raw;
+} terane_conv;
+
+typedef struct {
+    terane_value **values;
+    Py_ssize_t size;
+} terane_iterkey;
+
 typedef struct _terane_Iter {
     PyObject_HEAD
     PyObject *parent;
     DBC *cursor;
     int initialized;
     int itype;
-    DBT start_key;
-    DBT end_key;
+    terane_iterkey *start;
+    terane_iterkey *end;
+    DBT range;
     int reverse;
     PyObject *(*next)(struct _terane_Iter *, DBT *, DBT *);
-    DBT *(*skip)(struct _terane_Iter *, PyObject *);
+    PyObject *(*skip)(struct _terane_Iter *, PyObject *);
 } terane_Iter;
 
 typedef PyObject *(*terane_Iter_next_cb)(terane_Iter *, DBT *, DBT *);
-typedef DBT *(*terane_Iter_skip_cb)(terane_Iter *, PyObject *);
+typedef PyObject *(*terane_Iter_skip_cb)(terane_Iter *, PyObject *);
 
 typedef struct _terane_Iter_ops {
     terane_Iter_next_cb next;
@@ -80,8 +117,10 @@ typedef struct _terane_Segment {
     terane_Index *index;    /* reference to the table of contents */
     char *name;             /* name of the segment file */
     DB *metadata;           /* DB handle to the segment metadata */
-    DB *documents;          /* DB handle to the segment documents */
+    DB *events;             /* DB handle to the segment events */
     DB *postings;           /* DB handle to the segment postings */
+    DB *fields;             /* DB handle to the segment fields */
+    DB *terms;              /* DB handle to the segment terms */
     int deleted;            /* non-zero if the segment is scheduled to be deleted */
 } terane_Segment;
 
@@ -96,12 +135,14 @@ PyObject * terane_Env_close (terane_Env *self);
 /* Index methods */
 PyObject * terane_Index_get_meta (terane_Index *self, PyObject *args);
 PyObject * terane_Index_set_meta (terane_Index *self, PyObject *args);
+
 PyObject * terane_Index_get_field (terane_Index *self, PyObject *args);
 PyObject * terane_Index_add_field (terane_Index *self, PyObject *args);
 PyObject * terane_Index_remove_field (terane_Index *self, PyObject *args);
 PyObject * terane_Index_contains_field (terane_Index *self, PyObject *args);
 PyObject * terane_Index_list_fields (terane_Index *self, PyObject *args);
 PyObject * terane_Index_count_fields (terane_Index *self);
+
 PyObject * terane_Index_new_segment (terane_Index *self, PyObject *args);
 int        terane_Index_contains_segment (terane_Index *self, terane_Txn *txn, db_recno_t sid);
 PyObject * terane_Index_iter_segments (terane_Index *self, PyObject *args);
@@ -113,25 +154,27 @@ PyObject * terane_Index_close (terane_Index *self);
 /* Segment methods */
 PyObject * terane_Segment_get_meta (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_set_meta (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_get_field_meta (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_set_field_meta (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_new_doc (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_get_doc (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_set_doc (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_delete_doc (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_contains_doc (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_estimate_docs (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_iter_docs_within (terane_Segment *self, PyObject *args);
+
+PyObject * terane_Segment_get_field (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_set_field (terane_Segment *self, PyObject *args);
+
+PyObject * terane_Segment_new_event (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_get_event (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_set_event (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_delete_event (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_contains_event (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_estimate_events (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_iter_events (terane_Segment *self, PyObject *args);
+
 PyObject * terane_Segment_get_term (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_set_term (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_contains_term (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_estimate_term_postings (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_iter_terms (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_iter_terms_within (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_get_term_meta (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_set_term_meta (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_iter_terms_meta (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_iter_terms_meta_range (terane_Segment *self, PyObject *args);
+
+PyObject * terane_Segment_get_posting (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_set_posting (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_contains_posting (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_estimate_postings (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_iter_postings (terane_Segment *self, PyObject *args);
+
 PyObject * terane_Segment_delete (terane_Segment *self);
 PyObject * terane_Segment_close (terane_Segment *self);
 
@@ -143,25 +186,31 @@ PyObject * terane_Txn_abort (terane_Txn *self);
 
 /* Iter methods */
 PyObject * terane_Iter_new (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, int reverse);
-PyObject * terane_Iter_new_range (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void *key, size_t len, int reverse);
-PyObject * terane_Iter_new_from (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, void *key, size_t len, int reverse);
-PyObject * terane_Iter_new_within (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, DBT *start, DBT *end, int reverse);
+PyObject * terane_Iter_new_range (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, PyObject *key, int reverse);
+PyObject * terane_Iter_new_from (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, PyObject *key, int reverse);
+PyObject * terane_Iter_new_within (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, PyObject *start, PyObject *end, int reverse);
 PyObject * terane_Iter_skip (terane_Iter *self, PyObject *args);
 PyObject * terane_Iter_close (terane_Iter *self);
 
 /*
  * logging function declarations
  */
+PyObject * terane_log_fd (PyObject *self);
 void       terane_log_msg (int level, const char *logger, const char *fmt, ...);
-PyObject * terane_Module_log_fd (PyObject *self);
 
 /*
  * msgpack serialization declarations
  */
-int        _terane_msgpack_dump (PyObject *obj, char **buf, uint32_t *len);
-PyObject * terane_msgpack_dump (PyObject *self, PyObject *args);
-int        _terane_msgpack_load (const char *buf, uint32_t len, PyObject **dest);
-PyObject * terane_msgpack_load (PyObject *self, PyObject *args);
+int             _terane_msgpack_dump (PyObject *obj, char **buf, uint32_t *len);
+PyObject *      terane_msgpack_dump (PyObject *self, PyObject *args);
+terane_value *  _terane_msgpack_make_value (PyObject *obj);
+int             _terane_msgpack_load_value (char *buf, uint32_t len, char **pos, terane_value *val);
+int             _terane_msgpack_load (char *buf, uint32_t len, PyObject **dest);
+PyObject *      terane_msgpack_load (PyObject *self, PyObject *args);
+int             _terane_msgpack_cmp_values (terane_value *v1, terane_value *v2);
+int             _terane_msgpack_cmp (char *b1, uint32_t l1, char *b2, uint32_t l2, int *result);
+int             _terane_msgpack_DB_compare (DB *db, const DBT *dbt1, const DBT *dbt2);
+void            _terane_msgpack_free_value (terane_value *value);
 
 /*
  * class type declarations
@@ -180,6 +229,24 @@ extern PyObject *terane_Exc_LockTimeout;
 extern PyObject *terane_Exc_DocExists;
 extern PyObject *terane_Exc_Error;
 
+
+/*
+ * msgpack type constants
+ */
+typedef enum {
+    TERANE_MSGPACK_TYPE_UNKNOWN = 0,
+    TERANE_MSGPACK_TYPE_NONE    = 1,
+    TERANE_MSGPACK_TYPE_FALSE   = 2,
+    TERANE_MSGPACK_TYPE_TRUE    = 3,
+    TERANE_MSGPACK_TYPE_INT64   = 4,
+    TERANE_MSGPACK_TYPE_INT32   = 5,
+    TERANE_MSGPACK_TYPE_UINT32  = 6,
+    TERANE_MSGPACK_TYPE_UINT64  = 7,
+    TERANE_MSGPACK_TYPE_DOUBLE  = 8,
+    TERANE_MSGPACK_TYPE_RAW     = 9,
+    TERANE_MSGPACK_TYPE_LIST    = 10,
+    TERANE_MSGPACK_TYPE_DICT    = 11
+} terane_msgpack_type;
 
 /*
  * iteration type constants

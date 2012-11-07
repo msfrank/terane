@@ -58,7 +58,7 @@ terane_Index_get_field (terane_Index *self, PyObject *args)
     switch (dbret) {
         case 0:
             /* deserialize the data */
-            _terane_msgpack_load ((const char *) data.data, data.size, &fieldspec);
+            _terane_msgpack_load (data.data, data.size, &fieldspec);
             break;
         case DB_NOTFOUND:
         case DB_KEYEMPTY:
@@ -248,7 +248,7 @@ terane_Index_list_fields (terane_Index *self, PyObject *args)
                 fieldname = PyString_FromStringAndSize (key.data, key.size - 1);
                 if (fieldname == NULL)
                     goto error;
-                if (_terane_msgpack_load ((const char *) data.data, data.size, &fieldspec) < 0)
+                if (_terane_msgpack_load (data.data, data.size, &fieldspec) < 0)
                     goto error;
                 tuple = PyTuple_Pack (2, fieldname, fieldspec);
                 if (tuple == NULL)

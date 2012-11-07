@@ -60,7 +60,7 @@ terane_Index_get_meta (terane_Index *self, PyObject *args)
     switch (dbret) {
         case 0:
             /* create a python string from the data */
-            _terane_msgpack_load ((const char *) data.data, data.size, &metadata);
+            _terane_msgpack_load (data.data, data.size, &metadata);
             break;
         case DB_NOTFOUND:
         case DB_KEYEMPTY:

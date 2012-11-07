@@ -26,7 +26,7 @@
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   id (string): The metadata id
- * returns: A string representing the metadata value 
+ * returns: The metadata value 
  * exceptions:
  *   KeyError: The document with the specified id doesn't exist
  *   terane.outputs.store.backend.Error: A db error occurred when trying to retrieve the record
@@ -37,7 +37,7 @@ terane_Segment_get_meta (terane_Segment *self, PyObject *args)
     terane_Txn *txn = NULL;
     const char *id = NULL;
     DBT key, data;
-    PyObject *metadata = NULL;
+    PyObject *value = NULL;
     int dbret;
 
     /* parse parameters */
@@ -51,7 +51,7 @@ terane_Segment_get_meta (terane_Segment *self, PyObject *args)
     /* use the document id as the record number */
     memset (&key, 0, sizeof (DBT));
     key.data = (char *) id;
-    key.size = strlen(id) + 1;
+    key.size = strlen (id) + 1;
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
 
@@ -60,7 +60,7 @@ terane_Segment_get_meta (terane_Segment *self, PyObject *args)
     switch (dbret) {
         case 0:
             /* create a python string from the data */
-            metadata = PyString_FromString ((char *) data.data);
+            _terane_msgpack_load ((char *) data.data, data.size, &value);
             break;
         case DB_NOTFOUND:
         case DB_KEYEMPTY:
@@ -78,7 +78,7 @@ terane_Segment_get_meta (terane_Segment *self, PyObject *args)
     /* free allocated memory */
     if (data.data)
         PyMem_Free (data.data);
-    return metadata;
+    return value;
 }
 
 /*
@@ -88,7 +88,7 @@ terane_Segment_get_meta (terane_Segment *self, PyObject *args)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  *   id (string): The metadata id
- *   value (string): Metadata to store
+ *   value (object): The metadata value
  * returns: None
  * exceptions:
  *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
@@ -98,30 +98,31 @@ terane_Segment_set_meta (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     const char *id = NULL;
-    const char *metadata = NULL;
+    PyObject *value = NULL;
     DBT key, data;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!ss", &terane_TxnType, &txn, &id, &metadata))
+    if (!PyArg_ParseTuple (args, "O!sO", &terane_TxnType, &txn, &id, &value))
         return NULL;
 
     memset (&key, 0, sizeof (DBT));
-    memset (&data, 0, sizeof (DBT));
     key.data = (char *) id;
     key.size = strlen (id) + 1;
-    data.data = (char *) metadata;
-    data.size = strlen(metadata) + 1;
+    memset (&data, 0, sizeof (DBT));
+    if (_terane_msgpack_dump (value, (char **) &data.data, &data.size) < 0)
+        return NULL;
+
     /* set the record */
     dbret = self->metadata->put (self->metadata, txn->txn, &key, &data, 0);
-    /* db error, raise Exception */
+    PyMem_Free (data.data);
     switch (dbret) {
         case 0:
             break;
         default:
-            PyErr_Format (terane_Exc_Error, "Failed to set metadata %s: %s",
+            /* db error, raise Exception */
+            return PyErr_Format (terane_Exc_Error, "Failed to set metadata %s: %s",
                 (char *) key.data, db_strerror (dbret));
-            break;
     }
     Py_RETURN_NONE;
 }

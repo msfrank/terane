@@ -82,17 +82,19 @@ setup(
             'terane/outputs/store/backend-index-segment.c',
             'terane/outputs/store/backend-iter.c',
             'terane/outputs/store/backend-logfd.c',
+            'terane/outputs/store/backend-msgpack-cmp.c',
             'terane/outputs/store/backend-msgpack-dump.c',
             'terane/outputs/store/backend-msgpack-load.c',
             'terane/outputs/store/backend-segment.c',
-            'terane/outputs/store/backend-segment-doc.c',
+            'terane/outputs/store/backend-segment-event.c',
             'terane/outputs/store/backend-segment-field.c',
             'terane/outputs/store/backend-segment-meta.c',
+            'terane/outputs/store/backend-segment-posting.c',
             'terane/outputs/store/backend-segment-term.c',
             'terane/outputs/store/backend-txn.c',
             ],
-            # link against libdb and libmsgpack
-            libraries=['db', 'msgpack'],
+            # link against libdb
+            libraries=['db'],
             # set search paths for headers and libraries
             include_dirs=extra_include_dirs,
             library_dirs=extra_library_dirs,

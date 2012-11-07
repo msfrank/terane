@@ -20,731 +20,29 @@
 #include "backend.h"
 
 /*
- * _Segment_make_term_key:
- */
-static DBT *
-_Segment_make_term_key (PyObject *fieldname, PyObject *term, PyObject *id)
-{
-    PyObject *encoded = NULL;
-    char *field_str, *term_str, *doc_id;
-    Py_ssize_t field_len, term_len, id_len;
-    DBT *key = NULL;
-
-    assert (fieldname != NULL);
-    assert (term != NULL);
-    assert (id != NULL);
-
-    if (!PyString_Check (fieldname))
-        return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'id' is not str type");
-    if (!PyUnicode_Check (term))
-        return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'term' is not unicode type");
-    if (!PyString_Check (id))
-        return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'id' is not str type");
-
-    /* get field name string data and length */
-    if (PyString_AsStringAndSize (fieldname, &field_str, &field_len) < 0)
-        return NULL;        /* raises TypeError */
-    /* get document ID string and length */
-    if (PyString_AsStringAndSize (id, &doc_id, &id_len) < 0)
-        return NULL;        /* raises TypeError */
-    /* convert term from UTF-16 to UTF-8 */
-    encoded = PyUnicode_AsUTF8String (term);
-    if (encoded == NULL)
-        return NULL;        /* raises a codec error */
-    /* get term string data and length */
-    if (PyString_AsStringAndSize (encoded, &term_str, &term_len) < 0) {
-        Py_DECREF (encoded);
-        return NULL;        /* raises TypeError */
-    }
-    /* allocate a DBT to store the key */
-    key = PyMem_Malloc (sizeof (DBT));
-    if (key == NULL) {
-        PyErr_NoMemory ();
-        Py_DECREF (encoded);
-        return NULL;    /* raises MemoryError */
-    }
-    memset (key, 0, sizeof (DBT));
-
-    /* create key in the form of field + '=' + term + ':' + id + '\0' */
-    key->size = field_len + term_len + id_len + 3;
-    key->ulen = key->size;
-    key->flags = DB_DBT_USERMEM;
-    key->data = PyMem_Malloc (key->size);
-    if (key->data == NULL) {
-        PyErr_NoMemory ();
-        PyMem_Free (key);
-        Py_DECREF (encoded);
-        return NULL;    /* raises MemoryError */
-    }
-    memcpy (key->data, field_str, field_len);
-    ((char *)key->data)[field_len] = '=';
-    memcpy (key->data + field_len + 1, term_str, term_len);
-    ((char *)key->data)[field_len + term_len + 1] = ':';
-    memcpy (key->data + field_len + term_len + 2, doc_id, id_len);
-    ((char *)key->data)[field_len + term_len + id_len + 2] = '\0';
-
-    /* we don't need the UTF-8 string anymore */
-    Py_DECREF (encoded);
-
-    return key;
-}
-
-/*
- * _Segment_make_term_meta_key:
- */
-static DBT *
-_Segment_make_term_meta_key (PyObject *fieldname, PyObject *term)
-{
-    PyObject *encoded = NULL;
-    char *field_str, *term_str;
-    Py_ssize_t field_len, term_len;
-    DBT *key = NULL;
-
-    assert (fieldname != NULL);
-    assert (term != NULL);
-
-    if (!PyString_Check (fieldname))
-        return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'fieldname' is not Unicode type");
-    if (!PyUnicode_Check (term))
-        return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'term' is not Unicode type");
-
-    /* get field name string data and length */
-    if (PyString_AsStringAndSize (fieldname, &field_str, &field_len) < 0)
-        return NULL;        /* raises TypeError */
-    /* convert term from UTF-16 to UTF-8 */
-    encoded = PyUnicode_AsUTF8String (term);
-    if (encoded == NULL)
-        return NULL;        /* raises a codec error */
-    if (PyString_AsStringAndSize (encoded, &term_str, &term_len) < 0) {
-        Py_DECREF (encoded);
-        return NULL;        /* raises TypeError */
-    }
-
-    /* allocate a DBT to store the key */
-    key = PyMem_Malloc (sizeof (DBT));
-    if (key == NULL) {
-        PyErr_NoMemory ();
-        Py_DECREF (encoded);
-        return NULL;    /* raises MemoryError */
-    }
-    memset (key, 0, sizeof (DBT));
-
-    /* create key in the form of '#' + fieldname + '=' + term + '\0' */
-    key->size = field_len + term_len + 3;
-    key->ulen = key->size;
-    key->flags = DB_DBT_USERMEM;
-    key->data = PyMem_Malloc (key->size);
-    if (key->data == NULL) {
-        PyErr_NoMemory ();
-        PyMem_Free (key);
-        Py_DECREF (encoded);
-        return NULL;    /* raises MemoryError */
-    }
-    ((char *)key->data)[0] = '#';
-    memcpy (key->data + 1, field_str, field_len);
-    ((char *)key->data)[field_len + 1] = '=';
-    memcpy (key->data + field_len + 2, term_str, term_len);
-    ((char *)key->data)[field_len + term_len + 2] = '\0';
-
-    /* we don't need the UTF-8 string anymore */
-    Py_DECREF (encoded);
-
-    return key;
-}
-
-/*
- * _Segment_make_term_iter_key:
- */
-static DBT *
-_Segment_make_term_iter_key (PyObject *fieldname, PyObject *term)
-{
-    PyObject *encoded = NULL;
-    char *field_str, *term_str;
-    Py_ssize_t field_len, term_len;
-    DBT *key = NULL;
-
-    assert (fieldname != NULL);
-    assert (term != NULL);
-
-    if (!PyUnicode_Check (fieldname))
-        return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'fieldname' is not Unicode type");
-    if (!PyUnicode_Check (term))
-        return (DBT *) PyErr_Format (PyExc_TypeError, "Argument 'term' is not Unicode type");
-
-    /* get field name string data and length */
-    if (PyString_AsStringAndSize (fieldname, &field_str, &field_len) < 0)
-        return NULL;        /* raises TypeError */
-    /* convert term from UTF-16 to UTF-8 */
-    encoded = PyUnicode_AsUTF8String (term);
-    if (encoded == NULL)
-        return NULL;        /* raises a codec error */
-    if (PyString_AsStringAndSize (encoded, &term_str, &term_len) < 0) {
-        Py_DECREF (encoded);
-        return NULL;        /* raises TypeError */
-    }
-
-    /* allocate a DBT to store the key */
-    key = PyMem_Malloc (sizeof (DBT));
-    if (key == NULL) {
-        PyErr_NoMemory ();
-        Py_DECREF (encoded);
-        return NULL;    /* raises MemoryError */
-    }
-    memset (key, 0, sizeof (DBT));
-
-    /* create key in the form of fieldname + '=' + term + ':' + '\0' */
-    key->size = field_len + term_len + 2;
-    key->ulen = key->size;
-    key->flags = DB_DBT_USERMEM;
-    key->data = PyMem_Malloc (key->size + 1);
-    if (key->data == NULL) {
-        PyErr_NoMemory ();
-        PyMem_Free (key);
-        Py_DECREF (encoded);
-        return NULL;    /* raises MemoryError */
-    }
-    /* 
-     * the actual key is fieldname + '=' + term + ':' without the \0 terminator.
-     * however its easier to debug with a terminated string, so we add it although
-     * it is not reflected in the DBT size field.
-     */
-    memcpy (key->data, field_str, field_len);
-    ((char *)key->data)[field_len] = '=';
-    memcpy (key->data + field_len + 1, term_str, term_len);
-    ((char *)key->data)[field_len + term_len + 1] = ':';
-    ((char *)key->data)[field_len + term_len + 2] = '\0';
-
-    /* we don't need the UTF-8 string anymore */
-    Py_DECREF (encoded);
-
-    return key;
-}
-
-/*
- * _Segment_free_term_key:
- */
-static void
-_Segment_free_term_key (DBT *key)
-{
-    assert (key != NULL);
-    if (key->data != NULL)
-        PyMem_Free (key->data);
-    PyMem_Free (key);
-}
-
-/*
- * terane_Segment_get_term:
+ * terane_Segment_get_term: Retrieve the value associated with the
+ *  specified term in the specified field.
  *
- * callspec: Segment.get_term(txn, fieldname, term, evid)
+ * callspec: Segment.get_term(txn, term)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
- *   fieldname (string): The field name
- *   term (unicode): The term
- *   evid (str): The event identifier string
- * returns: The JSON-encoded posting data
+ *   term (object): The term key
+ * returns: The term value
  * exceptions:
- *   KeyError: The specified field or record doesn't exist
+ *   KeyError: The specified field or metadata doesn't exist
  *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
  */
 PyObject *
 terane_Segment_get_term (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    PyObject *fieldname = NULL;
     PyObject *term = NULL;
-    PyObject *id = NULL;
-    DBT *key, data;
+    DBT key, data;
     PyObject *value = NULL;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OO!O!O!", &txn, &PyString_Type, &fieldname,
-        &PyUnicode_Type, &term, PyString_Type, &id))
-        return NULL;
-    if ((PyObject *) txn == Py_None)
-        txn = NULL;
-    if (txn && txn->ob_type != &terane_TxnType)
-        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-
-    /* build the key from the term and id values */
-    key = _Segment_make_term_key (fieldname, term, id);
-    if (key == NULL)
-        return NULL;
-
-    /* get the record */
-    memset (&data, 0, sizeof (DBT));
-    data.flags = DB_DBT_MALLOC;
-    dbret = self->postings->get (self->postings, txn? txn->txn : NULL, key, &data, 0);
-    _Segment_free_term_key (key);
-    switch (dbret) {
-        case 0:
-            /* create a python string from the data */
-            value = PyString_FromString (data.data);
-            break;
-        case DB_NOTFOUND:
-        case DB_KEYEMPTY:
-            /* document doesn't exist, raise KeyError */
-            return PyErr_Format (PyExc_KeyError, "Data doesn't exist");
-        default:
-            /* some other db error, raise Error */
-            return PyErr_Format (terane_Exc_Error, "Failed to get data: %s",
-                db_strerror (dbret));
-    }
-
-    /* free allocated memory */
-    if (data.data)
-        PyMem_Free (data.data);
-    return value;
-}
-
-/*
- * terane_Segment_set_term:
- *
- * callspec: Segment.set_term(txn, fieldname, term, evid, value)
- * parameters:
- *   txn (Txn): A Txn object to wrap the operation in
- *   fieldname (string): The field name
- *   term (unicode): The term
- *   evid (str): The event identifier string
- *   value (unicode): JSON-encoded posting data
- * returns: None
- * exceptions:
- *   KeyError: The specified field doesn't exist
- *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
- */
-PyObject *
-terane_Segment_set_term (terane_Segment *self, PyObject *args)
-{
-    terane_Txn *txn = NULL;
-    PyObject *fieldname = NULL;
-    PyObject *term = NULL;
-    PyObject *id = NULL;
-    char *value = NULL;
-    DBT *key = NULL, data;
-    int value_len = 0, dbret;
-
-    /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!O!O!O!s#", &terane_TxnType, &txn,
-        &PyString_Type, &fieldname, &PyUnicode_Type, &term, &PyString_Type, &id,
-        &value, &value_len))
-        return NULL;
-
-    /* build the key from the term and id values */
-    key = _Segment_make_term_key (fieldname, term, id);
-    if (key == NULL)
-        return NULL;
-
-    /* set the record */
-    memset (&data, 0, sizeof (DBT));
-    data.data = value;
-    data.size = value_len + 1;
-    dbret = self->postings->put (self->postings, txn->txn, key, &data, 0);
-    _Segment_free_term_key (key);
-    switch (dbret) {
-        case 0:
-            break;
-        default:
-            /* some other db error, raise Error */
-            return PyErr_Format (terane_Exc_Error, "Failed to set data: %s",
-                db_strerror (dbret));
-    }
-    Py_RETURN_NONE;
-}
-
-/*
- * terane_Segment_contains_term: Determine whether the specified field contains
- *  the specified term.
- *
- * callspec: Segment.contains_term(txn, fieldname, term)
- * parameters:
- *   txn (Txn): A Txn object to wrap the operation in, or None
- *   fieldname (string): The field name
- *   term (unicode): The term
- * returns: True if the term exists in the field, otherwise False.
- * exceptions:
- *   KeyError: The specified field doesn't exist
- *   terane.outputs.store.backend.Error: A db error occurred when trying to find the record
- */
-PyObject *
-terane_Segment_contains_term (terane_Segment *self, PyObject *args)
-{
-    terane_Txn *txn = NULL;
-    PyObject *fieldname = NULL;
-    PyObject *term = NULL;
-    DBT *key;
-    int dbret;
-
-    /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OO!O!", &txn, &PyString_Type, &fieldname,
-        &PyUnicode_Type, &term))
-        return NULL;
-    if ((PyObject *) txn == Py_None)
-        txn = NULL;
-    if (txn && txn->ob_type != &terane_TxnType)
-        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-
-    /* build the key from the term value */
-    key = _Segment_make_term_meta_key (fieldname, term);
-    if (key == NULL)
-        return NULL;
-
-    /* check if key exists in the db */
-    dbret = self->postings->exists (self->postings, txn? txn->txn : NULL, key, 0);
-    _Segment_free_term_key (key);
-    switch (dbret) {
-        case 0:
-        case DB_NOTFOUND:
-        case DB_KEYEMPTY:
-            break;
-        default:
-            /* some other db error, raise Exception */
-            PyErr_Format (terane_Exc_Error, "Failed to find term: %s",
-                db_strerror (dbret));
-            break;
-    }
-    if (dbret == 0)
-        Py_RETURN_TRUE;
-    Py_RETURN_FALSE;
-}
-
-/*
- * terane_Segment_estimate_term_postings: Return an estimate of the number of postings
- *  for a term between the start and end document ID.
- *
- * callspec: Segment.estimate_term_postings(txn, fieldname, term, start, end)
- * parameters:
- *   txn (Txn): A Txn object to wrap the operation in, or None
- *   fieldname (string): The field name
- *   term (unicode): The term
- *   start (str): The starting document ID
- *   end (str): The ending document ID
- * returns: An estimate of the percentage of total postings of all terms in the field which
- *   are between the start and end document IDs, expressed as a float.
- * exceptions:
- *   KeyError: The specified field doesn't exist
- *   terane.outputs.store.backend.Error: A db error occurred when trying to find the record
- */
-PyObject *
-terane_Segment_estimate_term_postings (terane_Segment *self, PyObject *args)
-{
-    terane_Txn *txn = NULL;
-    PyObject *fieldname = NULL;
-    PyObject *term = NULL, *start = NULL, *end = NULL;
-    DBT *key;
-    DB_KEY_RANGE startrange, endrange;
-    double estimate = 0.0;
-    int dbret, result;
-
-    /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OO!O!O!O!", &txn, &PyString_Type, &fieldname,
-        &PyUnicode_Type, &term, &PyString_Type, &start, &PyString_Type, &end))
-        return NULL;
-    if ((PyObject *) txn == Py_None)
-        txn = NULL;
-    if (txn && txn->ob_type != &terane_TxnType)
-        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-
-    /* build the start key from the term value */
-    key = _Segment_make_term_key (fieldname, term, start);
-    if (key == NULL)
-        return NULL;
-
-    /* estimate start key range */
-    dbret = self->postings->key_range (self->postings, txn? txn->txn : NULL, key, &startrange, 0);
-    _Segment_free_term_key (key);
-    if (dbret != 0) 
-        return PyErr_Format (terane_Exc_Error, "Failed to estimate start key range: %s",
-            db_strerror (dbret));
-
-    /* build the end key from the term value */
-    key = _Segment_make_term_key (fieldname, term, end);
-    if (key == NULL)
-        return NULL;
-
-    /* estimate start key range */
-    dbret = self->postings->key_range (self->postings, txn? txn->txn : NULL, key, &endrange, 0);
-    _Segment_free_term_key (key);
-    if (dbret != 0) 
-        return PyErr_Format (terane_Exc_Error, "Failed to estimate end key range: %s",
-            db_strerror (dbret));
-
-    if (PyObject_Cmp (start, end, &result) < 0)
-        return PyErr_Format (terane_Exc_Error, "key comparison failed");
-    if (result > 0)
-        estimate = 1.0 - (endrange.less + startrange.greater);
-    else
-        estimate = 1.0 - (startrange.less + endrange.greater);
-    return PyFloat_FromDouble (estimate);
-}
-
-/*
- * _Segment_next_term: return the (id,value) tuple from the current cursor item
- */
-static PyObject *
-_Segment_next_term (terane_Iter *iter, DBT *key, DBT *data)
-{
-    PyObject *id, *value, *tuple;
-    char *doc_id = NULL;
-    int i;
-
-    /* find the term end marker */
-    for (i = key->size - 1; i >= 0; i--) {
-        doc_id = key->data + i;
-        if (*doc_id == ':')
-            break;
-    }
-    if (*doc_id != ':')
-        return NULL;
-    doc_id++;
-    /* get the document id */
-    id = PyString_FromString(doc_id);
-    /* get the metadata */
-    value = PyString_FromString ((char *) data->data);
-    /* build the (id,metadata) tuple */
-    tuple = PyTuple_Pack (2, id, value);
-    Py_XDECREF (id);
-    Py_XDECREF (value);
-    return tuple;
-}
-
-/*
- * _Segment_skip_term: create a key to skip to the item specified by id.
- */
-static DBT *
-_Segment_skip_term (terane_Iter *iter, PyObject *args)
-{
-    char *doc_id = NULL;
-    int id_len = 0;
-    DBT *key = NULL;
-
-    if (!PyArg_ParseTuple (args, "s#", &doc_id, &id_len))
-        return NULL;
-    /* allocate a DBT to store the key */
-    key = PyMem_Malloc (sizeof (DBT));
-    if (key == NULL)
-        return (void *) PyErr_NoMemory ();
-    memset (key, 0, sizeof (DBT));
-    /* id_len does not include the trailing '\0' */
-    key->size = iter->start_key.size + id_len + 1;
-    /* iter->key is in the form of '<' + term + '>', without the '\0' */
-    key->data = PyMem_Malloc (key->size);
-    if (key->data == NULL) {
-        PyErr_NoMemory ();
-        PyMem_Free (key);
-        return NULL;    /* raises MemoryError */
-    }
-    /* create key in the form of '<' + term + '>' + id + '\0' */
-    memcpy (key->data, iter->start_key.data, iter->start_key.size);
-    memcpy (key->data + iter->start_key.size, doc_id, id_len);
-    return key;
-}
-
-/*
- * terane_Segment_iter_terms: Iterate through all document ids associated
- *  with the specified term in the specified field.
- *
- * callspec: Segment.iter_terms(txn, fieldname, term)
- * parameters:
- *   txn (Txn): A Txn object to wrap the operation in, or None
- *   fieldname (string): The field name
- *   term (string): The term
- * returns: a new Iterator object.  Each iteration returns a tuple consisting
- *  of (evid,value).
- * exceptions:
- *   KeyError: The specified field doesn't exist
- *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
- */
-PyObject *
-terane_Segment_iter_terms (terane_Segment *self, PyObject *args)
-{
-    terane_Txn *txn = NULL;
-    PyObject *fieldname = NULL;
-    PyObject *term = NULL;
-    DBT *key = NULL;
-    DBC *cursor = NULL;
-    int dbret;
-    PyObject *iter = NULL;
-    terane_Iter_ops ops = { .next = _Segment_next_term, .skip = _Segment_skip_term };
-
-    /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OO!O!", &txn, &PyString_Type, &fieldname,
-        &PyUnicode_Type, &term))
-        return NULL;
-    if ((PyObject *) txn == Py_None)
-        txn = NULL;
-    if (txn && txn->ob_type != &terane_TxnType)
-        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-
-    /* build the key from the term value */
-    key = _Segment_make_term_iter_key (fieldname, term);
-    if (key == NULL)
-        return NULL;
-
-    /* create a new cursor */
-    dbret = self->postings->cursor (self->postings, txn? txn->txn : NULL, &cursor, 0);
-    /* if cursor allocation failed, return Error */
-    if (dbret != 0) {
-        _Segment_free_term_key (key);
-        return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
-            db_strerror (dbret));
-    }
-
-    iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size, 0);
-    _Segment_free_term_key (key);
-    if (iter == NULL)
-        cursor->close (cursor);
-    return iter;
-}
-
-/*
- * _Segment_skip_term_within: create a key to skip to the item specified by id.
- */
-static DBT *
-_Segment_skip_term_within (terane_Iter *iter, PyObject *args)
-{
-    char *doc_id = NULL;
-    int id_len = 0, i;
-    DBT *key = NULL;
-
-    if (!PyArg_ParseTuple (args, "s#", &doc_id, &id_len))
-        return NULL;
-    /* find the term end marker */
-    for (i = iter->start_key.size - 1; i >= 0; i--) {
-        if (((char *)iter->start_key.data)[i] == ':')
-            break;
-    }
-    if (i < 0)
-        return NULL;
-    /* allocate a DBT to store the key */
-    key = PyMem_Malloc (sizeof (DBT));
-    if (key == NULL)
-        return (void *) PyErr_NoMemory ();
-    memset (key, 0, sizeof (DBT));
-    /* id_len does not include the trailing '\0' */
-    key->size = i + 1 + id_len + 1;
-    /* iter->key is in the form of '<' + term + '>', without the '\0' */
-    key->data = PyMem_Malloc (key->size);
-    if (key->data == NULL) {
-        PyErr_NoMemory ();
-        PyMem_Free (key);
-        return NULL;    /* raises MemoryError */
-    }
-    /* create key in the form of '<' + term + '>' + id + '\0' */
-    memset (key->data, 0, key->size);
-    memcpy (key->data, iter->start_key.data, i + 1);
-    memcpy (key->data + i + 1, doc_id, id_len);
-    return key;
-}
-
-/*
- * terane_Segment_iter_terms_within: Iterate through all document ids associated
- *  with the specified term in the specified field between the specified start and
- *  end document IDs.
- *
- * callspec: Segment.iter_terms_within(txn, fieldname, term, start, end)
- * parameters:
- *   txn (Txn): A Txn object to wrap the operation in, or None
- *   fieldname (string): The field name
- *   term (str): The term
- *   start (str): The starting document ID, inclusive
- *   end (str): The ending document ID, inclusive
- * returns: a new Iterator object.  Each iteration returns a tuple consisting
- *  of (evid,value).
- * exceptions:
- *   KeyError: The specified field doesn't exist
- *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
- */
-PyObject *
-terane_Segment_iter_terms_within (terane_Segment *self, PyObject *args)
-{
-    terane_Txn *txn = NULL;
-    PyObject *fieldname = NULL;
-    PyObject *term = NULL, *start = NULL, *end = NULL;
-    DBT *start_key = NULL, *end_key = NULL;
-    DBC *cursor = NULL;
-    int dbret, reverse = 0;
-    PyObject *iter = NULL;
-    terane_Iter_ops ops = { .next = _Segment_next_term, .skip = _Segment_skip_term_within };
-
-    /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OO!O!O!O!", &txn, &PyString_Type, &fieldname,
-        &PyUnicode_Type, &term, &PyString_Type, &start, &PyString_Type, &end))
-        return NULL;
-    if ((PyObject *) txn == Py_None)
-        txn = NULL;
-    if (txn && txn->ob_type != &terane_TxnType)
-        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-
-    /* determine whether ordering is reversed */
-    if (PyObject_Cmp (start, end, &reverse) < 0)
-        return PyErr_Format (terane_Exc_Error, "comparison of start and end failed");
-    if (reverse < 0)
-        reverse = 0;
-
-    /* build the start and end keys */
-    start_key = _Segment_make_term_key (fieldname, term, start);
-    if (start_key == NULL)
-        goto error;
-    end_key = _Segment_make_term_key (fieldname, term, end);
-    if (end_key == NULL)
-        goto error;
-
-    /* create a new cursor */
-    dbret = self->postings->cursor (self->postings, txn? txn->txn : NULL, &cursor, 0);
-    if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
-            db_strerror (dbret));
-        goto error;
-    }
-
-    /* allocate a new Iter object */
-    iter = terane_Iter_new_within ((PyObject *) self, cursor, &ops, start_key, end_key, reverse);
-    if (iter == NULL)
-        goto error;
-
-    /* clean up and return the Iter */
-    _Segment_free_term_key (start_key);
-    _Segment_free_term_key (end_key);
-    return iter;
-
-error:
-    if (start_key)
-        _Segment_free_term_key (start_key);
-    if (end_key)
-        _Segment_free_term_key (end_key);
-    if (cursor)
-        cursor->close (cursor);
-    return NULL;
-}
-
-
-/*
- * terane_Segment_get_term_meta: Retrieve the metadata associated with the
- *  specified term in the specified field.
- *
- * callspec: Segment.get_term_meta(txn, fieldname, term)
- * parameters:
- *   txn (Txn): A Txn object to wrap the operation in, or None
- *   fieldname (string): The field name
- *   term (unicode): The term
- * returns: a string containing the JSON-encoded metadata. 
- * exceptions:
- *   KeyError: The specified field or metadata doesn't exist
- *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
- */
-PyObject *
-terane_Segment_get_term_meta (terane_Segment *self, PyObject *args)
-{
-    terane_Txn *txn = NULL;
-    PyObject *fieldname = NULL;
-    PyObject *term = NULL;
-    DBT *key, data;
-    PyObject *metadata = NULL;
-    int dbret;
-
-    /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OO!O!", &txn, &PyString_Type, &fieldname,
-        &PyUnicode_Type, &term))
+    if (!PyArg_ParseTuple (args, "OO", &txn, &term))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
@@ -752,77 +50,79 @@ terane_Segment_get_term_meta (terane_Segment *self, PyObject *args)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
     /* build the key from the fieldname and term values */
-    key = _Segment_make_term_meta_key (fieldname, term);
-    if (key == NULL)
+    memset (&key, 0, sizeof (DBT));
+    if (_terane_msgpack_dump (term, (char **) &key.data, &key.size) < 0)
         return NULL;
 
     /* get the record */
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
-    dbret = self->postings->get (self->postings, txn? txn->txn : NULL, key, &data, 0);
-    _Segment_free_term_key (key);
+    dbret = self->postings->get (self->postings, txn? txn->txn : NULL, &key, &data, 0);
+    PyMem_Free (key.data);
     switch (dbret) {
         case 0:
             /* create a python string from the data */
-            metadata = PyString_FromString (data.data);
+            _terane_msgpack_load ((char *) data.data, data.size, &value);
             break;
         case DB_NOTFOUND:
         case DB_KEYEMPTY:
             /* document doesn't exist, raise KeyError */
-            return PyErr_Format (PyExc_KeyError, "Metadata doesn't exist");
+            PyErr_Format (PyExc_KeyError, "Metadata doesn't exist");
+            break;
         default:
             /* some other db error, raise Error */
-            return PyErr_Format (terane_Exc_Error, "Failed to get metadata: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to get metadata: %s",
                 db_strerror (dbret));
+            break;
     }
     
     /* free allocated memory */
     if (data.data)
         PyMem_Free (data.data);
-    return metadata;
+    return value;
 }
 
 /*
- * terane_Segment_set_term_meta: Change the metadata associated with the
+ * terane_Segment_set_term: Change the value associated with the
  *  specified term in the specified field.
  *
- * callspec: Segment.set_term_meta(txn, fieldname, term, metadata)
+ * callspec: Segment.set_term(txn, term, value)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
- *   fieldname (string): The field name
- *   term (unicode): The term
- *   metadata (string): The JSON-encoded metadata
+ *   term (object): The term key
+ *   value (object): The term value
  * returns: None
  * exceptions:
- *   KeyError: The specified field doesn't exist
  *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
  */
 PyObject *
-terane_Segment_set_term_meta (terane_Segment *self, PyObject *args)
+terane_Segment_set_term (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    PyObject *fieldname = NULL;
     PyObject *term = NULL;
-    const char *metadata = NULL;
-    DBT *key, data;
+    PyObject *value = NULL;
+    DBT key, data;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!O!O!s", &terane_TxnType, &txn,
-        &PyString_Type, &fieldname, &PyUnicode_Type, &term, &metadata))
+    if (!PyArg_ParseTuple (args, "O!OO", &terane_TxnType, &txn, &term, &value))
         return NULL;
 
     /* build the key from the fieldname and term value */
-    key = _Segment_make_term_meta_key (fieldname, term);
-    if (key == NULL)
+    memset (&key, 0, sizeof (DBT));
+    if (_terane_msgpack_dump (term, (char **) &key.data, &key.size) < 0)
         return NULL;
 
-    /* set the record */
     memset (&data, 0, sizeof (DBT));
-    data.data = (char *) metadata;
-    data.size = strlen (metadata) + 1;
-    dbret = self->postings->put (self->postings, txn->txn, key, &data, 0);
-    _Segment_free_term_key (key);
+    if (_terane_msgpack_dump (value, (char **) &data.data, &data.size) < 0) {
+        PyMem_Free (key.data);
+        return NULL;
+    }
+
+    /* set the record */
+    dbret = self->postings->put (self->postings, txn->txn, &key, &data, 0);
+    PyMem_Free (key.data);
+    PyMem_Free (data.data);
     switch (dbret) {
         case 0:
             break;
@@ -832,142 +132,4 @@ terane_Segment_set_term_meta (terane_Segment *self, PyObject *args)
                 db_strerror (dbret));
     }
     Py_RETURN_NONE;
-}
-
-/*
- * _Segment_next_term_meta: return the (term,metadata) tuple from the current cursor item
- */
-static PyObject *
-_Segment_next_term_meta (terane_Iter *iter, DBT *key, DBT *data)
-{
-    PyObject *term, *metadata, *tuple;
-
-    /* if key is empty then stop iterating */
-    if (key->size == 0)
-        return NULL;
-    /* if key doesn't start with a '!', then stop iterating */
-    if (((char *) key->data)[0] != '#')
-        return NULL;
-    /* decode UTF-8 term data, excluding the leading '!' and the trailing '\0' */
-    term = PyUnicode_DecodeUTF8 ((char *) &((char *)key->data)[1],
-        key->size - 2, "strict");
-    /* if term is NULL, then there was a problem decoding the term from UTF-8 */
-    if (term == NULL)
-        return NULL;
-    /* get the metadata */
-    metadata = PyString_FromString ((char *) data->data);
-    /* build the (term,metadata) tuple */
-    tuple = PyTuple_Pack (2, term, metadata);
-    Py_XDECREF (term);
-    Py_XDECREF (metadata);
-    return tuple;
-}
-
-/*
- * terane_Segment_iter_terms_meta: Iterate through all terms in the specified
- *  field and return the metadata for each term.
- *
- * callspec: Segments.iter_terms_meta(txn, fieldname)
- * parameters:
- *   txn (Txn): A Txn object to wrap the operation in, or None
- *   fieldname (string): The field name
- * returns: a new Iterator object.  Each iteration returns a tuple consisting
- *  of (term,metadata).
- * exceptions:
- *   KeyError: The specified field doesn't exist
- *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
- */
-PyObject *
-terane_Segment_iter_terms_meta (terane_Segment *self, PyObject *args)
-{
-    terane_Txn *txn = NULL;
-    PyObject *fieldname = NULL;
-    DBT *key = NULL;
-    DBC *cursor = NULL;
-    int dbret;
-    PyObject *iter = NULL;
-    terane_Iter_ops ops = { .next = _Segment_next_term_meta };
-
-    /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OO!", &txn, &PyString_Type, &fieldname))
-        return NULL;
-    if ((PyObject *) txn == Py_None)
-        txn = NULL;
-    if (txn && txn->ob_type != &terane_TxnType)
-        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-
-    /* build the key using NULL term value */
-    key = _Segment_make_term_meta_key (fieldname, NULL);
-    if (key == NULL)
-        return NULL;
-
-    /* create a new cursor */
-    dbret = self->postings->cursor (self->postings, txn? txn->txn : NULL, &cursor, 0);
-    /* if cursor allocation failed, return Error */
-    if (dbret != 0) {
-        _Segment_free_term_key (key);
-        return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
-            db_strerror (dbret));
-    }
-    iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size - 1, 0);
-    _Segment_free_term_key (key);
-    if (iter == NULL)
-        cursor->close (cursor);
-    return iter;
-}
-
-/*
- * terane_Segment_iter_term_meta_range: Iterate through all terms matching the
- *  specified prefix in the specified field and return the metadata for each term.
- *
- * callspec: Segment.iter_term_meta_range(fieldname, prefix)
- * parameters:
- *   txn (Txn): A Txn object to wrap the operation in, or None
- *   fieldname (string): The field name
- *   prefix (unicode): The term prefix to match
- * returns: a new Iterator object.  Each iteration returns a tuple consisting
- *  of (term,metadata).
- * exceptions:
- *   KeyError: The specified field doesn't exist
- *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
- */
-PyObject *
-terane_Segment_iter_terms_meta_range (terane_Segment *self, PyObject *args)
-{
-    terane_Txn *txn = NULL;
-    PyObject *fieldname = NULL;
-    PyObject *prefix = NULL;
-    DBT *key = NULL;
-    DBC *cursor = NULL;
-    int dbret;
-    PyObject *iter = NULL;
-    terane_Iter_ops ops = { .next = _Segment_next_term_meta };
-
-    /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OO!O!", &txn, &PyString_Type, &fieldname,
-        &PyUnicode_Type, &prefix))
-        return NULL;
-    if ((PyObject *) txn == Py_None)
-        txn = NULL;
-    if (txn && txn->ob_type != &terane_TxnType)
-        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-
-    /* build the key from the term value */
-    key = _Segment_make_term_meta_key (fieldname, prefix);
-    if (key == NULL)
-        return NULL;
-
-    /* create a new cursor */
-    dbret = self->postings->cursor (self->postings, txn? txn->txn : NULL, &cursor, 0);
-    /* if cursor allocation failed, return Error */
-    if (dbret != 0) {
-        _Segment_free_term_key (key);
-        return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
-            db_strerror (dbret));
-    }
-    iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, key->data, key->size - 1, 0);
-    if (iter == NULL)
-        cursor->close (cursor);
-    _Segment_free_term_key (key);
-    return iter;
 }

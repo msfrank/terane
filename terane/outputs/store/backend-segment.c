@@ -106,32 +106,32 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
     /* create the DB handle for metadata */
     dbret = db_create (&self->metadata, self->index->env->env, 0);
     if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to create handle for _metadata: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to create handle for metadata: %s",
             db_strerror (dbret));
         goto error;
     }
     /* open the metadata DB */
     dbret = self->metadata->open (self->metadata, segment_txn, self->name,
-        "_metadata", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
+        "metadata", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to open _metadata: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to open metadata: %s",
             db_strerror (dbret));
         goto error;
     }
 
-    /* create the DB handle for documents */
-    dbret = db_create (&self->documents, self->index->env->env, 0);
+    /* create the DB handle for events */
+    dbret = db_create (&self->events, self->index->env->env, 0);
     if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to create handle for _documents: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to create handle for events: %s",
             db_strerror (dbret));
         goto error;
     }
 
-    /* open the documents DB */
-    dbret = self->documents->open (self->documents, segment_txn, self->name,
-        "_documents", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
+    /* open the events DB */
+    dbret = self->events->open (self->events, segment_txn, self->name,
+        "events", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to open _documents: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to open events: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -139,16 +139,50 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
     /* create the DB handle for postings */
     dbret = db_create (&self->postings, self->index->env->env, 0);
     if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to create handle for _postings: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to create handle for postings: %s",
             db_strerror (dbret));
         goto error;
     }
 
     /* open the postings DB */
     dbret = self->postings->open (self->postings, segment_txn, self->name,
-        "_postings", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
+        "postings", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to open _postings: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to open postings: %s",
+            db_strerror (dbret));
+        goto error;
+    }
+
+    /* create the DB handle for fields */
+    dbret = db_create (&self->fields, self->index->env->env, 0);
+    if (dbret != 0) {
+        PyErr_Format (terane_Exc_Error, "Failed to create handle for fields: %s",
+            db_strerror (dbret));
+        goto error;
+    }
+
+    /* open the fields DB */
+    dbret = self->fields->open (self->fields, segment_txn, self->name,
+        "fields", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
+    if (dbret != 0) {
+        PyErr_Format (terane_Exc_Error, "Failed to open fields: %s",
+            db_strerror (dbret));
+        goto error;
+    }
+
+    /* create the DB handle for terms */
+    dbret = db_create (&self->terms, self->index->env->env, 0);
+    if (dbret != 0) {
+        PyErr_Format (terane_Exc_Error, "Failed to create handle for terms: %s",
+            db_strerror (dbret));
+        goto error;
+    }
+
+    /* open the terms DB */
+    dbret = self->terms->open (self->terms, segment_txn, self->name,
+        "terms", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
+    if (dbret != 0) {
+        PyErr_Format (terane_Exc_Error, "Failed to open terms: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -202,28 +236,46 @@ terane_Segment_close (terane_Segment *self)
     if (self->metadata != NULL) {
         dbret = self->metadata->close (self->metadata, 0);
         if (dbret != 0)
-            PyErr_Format (terane_Exc_Error, "Failed to close _metadata DB: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to close metadata DB: %s",
                 db_strerror (dbret));
     }
     self->metadata = NULL;
 
-    /* close the documents db */
-    if (self->documents != NULL) {
-        dbret = self->documents->close (self->documents, 0);
+    /* close the events db */
+    if (self->events != NULL) {
+        dbret = self->events->close (self->events, 0);
         if (dbret != 0)
-            PyErr_Format (terane_Exc_Error, "Failed to close _documents DB: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to close events DB: %s",
                 db_strerror (dbret));
     }
-    self->documents = NULL;
+    self->events = NULL;
 
     /* close the postings db */
     if (self->postings != NULL) {
         dbret = self->postings->close (self->postings, 0);
         if (dbret != 0)
-            PyErr_Format (terane_Exc_Error, "Failed to close _postings DB: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to close postings DB: %s",
                 db_strerror (dbret));
     }
     self->postings = NULL;
+
+    /* close the fields db */
+    if (self->fields != NULL) {
+        dbret = self->fields->close (self->fields, 0);
+        if (dbret != 0)
+            PyErr_Format (terane_Exc_Error, "Failed to close fields DB: %s",
+                db_strerror (dbret));
+    }
+    self->fields = NULL;
+
+    /* close the terms db */
+    if (self->terms != NULL) {
+        dbret = self->terms->close (self->terms, 0);
+        if (dbret != 0)
+            PyErr_Format (terane_Exc_Error, "Failed to close terms DB: %s",
+                db_strerror (dbret));
+    }
+    self->terms = NULL;
 
     /* if this segment is marked to be deleted */
     if (self->deleted) {
@@ -244,44 +296,38 @@ PyMethodDef _Segment_methods[] =
         "Get a Segment metadata value." },
     { "set_meta", (PyCFunction) terane_Segment_set_meta, METH_VARARGS,
         "Set a Segment metadata value." },
-    { "get_field_meta", (PyCFunction) terane_Segment_get_field_meta, METH_VARARGS,
+    { "get_field", (PyCFunction) terane_Segment_get_field, METH_VARARGS,
         "Get a field metadata value." },
-    { "set_field_meta", (PyCFunction) terane_Segment_set_field_meta, METH_VARARGS,
+    { "set_field", (PyCFunction) terane_Segment_set_field, METH_VARARGS,
         "Set a field metadata value." },
-    { "new_doc", (PyCFunction) terane_Segment_new_doc, METH_VARARGS,
-        "Create a new document." },
-    { "get_doc", (PyCFunction) terane_Segment_get_doc, METH_VARARGS,
-        "Get a document blob by document ID." },
-    { "set_doc", (PyCFunction) terane_Segment_set_doc, METH_VARARGS,
-        "Set a document blob value." },
-    { "delete_doc", (PyCFunction) terane_Segment_delete_doc, METH_VARARGS,
-        "Delete a document blob." },
-    { "contains_doc", (PyCFunction) terane_Segment_contains_doc, METH_VARARGS,
-        "Returns True if the segment contains the specified document." },
-    { "estimate_docs", (PyCFunction) terane_Segment_estimate_docs, METH_VARARGS,
-        "Returns the percentage of documents within the given range." },
-    { "iter_docs_within", (PyCFunction) terane_Segment_iter_docs_within, METH_VARARGS,
-        "Iterates through all documents in the segment between the start and end IDs." },
+    { "new_event", (PyCFunction) terane_Segment_new_event, METH_VARARGS,
+        "Create a new event." },
+    { "get_event", (PyCFunction) terane_Segment_get_event, METH_VARARGS,
+        "Get an event blob by event identifier." },
+    { "set_event", (PyCFunction) terane_Segment_set_event, METH_VARARGS,
+        "Set an event value." },
+    { "delete_event", (PyCFunction) terane_Segment_delete_event, METH_VARARGS,
+        "Delete an event." },
+    { "contains_event", (PyCFunction) terane_Segment_contains_event, METH_VARARGS,
+        "Returns True if the segment contains the specified event." },
+    { "estimate_events", (PyCFunction) terane_Segment_estimate_events, METH_VARARGS,
+        "Returns the percentage of events within the given range." },
+    { "iter_events", (PyCFunction) terane_Segment_iter_events, METH_VARARGS,
+        "Iterates through all event identifers in the segment between the start and end event identifier." },
     { "get_term", (PyCFunction) terane_Segment_get_term, METH_VARARGS,
-        "Get a posting in the segment inverted index." },
-    { "set_term", (PyCFunction) terane_Segment_set_term, METH_VARARGS,
-        "Set a posting in the segment inverted index." },
-    { "contains_term", (PyCFunction) terane_Segment_contains_term, METH_VARARGS,
-        "Returns True if the segment contains the specified term." },
-    { "estimate_term_postings", (PyCFunction) terane_Segment_estimate_term_postings, METH_VARARGS,
-        "Returns the percentage of postings in the field within the given range." },
-    { "iter_terms", (PyCFunction) terane_Segment_iter_terms, METH_VARARGS,
-        "Iterates through all postings in the segment." },
-    { "iter_terms_within", (PyCFunction) terane_Segment_iter_terms_within, METH_VARARGS,
-        "Iterates through postings in the segment between the start and end IDs." },
-    { "get_term_meta", (PyCFunction) terane_Segment_get_term_meta, METH_VARARGS,
         "Get metadata for a term in the segment." },
-    { "set_term_meta", (PyCFunction) terane_Segment_set_term_meta, METH_VARARGS,
+    { "set_term", (PyCFunction) terane_Segment_set_term, METH_VARARGS,
         "Set metadata for a term in the segment." },
-    { "iter_terms_meta", (PyCFunction) terane_Segment_iter_terms_meta, METH_VARARGS,
-        "Iterates through all terms in the index." },
-    { "iter_terms_meta_range", (PyCFunction) terane_Segment_iter_terms_meta_range, METH_VARARGS,
-        "Iterates through all terms in the index matching the prefix." },
+    { "get_posting", (PyCFunction) terane_Segment_get_posting, METH_VARARGS,
+        "Get a posting in the segment inverted index." },
+    { "contains_posting", (PyCFunction) terane_Segment_contains_posting, METH_VARARGS,
+        "Returns True if the segment contains the specified posting." },
+    { "set_posting", (PyCFunction) terane_Segment_set_posting, METH_VARARGS,
+        "Set a posting in the segment inverted index." },
+    { "estimate_postings", (PyCFunction) terane_Segment_estimate_postings, METH_VARARGS,
+        "Returns the percentage of postings in the field within the given range." },
+    { "iter_postings", (PyCFunction) terane_Segment_iter_postings, METH_VARARGS,
+        "Iterates through all postings in the segment." },
     { "delete", (PyCFunction) terane_Segment_delete, METH_NOARGS,
         "Mark the DB Segment for deletion.  Actual deletion will not occur until the Segment is deallocated." },
     { "close", (PyCFunction) terane_Segment_close, METH_NOARGS,
