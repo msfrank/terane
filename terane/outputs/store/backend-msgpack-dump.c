@@ -390,7 +390,7 @@ _msgpack_dump_object (PyObject *obj, struct _buffer *buffer)
 
         /* fix map */
         if (size < 16) {
-            u8 = (uint8_t) size | 0x80;
+            u8 = ((uint8_t) size) | 0x80;
             if (_buffer_write (buffer, (char *) &u8, 1) < 0)
                 return -1;
         }
