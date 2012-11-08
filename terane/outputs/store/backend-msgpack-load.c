@@ -201,6 +201,10 @@ _terane_msgpack_load_value (char *          buf,
         *pos += val->data.raw.size;
         return 1;
     }
+
+    /* rewind the pos by one byte */
+    *pos -= 1;
+
     /* -2 means the data type is unknown */
     return -2;
 }
@@ -293,10 +297,12 @@ _msgpack_load_object (char *        buf,
 {
     terane_value val;
     int ret;
+    unsigned char type;
+    terane_conv *conv;
 
     ret = _terane_msgpack_load_value (buf, len, pos, &val);
     /* there was an error loading the value, give up */
-    if (ret < -1)
+    if (ret == -1)
         return -1;
     /* we have reached the end of the buffer */
     if (ret == 0)
@@ -339,60 +345,74 @@ _msgpack_load_object (char *        buf,
             return -1;
         return 1;
     }
+
     /* otherwise load a complex type */
-    else {
-        unsigned char type;
-        terane_conv *conv;
+    type = (unsigned char) **pos;
+    *pos += 1;
 
-        /* get the type byte */
-        type = ((unsigned char) **pos) - 1;
-
-        /* FixMap */
-
-        /* FixArray */
-        switch (type) {
-            /* array 16 */
-            case 0xdc:
-                if (!CONTAINS_BYTES(buf, len, pos, 2))
-                    return -1;
-                conv = (terane_conv *) *pos;
-                *obj = _msgpack_load_tuple (buf, len, pos, (Py_ssize_t) NTOHS(conv->u16));
-                if (*obj == NULL)
-                    return -1;
-                return 1;
-            /* array 32 */
-            case 0xdd:
-                if (!CONTAINS_BYTES(buf, len, pos, 4))
-                    return -1;
-                conv = (terane_conv *) *pos;
-                *obj = _msgpack_load_tuple (buf, len, pos, (Py_ssize_t) NTOHL(conv->u32));
-                if (*obj == NULL)
-                    return -1;
-                return 1;
-            /* map 16 */
-            case 0xde:
-                if (!CONTAINS_BYTES(buf, len, pos, 2))
-                    return -1;
-                conv = (terane_conv *) *pos;
-                *obj = _msgpack_load_dict (buf, len, pos, (Py_ssize_t) NTOHS(conv->u16));
-                if (*obj == NULL)
-                    return -1;
-                return 1;
-            /* map 32 */
-            case 0xdf:
-                if (!CONTAINS_BYTES(buf, len, pos, 4))
-                    return -1;
-                conv = (terane_conv *) *pos;
-                *obj = _msgpack_load_tuple (buf, len, pos, (Py_ssize_t) NTOHL(conv->u32));
-                if (*obj == NULL)
-                    return -1;
-                return 1;
-            /* unknown type */
-            default:
+    switch (type) {
+        /* array 16 */
+        case 0xdc:
+            if (!CONTAINS_BYTES(buf, len, pos, 2))
                 return -1;
-        }
+            conv = (terane_conv *) *pos;
+            *pos += 2;
+            *obj = _msgpack_load_tuple (buf, len, pos, (Py_ssize_t) NTOHS(conv->u16));
+            if (*obj == NULL)
+                return -1;
+            return 1;
+        /* array 32 */
+        case 0xdd:
+            if (!CONTAINS_BYTES(buf, len, pos, 4))
+                return -1;
+            conv = (terane_conv *) *pos;
+            *pos += 4;
+            *obj = _msgpack_load_tuple (buf, len, pos, (Py_ssize_t) NTOHL(conv->u32));
+            if (*obj == NULL)
+                return -1;
+            return 1;
+        /* map 16 */
+        case 0xde:
+            if (!CONTAINS_BYTES(buf, len, pos, 2))
+                return -1;
+            conv = (terane_conv *) *pos;
+            *pos += 2;
+            *obj = _msgpack_load_dict (buf, len, pos, (Py_ssize_t) NTOHS(conv->u16));
+            if (*obj == NULL)
+                return -1;
+            return 1;
+        /* map 32 */
+        case 0xdf:
+            if (!CONTAINS_BYTES(buf, len, pos, 4))
+                return -1;
+            conv = (terane_conv *) *pos;
+            *pos += 4;
+            *obj = _msgpack_load_dict (buf, len, pos, (Py_ssize_t) NTOHL(conv->u32));
+            if (*obj == NULL)
+                return -1;
+            return 1;
+        /* fall through */
+        default:
+            break;
     }
-    /* shouldn't ever get here */
+
+    /* FixArray */
+    if ((type & 0xf0) == 0x90) {
+        *obj = _msgpack_load_tuple (buf, len, pos, type & 0x0f);
+        if (*obj == NULL)
+                return -1;
+        return 1;
+    }
+    /* FixMap */
+    if ((type & 0xf0) == 0x80) {
+        *obj = _msgpack_load_dict (buf, len, pos, type & 0x0f);
+        if (*obj == NULL)
+                return -1;
+        return 1;
+    }
+
+    /* we don't know how to handle this type */
+    PyErr_Format (PyExc_ValueError, "unable to load data with type %x", (int) type);
     return -1;
 }
 

@@ -112,8 +112,20 @@ class Msgpack_Tests(unittest.TestCase):
         o = msgpack_load(s)
         self.failUnless(o == v, "o=%s, v=%s" % (o,v))
 
-    def test_list(self):
+    def test_fixarray(self):
         v = [1,2,3,4,5]
+        s = msgpack_dump(v)
+        o = msgpack_load(s)
+        self.failUnless(o == v, "o=%s, v=%s" % (o,v))
+
+    def test_array16(self):
+        v = [x for x in range(0, 1000)]
+        s = msgpack_dump(v)
+        o = msgpack_load(s)
+        self.failUnless(o == v, "o=%s, v=%s" % (o,v))
+
+    def test_array32(self):
+        v = [x for x in range(0, 100000)]
         s = msgpack_dump(v)
         o = msgpack_load(s)
         self.failUnless(o == v, "o=%s, v=%s" % (o,v))
@@ -122,11 +134,28 @@ class Msgpack_Tests(unittest.TestCase):
         v = (6,7,8,9,10)
         self.failUnlessRaises(ValueError, msgpack_dump, v)
 
-    def test_dict(self):
+    def test_fixmap(self):
         v = {u'foo': u'bar', u'baz': u'qux'}
         s = msgpack_dump(v)
         o = msgpack_load(s)
         self.failUnless(o == v, "o=%s, v=%s" % (o,v))
+
+    def test_map16(self):
+        v = dict()
+        for x in range(0, 16):
+            v[u"k%i" % x] = u"v%i" % x
+        s = msgpack_dump(v)
+        o = msgpack_load(s)
+        self.failUnless(o == v, "\no=%s\nv=%s" % (o,v))
+
+    def test_map32(self):
+        v = dict()
+        for x in range(0, 100000):
+            v[u"k%i" % x] = u"v%i" % x
+        s = msgpack_dump(v)
+        o = msgpack_load(s)
+        #self.failUnless(o == v, "o=%s, v=%s" % (o,v))
+        self.failUnless(o == v)
 
     def test_dict_key_types(self):
         v = {False: None, 1: None, u'two': None, 3.000: None}
