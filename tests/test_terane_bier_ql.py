@@ -20,6 +20,9 @@ class iter_Tests(unittest.TestCase):
     def test_OR_operator(self):
         q = parseIterQuery('foo OR bar')
 
+    def test_term_function(self):
+        q = parseIterQuery('foo:text:in(hello world)')
+
 class DATE_Tests(unittest.TestCase):
     """DATE clause tests."""
 
