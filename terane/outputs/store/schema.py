@@ -60,7 +60,7 @@ class Schema(object):
 
     def getField(self, fieldname, fieldtype):
         if fieldname == None and fieldtype == None:
-            return self.getField('message', None)
+            return self.getField(u'message', None)
         if fieldname not in self._fields:
             raise KeyError("%s:%s" % (fieldname, fieldtype))
         fieldspec = self._fields[fieldname]

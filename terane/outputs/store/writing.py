@@ -15,11 +15,10 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import pickle, time
+import time
 from zope.interface import implements
 from terane.bier import IWriter
 from terane.bier.writing import WriterError
-from terane.outputs.store.encoding import json_encode, json_decode
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.writing')
@@ -45,43 +44,47 @@ class IndexWriter(object):
         self._txn = self._ix.new_txn()
         return self
 
-    def newEvent(self, fields, evid):
+    def newEvent(self, evid, event):
         # serialize the fields dict and write it to the segment
         segment = self._ix._current
-        segment.set_doc(self._txn, str(evid), json_encode(fields))
+        segment.set_event(self._txn, str(evid), event)
         # update segment metadata
         self._indexSize += 1
         self._currentSize += 1
         self._lastId = str(evid)
         self._lastModified = int(time.time())
-        lastUpdate = {'size': self._currentSize, 'last-id': self._lastId, 'last-modified': self._lastModified}
-        segment.set_meta(self._txn, 'last-update', json_encode(lastUpdate))
+        lastUpdate = {
+            u'size': self._currentSize,
+            u'last-id': self._lastId,
+            u'last-modified': self._lastModified
+            }
+        segment.set_meta(self._txn, u'last-update', lastUpdate)
 
-    def newPosting(self, field, term, evid, meta):
+    def newPosting(self, field, term, evid, posting):
         segment = self._ix._current
+        fieldspec = (field.fieldname,field.fieldtype)
         try:
-            fieldspec = "%s~%s" % (field.fieldname,field.fieldtype)
-            tmeta = json_decode(segment.get_term_meta(self._txn, fieldspec, term))
-            if not 'num-docs' in tmeta:
+            value = segment.get_term(self._txn, fieldspec, term)
+            if not u'num-docs' in value:
                 raise WriterError("term metadata corruption: no such key 'num-docs'")
-            tmeta['num-docs'] += 1
+            value[u'num-docs'] += 1
         except KeyError:
-            tmeta = {'num-docs': 1}
+            value = {u'num-docs': 1}
         # increment the document count for this term
-        segment.set_term_meta(self._txn, fieldspec, term, json_encode(tmeta))
+        segment.set_term(self._txn, fieldspec, term, value)
         try:
-            fmeta = json_decode(segment.get_field_meta(self._txn, fieldspec))
-            if not 'num-docs' in fmeta:
+            value = segment.get_field(self._txn, fieldspec)
+            if not u'num-docs' in value:
                 raise WriterError("field metadata corruption: no such key 'num-docs'")
-            fmeta['num-docs'] += 1
+            value[u'num-docs'] += 1
         except KeyError:
-            fmeta = {'num-docs': 1}
+            value = {u'num-docs': 1}
         # increment the document count for this field
-        segment.set_field_meta(self._txn, fieldspec, json_encode(fmeta))
-        if meta == None:
-            meta = dict()
+        segment.set_field(self._txn, fieldspec, value)
+        if posting == None:
+            posting = dict()
         # add the term to the reverse index
-        segment.set_term(self._txn, fieldspec, term, str(evid), json_encode(meta))
+        segment.set_posting(self._txn, fieldspec, term, str(evid), posting)
 
     def commit(self):
         self._txn.commit()

@@ -23,7 +23,6 @@ from terane.outputs.store.segment import Segment
 from terane.outputs.store.schema import Schema
 from terane.outputs.store.searching import IndexSearcher
 from terane.outputs.store.writing import IndexWriter
-from terane.outputs.store.encoding import json_encode, json_decode
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.index')
@@ -58,22 +57,22 @@ class Index(backend.Index):
             with self.new_txn() as txn:
                 for segmentId in self.iter_segments(txn):
                     segment = Segment(txn, self, segmentId)
-                    last_update = json_decode(segment.get_meta(txn, 'last-update'))
-                    self._currentSize = last_update['size']
-                    self._indexSize += last_update['size']
-                    if last_update['last-id'] > self._lastId:
-                        self._lastId = last_update['last-id']
-                    if last_update['last-modified'] > self._lastModified:
-                        self._lastModified = last_update['last-modified']
+                    last_update = segment.get_meta(txn, u'last-update')
+                    self._currentSize = last_update[u'size']
+                    self._indexSize += last_update[u'size']
+                    if last_update[u'last-id'] > self._lastId:
+                        self._lastId = last_update[u'last-id']
+                    if last_update[u'last-modified'] > self._lastModified:
+                        self._lastModified = last_update[u'last-modified']
                     self._segments.append(segment)
             # if the index has no segments, create one
             if self._segments == []:
                 with self.new_txn() as txn:
                     segmentId = self.new_segment(txn)
                     segment = Segment(txn, self, segmentId)
-                    segment.set_meta(txn, 'created-on', json_encode(int(time.time())))
-                    last_update = {'size': 0, 'last-id': 0, 'last-modified': 0}
-                    segment.set_meta(txn, 'last-update', json_encode(last_update))
+                    segment.set_meta(txn, u'created-on', int(time.time()))
+                    last_update = {u'size': 0, u'last-id': 0, u'last-modified': 0}
+                    segment.set_meta(txn, u'last-update', last_update)
                 self._segments.append(segment)
                 logger.info("created first segment for new index '%s'" % name)
             else:
@@ -128,9 +127,9 @@ class Index(backend.Index):
             with self.new_txn() as txn:
                 segmentId = self.new_segment(txn)
                 segment = Segment(txn, self, segmentId)
-                segment.set_meta(txn, 'created-on', json_encode(int(time.time())))
-                last_update = {'size': 0, 'last-id': 0, 'last-modified': 0}
-                segment.set_meta(txn, 'last-update', json_encode(last_update))
+                segment.set_meta(txn, u'created-on', int(time.time()))
+                last_update = {u'size': 0, u'last-id': 0, u'last-modified': 0}
+                segment.set_meta(txn, u'last-update', last_update)
             self._segments.append(segment)
             self._current = segment
             self._currentSize = 0

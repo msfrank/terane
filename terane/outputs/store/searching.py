@@ -19,7 +19,6 @@ import math
 from zope.interface import implements
 from terane.bier import ISearcher, IPostingList, IEventStore
 from terane.bier.evid import EVID
-from terane.outputs.store.encoding import json_encode, json_decode
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.searching')
@@ -148,11 +147,13 @@ class MergedPostingList(object):
 
     def skipPosting(self, targetId):
         """
-        Skips to the targetId, returning the posting or None if the posting doesn't exist.
+        Skips to the targetId, returning the posting or None if the posting
+        doesn't exist.
 
         :param targetId: The target evid to skip to.
         :type targetId: :class:`terane.bier.evid.EVID`
-        :returns: The target posting, which is a tuple containing the evid, the term value, and the searcher, or (None,None,None)
+        :returns: The target posting, which is a tuple containing the evid,
+          the term value, and the searcher, or (None,None,None)
         :rtype: tuple
         """
         posting = None
@@ -207,20 +208,20 @@ class SegmentSearcher(object):
         """
         try:
             if field == None and term == None:
-                lastUpdate = json_decode(self._segment.get_meta(self._txn, 'last-update'))
-                numDocs = lastUpdate['size']
-                # startId may be greater than endId, but the estimate_doc_postings
-                #method doesn't care
-                estimate = self._segment.estimate_doc_postings(self._txn,
+                lastUpdate = self._segment.get_meta(self._txn, u'last-update')
+                numDocs = lastUpdate[u'size']
+                # startId may be greater than endId, but the estimate_events
+                # method doesn't care
+                estimate = self._segment.estimate_events(self._txn,
                     str(startId), str(endId))
             else:
-                fieldspec = "%s~%s" % (field.fieldname, field.fieldtype)
+                fieldspec = (field.fieldname, field.fieldtype)
                 term = unicode(term)
-                fmeta = json_decode(self._segment.get_field_meta(self._txn, fieldspec))
-                numDocs = fmeta['num-docs']
-                # startId may be greater than endId, but the estimate_term_postings
+                field = self._segment.get_field(self._txn, fieldspec)
+                numDocs = field[u'num-docs']
+                # startId may be greater than endId, but the estimate_postings
                 # method doesn't care
-                estimate = self._segment.estimate_term_postings(self._txn,
+                estimate = self._segment.estimate_postings(self._txn,
                     fieldspec, term, str(startId), str(endId))
             return int(math.ceil(numDocs * estimate))
         except KeyError:
@@ -228,9 +229,10 @@ class SegmentSearcher(object):
 
     def iterPostings(self, field, term, startId, endId):
         """
-        Returns a PostingList which yields postings for the term in the specified field.
-        As a special case, if fieldname and term are None, then yield postings for all
-        terms in all fields within the specified period.
+        Returns a PostingList which yields postings for the term in the
+        specified field.  As a special case, if fieldname and term are None,
+        then yield postings for all terms in all fields within the specified
+        period.
 
         :param field: The field to search within.
         :type field: :class:`terane.bier.fields.QualifiedField`
@@ -244,12 +246,12 @@ class SegmentSearcher(object):
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
         if field == None and term == None:
-            postings = self._segment.iter_docs_within(self._txn,
+            postings = self._segment.iter_events(self._txn,
                 str(startId), str(endId))
         else:
-            fieldspec = "%s~%s" % (field.fieldname, field.fieldtype)
+            fieldspec = (field.fieldname, field.fieldtype)
             term = unicode(term)
-            postings = self._segment.iter_terms_within(self._txn,
+            postings = self._segment.iter_postings(self._txn,
                 fieldspec, term, str(startId), str(endId))
         return PostingList(self, postings)
 
@@ -262,8 +264,8 @@ class SegmentSearcher(object):
         :returns: A dict mapping fieldnames to values.
         :rtype: dict
         """
-        fields = json_decode(self._segment.get_doc(self._txn, str(evid)))
-        defaultfield = 'message'
+        fields = self._segment.get_event(self._txn, str(evid))
+        defaultfield = u'message'
         defaultvalue = fields[defaultfield]
         del fields[defaultfield]
         return defaultfield, defaultvalue, fields
@@ -292,7 +294,8 @@ class PostingList(object):
         """
         Returns the next posting, or None if iteration is finished.
 
-        :returns: The next posting, which is a tuple containing the evid, the term value, and the searcher, or (None,None,None)
+        :returns: The next posting, which is a tuple containing the evid, the
+          term value, and the searcher, or (None,None,None)
         :rtype: tuple
         """
         if self._postings == None:
@@ -300,10 +303,6 @@ class PostingList(object):
         try:
             evid,tvalue = self._postings.next()
             evid = EVID.fromString(evid)
-            if tvalue == '' or tvalue == None:
-                tvalue = None
-            else:
-                tvalue = json_decode(tvalue)
             return evid, tvalue, self._searcher
         except StopIteration:
             self._postings.close()
@@ -312,11 +311,13 @@ class PostingList(object):
 
     def skipPosting(self, targetId):
         """
-        Skips to the targetId, returning the posting or None if the posting doesn't exist.
+        Skips to the targetId, returning the posting or None if the posting
+        doesn't exist.
 
         :param targetId: The target evid to skip to.
         :type targetId: :class:`terane.bier.evid.EVID`
-        :returns: The target posting, which is a tuple containing the evid, the term value, and the searcher, or (None,None,None)
+        :returns: The target posting, which is a tuple containing the evid,
+          the term value, and the searcher, or (None,None,None)
         :rtype: tuple
         """
         if self._postings == None:
@@ -325,10 +326,6 @@ class PostingList(object):
             targetId = str(targetId)
             evid,tvalue = self._postings.skip(targetId)
             evid = EVID.fromString(evid)
-            if tvalue == '' or tvalue == None:
-                tvalue = None
-            else:
-                tvalue = json_decode(tvalue)
             return evid, tvalue, self._searcher
         except IndexError:
             return None, None, None
