@@ -111,7 +111,7 @@ terane_Index_set_meta (terane_Index *self, PyObject *args)
     key.size = strlen (id) + 1;
     /* serialize the metadata */
     memset (&data, 0, sizeof (DBT));
-    if (!_terane_msgpack_dump (metadata, (char **) &data.data, &data.size))
+    if (_terane_msgpack_dump (metadata, (char **) &data.data, &data.size) < 0)
         return NULL;
     /* set the record */
     dbret = self->metadata->put (self->metadata, txn->txn, &key, &data, 0);
