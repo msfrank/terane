@@ -158,7 +158,7 @@ class Msgpack_Tests(unittest.TestCase):
         self.failUnless(o == v)
 
     def test_dict_key_types(self):
-        v = {False: None, 1: None, u'two': None, 3.000: None}
+        v = {False: None, 1: None, u'two': None, 3.14159: None, u'foo': None}
         s = msgpack_dump(v)
         o = msgpack_load(s)
         self.failUnless(o == v, "o=%s, v=%s" % (o,v))

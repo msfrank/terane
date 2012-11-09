@@ -99,8 +99,13 @@ _terane_msgpack_make_value (PyObject *obj)
         return NULL;
     }
     else if (PyFloat_CheckExact (obj)) {
-        PyMem_Free (value);
-        return NULL;
+        value->type = TERANE_MSGPACK_TYPE_DOUBLE;
+        value->data.f64 = PyFloat_AsDouble (obj);
+        if (PyErr_Occurred()) {
+            PyMem_Free (value);
+            return NULL;
+        }
+        return value;
     }
     else if (PyUnicode_CheckExact (obj)) {
         PyObject *utf8;
@@ -285,7 +290,13 @@ _msgpack_dump_value (PyObject *obj, struct _buffer *buffer)
             break;
         /* double */
         case TERANE_MSGPACK_TYPE_DOUBLE:
-            goto error;
+            if (_buffer_write (buffer, "\xcb", 1) < 0)
+                return -1;
+            /* use some underhanded union trickery */
+            conv.u64 = HTONQ(value->data.u64);
+            if (_buffer_write (buffer, (char *) &conv.f64, 8) < 0)
+                return -1;
+            break;
         case TERANE_MSGPACK_TYPE_RAW:
             /* fixraw */
             if (value->data.raw.size < 32) {
@@ -347,7 +358,7 @@ _msgpack_dump_object (PyObject *obj, struct _buffer *buffer)
         return 0;
 
     /* list */
-    else if (PyTuple_CheckExact (obj)) {
+    else if (PyList_CheckExact (obj)) {
         size = PySequence_Fast_GET_SIZE (obj);
         items = PySequence_Fast_ITEMS (obj);
 

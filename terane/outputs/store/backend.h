@@ -71,6 +71,8 @@ typedef union {
     int32_t i32;
     uint64_t u64;
     int64_t i64;
+    float f32;
+    double f64;
     struct {
         char *bytes;
         uint32_t size;

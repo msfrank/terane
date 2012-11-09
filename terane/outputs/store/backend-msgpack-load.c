@@ -36,6 +36,10 @@ _terane_msgpack_load_value (char *          buf,
 {
     unsigned char type;
     terane_conv *conv = NULL;
+    union {
+        uint32_t u32;
+        float f32;
+    } u_to_f;
 
     assert (buf != NULL);
     assert (pos != NULL && (*pos == NULL || *pos >= buf));
@@ -69,14 +73,23 @@ _terane_msgpack_load_value (char *          buf,
         case 0xca:
             if (!CONTAINS_BYTES(buf, len, pos, 4))
                 return -1;
+            conv = (terane_conv *) *pos;
+            val->type = TERANE_MSGPACK_TYPE_DOUBLE;
+            /* use some underhanded union trickery */
+            u_to_f.u32 = NTOHL(conv->u32);
+            val->data.f64 = u_to_f.f32;
             *pos += 4;
-            return -1;
+            return 1;
         /* double */
         case 0xcb:
             if (!CONTAINS_BYTES(buf, len, pos, 8))
                 return -1;
+            conv = (terane_conv *) *pos;
+            val->type = TERANE_MSGPACK_TYPE_DOUBLE;
+            /* use some underhanded union trickery */
+            val->data.u64 = NTOHQ(conv->u64);
             *pos += 8;
-            return -1;
+            return 1;
         /* uint 8 */
         case 0xcc:
             if (!CONTAINS_BYTES(buf, len, pos, 1))
@@ -220,21 +233,21 @@ _msgpack_load_object (char *        buf,
  * _msgpack_load_tuple:
  */
 static PyObject *
-_msgpack_load_tuple (char *       buf,
-                     uint32_t     len,
-                     char **      pos,
-                     Py_ssize_t   size)
+_msgpack_load_list (char *        buf,
+                    uint32_t      len,
+                    char **       pos,
+                    Py_ssize_t    size)
 {
     PyObject *list = NULL, *item = NULL;
     int i;
 
-    list = PyTuple_New (size);
+    list = PyList_New (size);
     if (list == NULL)
         return NULL;
     for (i = 0; i < size; i++) {
         if (_msgpack_load_object (buf, len, pos, &item) < 0)
             goto error;
-        PyTuple_SET_ITEM (list, i, item);
+        PyList_SET_ITEM (list, i, item);
         item = NULL;
     }
     return list;
@@ -357,7 +370,7 @@ _msgpack_load_object (char *        buf,
                 return -1;
             conv = (terane_conv *) *pos;
             *pos += 2;
-            *obj = _msgpack_load_tuple (buf, len, pos, (Py_ssize_t) NTOHS(conv->u16));
+            *obj = _msgpack_load_list (buf, len, pos, (Py_ssize_t) NTOHS(conv->u16));
             if (*obj == NULL)
                 return -1;
             return 1;
@@ -367,7 +380,7 @@ _msgpack_load_object (char *        buf,
                 return -1;
             conv = (terane_conv *) *pos;
             *pos += 4;
-            *obj = _msgpack_load_tuple (buf, len, pos, (Py_ssize_t) NTOHL(conv->u32));
+            *obj = _msgpack_load_list (buf, len, pos, (Py_ssize_t) NTOHL(conv->u32));
             if (*obj == NULL)
                 return -1;
             return 1;
@@ -398,7 +411,7 @@ _msgpack_load_object (char *        buf,
 
     /* FixArray */
     if ((type & 0xf0) == 0x90) {
-        *obj = _msgpack_load_tuple (buf, len, pos, type & 0x0f);
+        *obj = _msgpack_load_list (buf, len, pos, type & 0x0f);
         if (*obj == NULL)
                 return -1;
         return 1;
