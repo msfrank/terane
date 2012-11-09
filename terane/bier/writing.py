@@ -63,7 +63,7 @@ def writeEventToIndex(event, index):
                 writer.newPosting(field, term, evid, meta)
             fields[fieldname] = value
         # store the document data
-        writer.newEvent(fields, evid)
+        writer.newEvent(evid, fields)
     # if an exception was raised, then abort the transaction
     except:
         writer.abort()

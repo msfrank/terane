@@ -209,16 +209,16 @@ class IWriter(Interface):
         """
         Enter the transactional context.
         """
-    def newEvent(fields, evid):
+    def newEvent(evid, event):
         """
         Create a new event with the specified event identifier.
 
-        :param fields: A map of fieldnames to values.
-        :type fields: dict
         :param evid: The identifier used as key to look up the event.
         :type evid: :class:`terane.bier.evid.EVID`
+        :param event: A map of fieldnames to values.
+        :type event: dict
         """
-    def newPosting(field, term, evid, meta):
+    def newPosting(field, term, evid, posting):
         """
         Create a new posting for the field term with the specified event identifier.
 
@@ -228,8 +228,8 @@ class IWriter(Interface):
         :type term: object
         :param evid: The identifier used as key to look up the event.
         :type evid: :class:`terane.bier.evid.EVID`
-        :param meta: Metadata associated with the posting.
-        :type meta: dict
+        :param posting: Value associated with the posting.
+        :type posting: dict
         """
     def commit():
         """
