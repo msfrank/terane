@@ -27,6 +27,10 @@ class Assertion(object):
     post-conditions with respect to the event processing pipeline.
     """
     def __init__(self, fieldname, fieldtype, expects=False, guarantees=True, ephemeral=False, accepts=None):
+        if not isinstance(fieldname, unicode):
+            raise TypeError("fieldname must be a unicode object")
+        if not isinstance(fieldtype, unicode):
+            raise TypeError("fieldtype must be a unicode object")
         if len(fieldname) < 2:
             raise TypeError("fieldname must be at least two characters")
         if fieldname.startswith('__'):
@@ -42,9 +46,9 @@ class Assertion(object):
         self.ephemeral = bool(ephemeral)
         self.accepts = accepts
 
-_assertion_input = Assertion('input', 'literal', guarantees=True, ephemeral=False)
-_assertion_hostname = Assertion('hostname', 'literal', guarantees=True, ephemeral=False)
-_assertion_message = Assertion('message', 'text', guarantees=True, ephemeral=False)
+_assertion_input = Assertion(u'input', u'literal', guarantees=True, ephemeral=False)
+_assertion_hostname = Assertion(u'hostname', u'literal', guarantees=True, ephemeral=False)
+_assertion_message = Assertion(u'message', u'text', guarantees=True, ephemeral=False)
 
 class Contract(object):
     """
@@ -59,9 +63,9 @@ class Contract(object):
     def __init__(self):
         self.signed = False
         self._assertions = {
-            'message': _assertion_message,
-            'input': _assertion_input,
-            'hostname': _assertion_hostname
+            u'message': _assertion_message,
+            u'input': _assertion_input,
+            u'hostname': _assertion_hostname
             }
 
     def addAssertion(self, fieldname, fieldtype, **kwds):
@@ -69,14 +73,18 @@ class Contract(object):
         Add an assertion to the contract.
 
         :param fieldname: The name of the field.
-        :type fieldname: str
+        :type fieldname: unicode
         :param fieldtype: The type of the field.
-        :type fieldtype: str
+        :type fieldtype: unicode
         :param kwds: keyword parameters which further describe the assertion.
         :type kwds: dict
         :returns: A reference to the contract, so methods can be chained.
         :rtype: :class:`terane.bier.event.Contract`
         """
+        if not isinstance(fieldname, unicode):
+            raise TypeError("fieldname must be a unicode object")
+        if not isinstance(fieldtype, unicode):
+            raise TypeError("fieldtype must be a unicode object")
         if self.signed:
             raise Exception("writing to a signed Contract is not allowed")
         if fieldname in self._assertions:
@@ -194,17 +202,17 @@ class Event(MutableMapping):
 
     implements(ICopyable)
 
-    def __init__(self, ts, id):
+    def __init__(self, ts, offset):
         self._values = dict()
         self.ts = ts
-        self.id = id
+        self.offset = offset
 
     def copy(self):
         return copy.deepcopy(self)
 
     def __str__(self):
         fields = ' '.join(["%s=%s(%s)" %(n,t,v) for n,t,v in self])
-        return "<Event ts=%i id=%i %s>" % (self.ts, self.id, fields)
+        return "<Event ts=%i offset=%i %s>" % (self.ts, self.offset, fields)
 
     def __len__(self):
         return len(self._values)

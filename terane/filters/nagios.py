@@ -30,12 +30,12 @@ class NagiosFilter(Filter):
 
     def configure(self, section):
         self._contract = Contract()
-        self._contract.addAssertion('nagios_evtype', 'literal', guarantees=True)
-        self._contract.addAssertion('nagios_host', 'text', guarantees=False)
-        self._contract.addAssertion('nagios_service', 'text', guarantees=False)
-        self._contract.addAssertion('nagios_status', 'text', guarantees=False)
-        self._contract.addAssertion('nagios_state', 'text', guarantees=False)
-        self._contract.addAssertion('nagios_attempt', 'text', guarantees=False)
+        self._contract.addAssertion(u'nagios_evtype', u'literal', guarantees=True)
+        self._contract.addAssertion(u'nagios_host', u'text', guarantees=False)
+        self._contract.addAssertion(u'nagios_service', u'text', guarantees=False)
+        self._contract.addAssertion(u'nagios_status', u'text', guarantees=False)
+        self._contract.addAssertion(u'nagios_state', u'text', guarantees=False)
+        self._contract.addAssertion(u'nagios_attempt', u'text', guarantees=False)
         self._contract.sign()
 
     def getContract(self):

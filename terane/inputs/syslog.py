@@ -126,10 +126,10 @@ class SyslogInput(Input):
             for selector in [s.strip() for s in selectors.split(';') if not s == '']:
                 self._updateselected(selector)
         self._contract = Contract()
-        self._contract.addAssertion('syslog_facility', 'literal', guarantees=True)
-        self._contract.addAssertion('syslog_severity', 'literal', guarantees=True)
-        self._contract.addAssertion('syslog_pid', 'literal', guarantees=False)
-        self._contract.addAssertion('syslog_tag', 'text', guarantees=False)
+        self._contract.addAssertion(u'syslog_facility', u'literal', guarantees=True)
+        self._contract.addAssertion(u'syslog_severity', u'literal', guarantees=True)
+        self._contract.addAssertion(u'syslog_pid', u'literal', guarantees=False)
+        self._contract.addAssertion(u'syslog_tag', u'text', guarantees=False)
         self._contract.sign()
 
     def getContract(self):

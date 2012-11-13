@@ -37,9 +37,9 @@ class RFC2822DatetimeFilter(Filter):
         self._expected = section.getBoolean('expects source', False)
         self._guaranteed = section.getBoolean('guarantees source', False)
         self._contract = Contract()
-        self._contract.addAssertion( self._fieldname, 'text',
+        self._contract.addAssertion( unicode(self._fieldname), u'text',
             expects=self._expected, guarantees=self._guaranteed, ephemeral=True)
-        self._assertion = getattr(self._contract, 'field_' + self._fieldname)
+        self._assertion = getattr(self._contract, unicode('field_' + self._fieldname))
         self._contract.sign()
 
     def getContract(self):
@@ -66,9 +66,9 @@ class SyslogDatetimeFilter(Filter):
         self._expected = section.getBoolean('expects source', False)
         self._guaranteed = section.getBoolean('guarantees source', False)
         self._contract = Contract()
-        self._contract.addAssertion(self._fieldname, 'text',
+        self._contract.addAssertion(unicode(self._fieldname), u'text',
             expects=self._expected, guarantees=self._guaranteed, ephemeral=True)
-        self._assertion = getattr(self._contract, 'field_' + self._fieldname)
+        self._assertion = getattr(self._contract, unicode('field_' + self._fieldname))
         self._contract.sign()
 
     def getContract(self):
@@ -100,14 +100,14 @@ class DatetimeExpanderFilter(Filter):
 
     def configure(self, section):
         self._contract = Contract()
-        self._contract.addAssertion('dt_year', 'text', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('dt_month', 'text', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('dt_day', 'text', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('dt_hour', 'text', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('dt_minute', 'text', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('dt_second', 'text', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('dt_weekday', 'text', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('dt_yearday', 'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'dt_year', u'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'dt_month', u'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'dt_day', u'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'dt_hour', u'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'dt_minute', u'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'dt_second', u'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'dt_weekday', u'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'dt_yearday', u'text', expects=False, guarantees=True, ephemeral=False)
         self._contract.sign()
 
     def getContract(self):

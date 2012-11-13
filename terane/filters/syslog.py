@@ -32,8 +32,8 @@ class SyslogFilter(Filter):
         self._linematcher = re.compile(r'(?P<ts>[A-Za-z]{3} [ \d]\d \d\d:\d\d\:\d\d) (?P<hostname>\S*) (?P<msg>.*)')
         self._tagmatcher = re.compile(r'^(\S+)\[(\d+)\]:$|^(\S+):$')
         self._contract = Contract()
-        self._contract.addAssertion('syslog_pid', 'literal', guarantees=False)
-        self._contract.addAssertion('syslog_tag', 'text', guarantees=False)
+        self._contract.addAssertion(u'syslog_pid', u'literal', guarantees=False)
+        self._contract.addAssertion(u'syslog_tag', u'text', guarantees=False)
         self._contract.sign()
 
     def getContract(self):

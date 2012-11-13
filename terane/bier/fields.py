@@ -28,8 +28,8 @@ class QualifiedField(object):
     """
     """
     def __init__(self, fieldname, fieldtype, field):
-        self.fieldname = fieldname
-        self.fieldtype = fieldtype
+        self.fieldname = unicode(fieldname)
+        self.fieldtype = unicode(fieldtype)
         self.field = field
 
     def parseValue(self, value):
@@ -92,7 +92,7 @@ class IdentityField(BaseField):
         :returns: A list of (term, metadata) tuples.
         :rtype: list
         """
-        return [(unicode(value), {'pos': 0})]
+        return [(unicode(value), {u'pos': 0})]
 
     def match_is(self, field, value):
         """
@@ -149,9 +149,9 @@ class TextField(BaseField):
         for position in range(len(terms)):
             term = terms[position]
             if term in positions:
-                positions[term]['pos'].append(position)
+                positions[term][u'pos'].append(position)
             else:
-                positions[term] = {'pos': [position]}
+                positions[term] = {u'pos': [position]}
         return positions.items()
 
     def match_in(self, field, value):

@@ -40,12 +40,12 @@ class ApacheCommonFilter(Filter):
             re.VERBOSE
             )
         self._contract = Contract()
-        self._contract.addAssertion('remotehost', 'text', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('remotelog', 'text', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('remoteuser', 'literal', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('request', 'literal', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('status', 'literal', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('byteswritten', 'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'remotehost', u'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'remotelog', u'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'remoteuser', u'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'request', u'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'status', u'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'byteswritten', u'literal', expects=False, guarantees=True, ephemeral=False)
         self._contract.sign()
 
     def getContract(self):
@@ -92,14 +92,14 @@ class ApacheCombinedFilter(Filter):
             re.VERBOSE
             )
         self._contract = Contract()
-        self._contract.addAssertion('remotehost', 'text', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('remotelog', 'literal', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('remoteuser', 'literal', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('request', 'text', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('status', 'literal', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('byteswritten', 'literal', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('referrer', 'text', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion('useragent', 'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'remotehost', u'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'remotelog', u'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'remoteuser', u'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'request', u'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'status', u'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'byteswritten', u'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'referrer', u'text', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'useragent', u'text', expects=False, guarantees=True, ephemeral=False)
         self._contract.sign()
 
     def getContract(self):

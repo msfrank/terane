@@ -98,5 +98,3 @@ class CollectInputPlugin(Plugin):
             self._listener = None
         Plugin.stopService(self)
         logger.info("[%s] stopped listening for remote messages" % self.name)
-
-
