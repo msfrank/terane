@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, datetime, traceback, types
+import os, sys, datetime, traceback, types
 from Queue import Queue
 from functools import wraps
 from twisted.python.log import startLoggingWithObserver, msg, err, ILogObserver
@@ -84,12 +84,17 @@ class BaseHandler(object):
     def __init__(self):
         pass
     def __call__(self, record):
-        if 'failure' in record:
-            record['message'] = record['failure'].getTraceback()
-            self.handle("%(time)s %(levelname)s %(loggername)s: %(message)s" % record)
-        else:
-            record['message'] = ' '.join(record['message'])
-            self.handle("%(time)s %(levelname)s %(loggername)s: %(message)s" % record)
+        try:
+            if 'failure' in record:
+                f = record['failure']
+                record['message'] = "Caught exception %s: %s" % (f.type.__name__, f.value)
+                record['why'] = ''.join(record['why'])
+                self.handle("%(time)s %(levelname)s %(loggername)s: %(message)s\n%(why)s" % record)
+            else:
+                record['message'] = ' '.join(record['message'])
+                self.handle("%(time)s %(levelname)s %(loggername)s: %(message)s" % record)
+        except BaseException, e:
+            print >> sys.stderr, "*** ERROR *** failed to log error: %s" % str(e)
     def handle(self, message):
         pass
     def close(self):
@@ -121,13 +126,13 @@ class Logger(object):
         return self._name
 
     def msg(self, level, message, **kwds):
-        kwds['logger'] = self
-        kwds['level'] = level
+        kwds = {'logger': self, 'level': level}
         msg(message, **kwds)
 
     def exception(self, exception):
+        type_, value_, traceback_ = sys.exc_info()
         kwds = {'logger': self, 'level': DEBUG}
-        err(_why=exception, **kwds)
+        err(exception, traceback.format_tb(traceback_), **kwds)
 
     def trace(self, message, **kwds):
         self.msg(TRACE, message, **kwds)
