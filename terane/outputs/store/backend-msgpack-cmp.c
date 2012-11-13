@@ -99,25 +99,28 @@ _terane_msgpack_cmp (char *b1, uint32_t l1, char *b2, uint32_t l2, int *result)
     *result = 0;
 
     while (1) {
+        /* if either load returns error, then pass that along */
         if ((ret1 = _terane_msgpack_load_value (b1, l1, &pos1, &val1)) < 0)
             return -1;
         if ((ret2 = _terane_msgpack_load_value (b2, l2, &pos2, &val2)) < 0)
             return -1;
+        /* if both lists have no more items, then they compare equal */
+        if (ret1 == 0 && ret2 == 0)
+            return 0;
         /* 
          * if either unpacker returns 0, then we don't need to compare the
          * actual objects.  otherwise, compare the two objects themselves.
          * if the result is zero then compare the next set of objects,
          * otherwise, break the loop.
          */
-        if (ret1 == 0 && ret2 == 0)
-            break;
-        else if (ret1 == 0)
+        if (ret1 == 0)
             *result = -1;
         else if (ret2 == 0)
             *result = 1;
         else
             *result = _terane_msgpack_cmp_values (&val1, &val2);
-        if (result != 0)
+        /* if result is not 0, then we are done */
+        if (*result != 0)
             break;
     }
     return 0;

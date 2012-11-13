@@ -35,27 +35,27 @@ PyObject *
 terane_Index_get_meta (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    const char *id = NULL;
+    PyObject *id = NULL;
     DBT key, data;
     PyObject *metadata = NULL;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "Os", &txn, &id))
+    if (!PyArg_ParseTuple (args, "OO", &txn, &id))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    /* use the document id as the record number */
+    /* use the metadata name as the key */
     memset (&key, 0, sizeof (DBT));
-    key.data = (char *) id;
-    key.size = strlen(id) + 1;
+    key.flags = DB_DBT_REALLOC;
+    if (_terane_msgpack_dump (id, (char **) &key.data, &key.size) < 0)
+        return NULL;
+    /* get the record */
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
-
-    /* get the record */
     dbret = self->metadata->get (self->metadata, txn? txn->txn : NULL, &key, &data, 0);
     switch (dbret) {
         case 0:
@@ -76,6 +76,8 @@ terane_Index_get_meta (terane_Index *self, PyObject *args)
     }
 
     /* free allocated memory */
+    if (key.data)
+        PyMem_Free (key.data);
     if (data.data)
         PyMem_Free (data.data);
     return metadata;
@@ -97,22 +99,24 @@ PyObject *
 terane_Index_set_meta (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    const char *id = NULL;
+    PyObject *id = NULL;
     PyObject *metadata = NULL;
     DBT key, data;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!sO", &terane_TxnType, &txn, &id, &metadata))
+    if (!PyArg_ParseTuple (args, "O!OO", &terane_TxnType, &txn, &id, &metadata))
         return NULL;
-    /*  set the key */
+    /*  use the metadata name asthe key */
     memset (&key, 0, sizeof (DBT));
-    key.data = (char *) id;
-    key.size = strlen (id) + 1;
+    if (_terane_msgpack_dump (id, (char **) &key.data, &key.size) < 0)
+        return NULL;
     /* serialize the metadata */
     memset (&data, 0, sizeof (DBT));
-    if (_terane_msgpack_dump (metadata, (char **) &data.data, &data.size) < 0)
+    if (_terane_msgpack_dump (metadata, (char **) &data.data, &data.size) < 0) {
+        PyMem_Free (key.data);
         return NULL;
+    }
     /* set the record */
     dbret = self->metadata->put (self->metadata, txn->txn, &key, &data, 0);
     /* db error, raise Exception */

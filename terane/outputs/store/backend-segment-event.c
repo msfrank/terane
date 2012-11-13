@@ -88,8 +88,9 @@ terane_Segment_get_event (terane_Segment *self, PyObject *args)
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
-    /* use the document id as the key */
+    /* use the event identifier as the key */
     memset (&key, 0, sizeof (DBT));
+    key.flags = DB_DBT_REALLOC;
     if (_terane_msgpack_dump (evid, (char **) &key.data, &key.size) < 0)
         return NULL;
     /* get the document */

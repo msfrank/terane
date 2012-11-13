@@ -29,11 +29,13 @@ _free_iterkey (terane_iterkey *iter_key)
 
     if (iter_key == NULL)
         return;
-    for (i = 0; i < iter_key->size; i++) {
-        if (iter_key->values[i])
-            _terane_msgpack_free_value (iter_key->values[i]);
+    if (iter_key->values) {
+        for (i = 0; i < iter_key->size; i++) {
+            if (iter_key->values[i])
+                _terane_msgpack_free_value (iter_key->values[i]);
+        }
+        PyMem_Free (iter_key->values);
     }
-    PyMem_Free (iter_key->values);
     PyMem_Free (iter_key);
 }
 
@@ -41,24 +43,27 @@ _free_iterkey (terane_iterkey *iter_key)
  * _make_iterkey:
  */
 static terane_iterkey *
-_make_iterkey (PyObject *tuple)
+_make_iterkey (PyObject *list)
 {
     terane_iterkey *iter_key = NULL;
+    Py_ssize_t size;
     int i;
 
-    assert (PyTuple_CheckExact (tuple));
+    assert (PyList_CheckExact (list));
 
     iter_key = PyMem_Malloc (sizeof (terane_iterkey));
     if (iter_key == NULL)
         return NULL;
-    iter_key->size = PyTuple_GET_SIZE (tuple);
-    iter_key->values = PyMem_Malloc (sizeof (terane_value *) * iter_key->size);
+    size = PyList_GET_SIZE (list);
+    iter_key->values = PyMem_New (terane_value *, size);
     if (iter_key->values == NULL) {
         _free_iterkey (iter_key);
         return NULL;
     }
+    memset (iter_key->values, 0, sizeof (terane_value *) * size);
+    iter_key->size = size;
     for (i = 0; i < iter_key->size; i++ ) {
-        PyObject *item = PyTuple_GET_ITEM (tuple, i);
+        PyObject *item = PyList_GET_ITEM (list, i);
         iter_key->values[i] = _terane_msgpack_make_value (item);
         if (iter_key->values[i] < 0) {
             _free_iterkey (iter_key);
@@ -197,7 +202,7 @@ terane_Iter_new_within (PyObject *          parent,
         return NULL;
     }
     iter->end = _make_iterkey (end);
-    if (iter->start == NULL) {
+    if (iter->end == NULL) {
         Py_DECREF (iter);
         return NULL;
     }
@@ -227,15 +232,19 @@ static int
 _Iter_cmp (terane_iterkey *lhs, DBT *rhs, int reverse, int *result)
 {
     char *pos = NULL;
+    terane_value value;
     int i, ret = 0;
 
     /* compare each item */
     for (i = 0; i < lhs->size; i++) {
-        terane_value value;
-
         ret = _terane_msgpack_load_value (rhs->data, rhs->size, &pos, &value);
-        if (ret > 0)
+        if (ret < 0)
+            PyErr_Format (PyExc_ValueError, "cmp failed: error loading value for rhs");
+        if (ret > 0) {
             ret = _terane_msgpack_cmp_values (lhs->values[i], &value);
+            if (ret < 0)
+                PyErr_Format (PyExc_ValueError, "cmp failed: error comparing values");
+        }
         else if (ret == 0)
             *result = 1;
         if (ret < 0 || *result != 0)
@@ -474,8 +483,13 @@ terane_Iter_close (terane_Iter *self)
     self->parent = NULL;
     if (self->start)
         _free_iterkey (self->start);
+    self->start = NULL;
     if (self->end)
         _free_iterkey (self->end);
+    self->end = NULL;
+    if (self->range.data)
+        PyMem_Free (self->range.data);
+    self->range.data = NULL;
     Py_RETURN_NONE;
 }
 

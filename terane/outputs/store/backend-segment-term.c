@@ -51,13 +51,14 @@ terane_Segment_get_term (terane_Segment *self, PyObject *args)
 
     /* build the key from the fieldname and term values */
     memset (&key, 0, sizeof (DBT));
+    key.flags = DB_DBT_REALLOC;
     if (_terane_msgpack_dump (term, (char **) &key.data, &key.size) < 0)
         return NULL;
 
     /* get the record */
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
-    dbret = self->postings->get (self->postings, txn? txn->txn : NULL, &key, &data, 0);
+    dbret = self->terms->get (self->terms, txn? txn->txn : NULL, &key, &data, 0);
     PyMem_Free (key.data);
     switch (dbret) {
         case 0:
@@ -120,7 +121,7 @@ terane_Segment_set_term (terane_Segment *self, PyObject *args)
     }
 
     /* set the record */
-    dbret = self->postings->put (self->postings, txn->txn, &key, &data, 0);
+    dbret = self->terms->put (self->terms, txn->txn, &key, &data, 0);
     PyMem_Free (key.data);
     PyMem_Free (data.data);
     switch (dbret) {

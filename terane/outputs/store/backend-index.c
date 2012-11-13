@@ -96,15 +96,17 @@ _Index_init (terane_Index *self, PyObject *args, PyObject *kwds)
     /* create the DB handle for the metadata store */
     dbret = db_create (&self->metadata, self->env->env, 0);
     if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to create handle for _metadata: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to create handle for metadata: %s",
             db_strerror (dbret));
         goto error;
     }
+    /* set compare function */
+    self->metadata->set_bt_compare (self->metadata, _terane_msgpack_DB_compare);
     /* open the metadata store */
-    dbret = self->metadata->open (self->metadata, txn, tocname, "_metadata",
+    dbret = self->metadata->open (self->metadata, txn, tocname, "metadata",
         DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to open _metadata: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to open metadata: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -112,19 +114,20 @@ _Index_init (terane_Index *self, PyObject *args, PyObject *kwds)
     /* create the DB handle for the schema store */
     dbret = db_create (&self->schema, self->env->env, 0);
     if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to create handle for _schema: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to create handle for schema: %s",
             db_strerror (dbret));
         goto error;
     }
+    /* set compare function */
+    self->schema->set_bt_compare (self->schema, _terane_msgpack_DB_compare);
     /* open the schema store */
-    dbret = self->schema->open (self->schema, txn, tocname, "_schema",
+    dbret = self->schema->open (self->schema, txn, tocname, "schema",
         DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to open _schema: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to open schema: %s",
             db_strerror (dbret));
         goto error;
     }
-
     /* get an initial count of fields */
     dbret = self->schema->stat (self->schema, txn, &stats, 0);
     if (dbret != 0) {
@@ -142,15 +145,15 @@ _Index_init (terane_Index *self, PyObject *args, PyObject *kwds)
     /* create the DB handle for the segments store */
     dbret = db_create (&self->segments, self->env->env, 0);
     if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to create handle for _segments: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to create handle for segments: %s",
             db_strerror (dbret));
         goto error;
     }
     /* open the segments store */
-    dbret = self->segments->open (self->segments, txn, tocname, "_segments",
+    dbret = self->segments->open (self->segments, txn, tocname, "segments",
         DB_RECNO, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to open _segments: %s",
+        PyErr_Format (terane_Exc_Error, "Failed to open segments: %s",
             db_strerror (dbret));
         goto error;
     }
@@ -254,8 +257,6 @@ PyMethodDef _Index_methods[] =
         "Get a field in the Index." },
     { "add_field", (PyCFunction) terane_Index_add_field, METH_VARARGS,
         "Add a field to the Index." },
-    { "remove_field", (PyCFunction) terane_Index_remove_field, METH_VARARGS,
-        "Remove a field from the Index." },
     { "contains_field", (PyCFunction) terane_Index_contains_field, METH_VARARGS,
         "Return True if the field exists in the Index." },
     { "list_fields", (PyCFunction) terane_Index_list_fields, METH_VARARGS,

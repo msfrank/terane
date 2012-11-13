@@ -110,6 +110,8 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
             db_strerror (dbret));
         goto error;
     }
+    /* set compare function */
+    self->metadata->set_bt_compare (self->metadata, _terane_msgpack_DB_compare);
     /* open the metadata DB */
     dbret = self->metadata->open (self->metadata, segment_txn, self->name,
         "metadata", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
@@ -126,7 +128,8 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
             db_strerror (dbret));
         goto error;
     }
-
+    /* set compare function */
+    self->events->set_bt_compare (self->events, _terane_msgpack_DB_compare);
     /* open the events DB */
     dbret = self->events->open (self->events, segment_txn, self->name,
         "events", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
@@ -143,7 +146,8 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
             db_strerror (dbret));
         goto error;
     }
-
+    /* set compare function */
+    self->postings->set_bt_compare (self->postings, _terane_msgpack_DB_compare);
     /* open the postings DB */
     dbret = self->postings->open (self->postings, segment_txn, self->name,
         "postings", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
@@ -160,7 +164,8 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
             db_strerror (dbret));
         goto error;
     }
-
+    /* set compare function */
+    self->fields->set_bt_compare (self->fields, _terane_msgpack_DB_compare);
     /* open the fields DB */
     dbret = self->fields->open (self->fields, segment_txn, self->name,
         "fields", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
@@ -177,7 +182,8 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
             db_strerror (dbret));
         goto error;
     }
-
+    /* set compare function */
+    self->terms->set_bt_compare (self->terms, _terane_msgpack_DB_compare);
     /* open the terms DB */
     dbret = self->terms->open (self->terms, segment_txn, self->name,
         "terms", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);

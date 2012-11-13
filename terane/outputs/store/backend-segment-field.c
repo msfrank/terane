@@ -23,10 +23,10 @@
  * terane_Segment_get_field: Retrieve the value associated with the
  *  specified field.
  *
- * callspec: Segment.get_field(txn, fieldname)
+ * callspec: Segment.get_field(txn, field)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
- *   fieldname (unicode): The field name
+ *   field (object): The field (name,type) tuple
  * returns: The field value.
  * exceptions:
  *   KeyError: The specified field doesn't exist
@@ -36,25 +36,25 @@ PyObject *
 terane_Segment_get_field (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    char *fieldname = NULL;
+    PyObject *field = NULL;
     DBT key, data;
     PyObject *value = NULL;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "Os", &txn, &fieldname))
+    if (!PyArg_ParseTuple (args, "OO", &txn, &field))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
-
+    /* use the field as the key */
     memset (&key, 0, sizeof (DBT));
-    key.data = fieldname;
-    key.size = strlen (fieldname) + 1;
+    key.flags = DB_DBT_REALLOC;
+    if (_terane_msgpack_dump (field, (char **) &key.data, &key.size) < 0)
+        return NULL;
+    /* get the record */
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
-
-    /* get the record */
-    dbret = self->postings->get (self->postings, txn? txn->txn : NULL, &key, &data, 0);
+    dbret = self->fields->get (self->fields, txn? txn->txn : NULL, &key, &data, 0);
     switch (dbret) {
         case 0:
             /* create a python string from the data */
@@ -63,16 +63,17 @@ terane_Segment_get_field (terane_Segment *self, PyObject *args)
         case DB_NOTFOUND:
         case DB_KEYEMPTY:
             /* metadata doesn't exist, raise KeyError */
-            PyErr_Format (PyExc_KeyError, "Metadata for %s doesn't exist", fieldname);
+            PyErr_Format (PyExc_KeyError, "Metadata doesn't exist");
             break;
         default:
             /* some other db error, raise Error */
-            PyErr_Format (terane_Exc_Error, "Failed to get metadata for field %s: %s",
-                fieldname, db_strerror (dbret));
+            PyErr_Format (terane_Exc_Error, "Failed to get metadata for field: %s",
+                db_strerror (dbret));
             break;
     }
-
     /* free allocated memory */
+    if (key.data)
+        PyMem_Free (key.data);
     if (data.data)
         PyMem_Free (data.data);
     return value;
@@ -82,10 +83,10 @@ terane_Segment_get_field (terane_Segment *self, PyObject *args)
  * terane_Segment_set_field: Change the value associated with the
  *  specified field.
  *
- * callspec: Segment.set_field(fieldname, value)
+ * callspec: Segment.set_field(txn, field, value)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
- *   fieldname (string): The field name
+ *   field (object): The field (name,type) tuple
  *   value (object): The field value
  * returns: None
  * exceptions:
@@ -95,32 +96,35 @@ PyObject *
 terane_Segment_set_field (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    char *fieldname = NULL;
+    PyObject *field = NULL;
     PyObject *value = NULL;
     DBT key, data;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!sO", &terane_TxnType, &txn, &fieldname, &value))
+    if (!PyArg_ParseTuple (args, "O!OO", &terane_TxnType, &txn, &field, &value))
         return NULL;
-
+    /* use the field as the key */
     memset (&key, 0, sizeof (DBT));
-    key.data = fieldname;
-    key.size = strlen (fieldname) + 1;
-    memset (&data, 0, sizeof (DBT));
-    if (_terane_msgpack_dump (value, (char **) &data.data, &data.size) < 0)
+    if (_terane_msgpack_dump (field, (char **) &key.data, &key.size) < 0)
         return NULL;
-
+    /* set the field */
+    memset (&data, 0, sizeof (DBT));
+    if (_terane_msgpack_dump (value, (char **) &data.data, &data.size) < 0) {
+        PyMem_Free (key.data);
+        return NULL;
+    }
     /* set the record */
-    dbret = self->postings->put (self->postings, txn->txn, &key, &data, 0);
+    dbret = self->fields->put (self->fields, txn->txn, &key, &data, 0);
+    PyMem_Free (key.data);
     PyMem_Free (data.data);
     switch (dbret) {
         case 0:
             break;
         default:
             /* some other db error, raise Error */
-            return PyErr_Format (terane_Exc_Error, "Failed to set metadata for field %s: %s",
-                fieldname, db_strerror (dbret));
+            return PyErr_Format (terane_Exc_Error, "Failed to set metadata for field: %s",
+                db_strerror (dbret));
     }
     Py_RETURN_NONE;
 }

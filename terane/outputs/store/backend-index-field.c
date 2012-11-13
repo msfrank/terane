@@ -34,26 +34,27 @@ PyObject *
 terane_Index_get_field (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    const char *fieldname = NULL;
+    PyObject *fieldname = NULL;
     DBT key, data;
     PyObject *fieldspec = NULL;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "Os", &txn, &fieldname))
+    if (!PyArg_ParseTuple (args, "OO", &txn, &fieldname))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
+    /* use the fieldname as key */
     memset (&key, 0, sizeof (DBT));
-    key.data = (char *) fieldname;
-    key.size = strlen (fieldname) + 1;
+    key.flags = DB_DBT_REALLOC;
+    if (_terane_msgpack_dump (fieldname, (char **) &key.data, &key.size) < 0)
+        return NULL;
+    /* get the record */
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
-
-    /* get the record */
     dbret = self->schema->get (self->schema, txn? txn->txn : NULL, &key, &data, 0);
     switch (dbret) {
         case 0:
@@ -74,6 +75,8 @@ terane_Index_get_field (terane_Index *self, PyObject *args)
     }
 
     /* free allocated memory */
+    if (key.data)
+        PyMem_Free (key.data);
     if (data.data)
         PyMem_Free (data.data);
     return fieldspec;
@@ -95,23 +98,25 @@ PyObject *
 terane_Index_add_field (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    char *fieldname = NULL;
+    PyObject *fieldname = NULL;
     PyObject *fieldspec = NULL;
     DBT key, data;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!sO", &terane_TxnType, &txn,
+    if (!PyArg_ParseTuple (args, "O!OO", &terane_TxnType, &txn,
         &fieldname, &fieldspec))
         return NULL;
 
+    /* use the fieldname as the key */
     memset (&key, 0, sizeof (DBT));
-    key.data = fieldname;
-    key.size = strlen (fieldname) + 1;
-    memset (&data, 0, sizeof (DBT));
-    if (_terane_msgpack_dump (fieldspec, (char **) &data.data, &data.size) < 0)
+    if (_terane_msgpack_dump (fieldname, (char **) &key.data, &key.size) < 0)
         return NULL;
-
+    memset (&data, 0, sizeof (DBT));
+    if (_terane_msgpack_dump (fieldspec, (char **) &data.data, &data.size) < 0) {
+        PyMem_Free (key.data);
+        return NULL;
+    }
     /* set the record */
     dbret = self->schema->put (self->schema, txn->txn, &key, &data, DB_NOOVERWRITE);
     switch (dbret) {
@@ -120,33 +125,18 @@ terane_Index_add_field (terane_Index *self, PyObject *args)
             self->nfields += 1;
             break;
         case DB_KEYEXIST:
-            PyErr_Format (PyExc_KeyError, "Field %s already exists", fieldname);
+            PyErr_Format (PyExc_KeyError, "Field already exists");
             break;
         default:
-            PyErr_Format (terane_Exc_Error, "Failed to set fieldspec for %s: %s",
-                fieldname, db_strerror (dbret));
+            PyErr_Format (terane_Exc_Error, "Failed to set fieldspec: %s",
+                db_strerror (dbret));
             break;
     }
+    if (key.data)
+        PyMem_Free (key.data);
     if (data.data)
         PyMem_Free (data.data);
     Py_RETURN_NONE;
-}
-
-/*
- * terane_Index_remove_field: remove a field from the index
- *
- * callspec: Index.remove_field(txn, fieldname)
- * parameters:
- *   txn (Txn):
- *   fieldname (string): The field name
- * returns: None
- * exceptions:
- *   terane.outputs.store.backend.Error: A db error occurred when trying to remove the field
- */
-PyObject *
-terane_Index_remove_field (terane_Index *self, PyObject *args)
-{
-    return PyErr_Format (PyExc_NotImplementedError, "Index.remove_field() not implemented");
 }
 
 /*
@@ -164,12 +154,12 @@ PyObject *
 terane_Index_contains_field (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    char *fieldname = NULL;
+    PyObject *fieldname = NULL;
     DBT key;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "Os", &txn, &fieldname))
+    if (!PyArg_ParseTuple (args, "OO", &txn, &fieldname))
         return NULL;
     if ((PyObject *)txn == Py_None)
         txn = NULL;
@@ -178,17 +168,18 @@ terane_Index_contains_field (terane_Index *self, PyObject *args)
 
     /* see if fieldname exists in the schema */
     memset (&key, 0, sizeof (key));
-    key.data = fieldname;
-    key.size = strlen (fieldname) + 1;
+    if (_terane_msgpack_dump (fieldname, (char **) &key.data, &key.size) < 0)
+        return NULL;
     dbret = self->schema->exists (self->schema, txn? txn->txn : NULL, &key, 0);
+    PyMem_Free (key.data);
     switch (dbret) {
         case 0:
             Py_RETURN_TRUE;
         case DB_NOTFOUND:
             Py_RETURN_FALSE;
         default:
-            PyErr_Format (terane_Exc_Error, "Failed to lookup field %s in schema: %s",
-                fieldname, db_strerror (dbret));
+            PyErr_Format (terane_Exc_Error, "Failed to lookup field in schema: %s",
+                db_strerror (dbret));
             break;
     }
     return NULL;

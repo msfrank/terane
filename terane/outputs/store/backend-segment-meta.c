@@ -35,13 +35,13 @@ PyObject *
 terane_Segment_get_meta (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    const char *id = NULL;
+    PyObject *id = NULL;
     DBT key, data;
     PyObject *value = NULL;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "Os", &txn, &id))
+    if (!PyArg_ParseTuple (args, "OO", &txn, &id))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
@@ -50,12 +50,12 @@ terane_Segment_get_meta (terane_Segment *self, PyObject *args)
 
     /* use the document id as the record number */
     memset (&key, 0, sizeof (DBT));
-    key.data = (char *) id;
-    key.size = strlen (id) + 1;
+    key.flags = DB_DBT_REALLOC;
+    if (_terane_msgpack_dump (id, (char **) &key.data, &key.size) < 0)
+        return NULL;
+    /* get the record */
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
-
-    /* get the record */
     dbret = self->metadata->get (self->metadata, txn? txn->txn : NULL, &key, &data, 0);
     switch (dbret) {
         case 0:
@@ -76,6 +76,8 @@ terane_Segment_get_meta (terane_Segment *self, PyObject *args)
     }
 
     /* free allocated memory */
+    if (key.data)
+        PyMem_Free (key.data);
     if (data.data)
         PyMem_Free (data.data);
     return value;
@@ -97,24 +99,26 @@ PyObject *
 terane_Segment_set_meta (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    const char *id = NULL;
+    PyObject *id = NULL;
     PyObject *value = NULL;
     DBT key, data;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!sO", &terane_TxnType, &txn, &id, &value))
+    if (!PyArg_ParseTuple (args, "O!OO", &terane_TxnType, &txn, &id, &value))
         return NULL;
 
     memset (&key, 0, sizeof (DBT));
-    key.data = (char *) id;
-    key.size = strlen (id) + 1;
-    memset (&data, 0, sizeof (DBT));
-    if (_terane_msgpack_dump (value, (char **) &data.data, &data.size) < 0)
+    if (_terane_msgpack_dump (id, (char **) &key.data, &key.size) < 0)
         return NULL;
-
+    memset (&data, 0, sizeof (DBT));
+    if (_terane_msgpack_dump (value, (char **) &data.data, &data.size) < 0) {
+        PyMem_Free (key.data);
+        return NULL;
+    }
     /* set the record */
     dbret = self->metadata->put (self->metadata, txn->txn, &key, &data, 0);
+    PyMem_Free (key.data);
     PyMem_Free (data.data);
     switch (dbret) {
         case 0:

@@ -50,6 +50,7 @@ terane_Segment_get_posting (terane_Segment *self, PyObject *args)
 
     /* build the key */
     memset (&key, 0, sizeof (DBT));
+    key.flags = DB_DBT_REALLOC;
     if (_terane_msgpack_dump (posting, (char **) &key.data, &key.size) < 0)
         return NULL;
 
@@ -294,10 +295,11 @@ _Segment_skip_posting (terane_Iter *iter, PyObject *args)
  * terane_Segment_iter_postings: Iterate through all postings associated
  *  with the specified term in the specified field.
  *
- * callspec: Segment.iter_postings(txn, fieldname, term)
+ * callspec: Segment.iter_postings(txn, start, end)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
- *   posting (object): The posting key
+ *   start (object): The posting key marking the start of the range
+ *   end (object): The posting key marking the end of the range
  * returns: a new Iterator object.  Each iteration returns a tuple consisting
  *  of (key,value).
  * exceptions:
@@ -307,14 +309,14 @@ PyObject *
 terane_Segment_iter_postings (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    PyObject *posting = NULL;
+    PyObject *start = NULL, *end = NULL;
     DBC *cursor = NULL;
     int dbret;
     PyObject *iter = NULL;
     terane_Iter_ops ops = { .next = _Segment_next_posting, .skip = _Segment_skip_posting };
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OO", &txn, &posting))
+    if (!PyArg_ParseTuple (args, "OOO", &txn, &start, &end))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
@@ -328,7 +330,7 @@ terane_Segment_iter_postings (terane_Segment *self, PyObject *args)
             db_strerror (dbret));
 
     /* create the Iter */
-    iter = terane_Iter_new_range ((PyObject *) self, cursor, &ops, posting, 0);
+    iter = terane_Iter_new_within ((PyObject *) self, cursor, &ops, start, end, 0);
     if (iter == NULL) 
         cursor->close (cursor);
     return iter;
