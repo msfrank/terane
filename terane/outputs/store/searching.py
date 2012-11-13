@@ -212,17 +212,17 @@ class SegmentSearcher(object):
                 numDocs = lastUpdate[u'size']
                 # startId may be greater than endId, but the estimate_events
                 # method doesn't care
-                estimate = self._segment.estimate_events(self._txn,
-                    str(startId), str(endId))
+                start = [startId.ts, startId.offset]
+                end = [endId.ts, endId.offset]
+                estimate = self._segment.estimate_events(self._txn, start, end)
             else:
-                fieldspec = (field.fieldname, field.fieldtype)
-                term = unicode(term)
-                field = self._segment.get_field(self._txn, fieldspec)
+                start = [field.fieldname, field.fieldtype, term, startId.ts, startId.offset]
+                end = [field.fieldname, field.fieldtype, term, endId.ts, endId.offset]
+                field = self._segment.get_field(self._txn, [field.fieldname,field.fieldtype])
                 numDocs = field[u'num-docs']
                 # startId may be greater than endId, but the estimate_postings
                 # method doesn't care
-                estimate = self._segment.estimate_postings(self._txn,
-                    fieldspec, term, str(startId), str(endId))
+                estimate = self._segment.estimate_postings(self._txn, start, end)
             return int(math.ceil(numDocs * estimate))
         except KeyError:
             return 0
@@ -246,13 +246,13 @@ class SegmentSearcher(object):
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
         if field == None and term == None:
-            postings = self._segment.iter_events(self._txn,
-                str(startId), str(endId))
+            start = [startId.ts, startId.offset]
+            end = [endId.ts, endId.offset]
+            postings = self._segment.iter_events(self._txn, start, end)
         else:
-            fieldspec = (field.fieldname, field.fieldtype)
-            term = unicode(term)
-            postings = self._segment.iter_postings(self._txn,
-                fieldspec, term, str(startId), str(endId))
+            start = [field.fieldname, field.fieldtype, term, startId.ts, startId.offset]
+            end = [field.fieldname, field.fieldtype, term, endId.ts, endId.offset]
+            postings = self._segment.iter_postings(self._txn, start, end)
         return PostingList(self, postings)
 
     def getEvent(self, evid):
@@ -264,7 +264,7 @@ class SegmentSearcher(object):
         :returns: A dict mapping fieldnames to values.
         :rtype: dict
         """
-        fields = self._segment.get_event(self._txn, str(evid))
+        fields = self._segment.get_event(self._txn, [evid.ts, evid.offset])
         defaultfield = u'message'
         defaultvalue = fields[defaultfield]
         del fields[defaultfield]
@@ -301,9 +301,10 @@ class PostingList(object):
         if self._postings == None:
             return None, None, None
         try:
-            evid,tvalue = self._postings.next()
-            evid = EVID.fromString(evid)
-            return evid, tvalue, self._searcher
+            key,value = self._postings.next()
+            # key consists of: fieldname, fieldtype, term, ts, id
+            evid = EVID(key[3], key[4])
+            return evid, value, self._searcher
         except StopIteration:
             self._postings.close()
             self._postings = None
@@ -323,10 +324,10 @@ class PostingList(object):
         if self._postings == None:
             return None, None, None
         try:
-            targetId = str(targetId)
-            evid,tvalue = self._postings.skip(targetId)
-            evid = EVID.fromString(evid)
-            return evid, tvalue, self._searcher
+            key,value = self._postings.skip(targetId)
+            # key consists of: fieldname, fieldtype, term, ts, id
+            evid = EVID(key[3], key[4])
+            return evid, value, self._searcher
         except IndexError:
             return None, None, None
         except StopIteration:

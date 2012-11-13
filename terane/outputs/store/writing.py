@@ -47,11 +47,11 @@ class IndexWriter(object):
     def newEvent(self, evid, event):
         # serialize the fields dict and write it to the segment
         segment = self._ix._current
-        segment.set_event(self._txn, str(evid), event)
+        segment.set_event(self._txn, [evid.ts,evid.offset], event)
         # update segment metadata
         self._indexSize += 1
         self._currentSize += 1
-        self._lastId = str(evid)
+        self._lastId = [evid.ts,evid.offset]
         self._lastModified = int(time.time())
         lastUpdate = {
             u'size': self._currentSize,
@@ -62,29 +62,31 @@ class IndexWriter(object):
 
     def newPosting(self, field, term, evid, posting):
         segment = self._ix._current
-        fieldspec = (field.fieldname,field.fieldtype)
-        try:
-            value = segment.get_term(self._txn, fieldspec, term)
-            if not u'num-docs' in value:
-                raise WriterError("term metadata corruption: no such key 'num-docs'")
-            value[u'num-docs'] += 1
-        except KeyError:
-            value = {u'num-docs': 1}
-        # increment the document count for this term
-        segment.set_term(self._txn, fieldspec, term, value)
-        try:
-            value = segment.get_field(self._txn, fieldspec)
-            if not u'num-docs' in value:
-                raise WriterError("field metadata corruption: no such key 'num-docs'")
-            value[u'num-docs'] += 1
-        except KeyError:
-            value = {u'num-docs': 1}
         # increment the document count for this field
-        segment.set_field(self._txn, fieldspec, value)
+        f = [field.fieldname, field.fieldtype]
+        try:
+            value = segment.get_field(self._txn, f)
+            if not u'num-docs' in value:
+                raise WriterError("field %s is missing key 'num-docs'" % f)
+            value[u'num-docs'] += 1
+        except KeyError:
+            value = {u'num-docs': 1}
+        segment.set_field(self._txn, f, value)
+        # increment the document count for this term
+        t = [field.fieldname, field.fieldtype, term]
+        try:
+            value = segment.get_term(self._txn, t)
+            if not u'num-docs' in value:
+                raise WriterError("term %s is missing key 'num-docs'" % t)
+            value[u'num-docs'] += 1
+        except KeyError:
+            value = {u'num-docs': 1}
+        segment.set_term(self._txn, t, value)
+        # add the posting
         if posting == None:
             posting = dict()
-        # add the term to the reverse index
-        segment.set_posting(self._txn, fieldspec, term, str(evid), posting)
+        p = [field.fieldname, field.fieldtype, term, evid.ts, evid.offset]
+        segment.set_posting(self._txn, p, posting)
 
     def commit(self):
         self._txn.commit()

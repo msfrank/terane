@@ -42,13 +42,13 @@ class Period(object):
         :type endexcl: bool
         """
         if isinstance(start, datetime.datetime):
-            self.start = EVID(int(calendar.timegm(start.timetuple())), 0, 0)
+            self.start = EVID.fromDatetime(start)
         elif isinstance(start, EVID):
             self.start = start
         else:
             raise TypeError("start must be datetime.datetime or terane.bier.evid.EVID")
         if isinstance(end, datetime.datetime):
-            self.end = EVID(int(calendar.timegm(end.timetuple())), 0, 0)
+            self.end = EVID.fromDatetime(end)
         elif isinstance(end, EVID):
             self.end = end
         else:
