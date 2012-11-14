@@ -73,7 +73,21 @@ class EVID(object):
         return EVID(int(calendar.timegm(event.ts.timetuple())), event.offset)
 
     def __str__(self):
-        return "<EVID ts=%s, offset=%s>" % (self.ts, self.offset)
+        return "%i:%i" % (self.ts, self.offset)
+
+    def __eq__(self, other):
+        if not isinstance(other, EVID):
+            return False
+        if self.__cmp__(other) == 0:
+            return True
+        return False
+
+    def __ne__(self, other):
+        if not isinstance(other, EVID):
+            return True
+        if self.__cmp__(other) == 0:
+            return False
+        return True
 
     def __cmp__(self, other):
         return cmp((self.ts,self.offset), (other.ts,other.offset))
