@@ -176,6 +176,65 @@ class TextField(BaseField):
 
     defaultMatcher = match_in
 
+class IntegerField(BaseField):
+    """
+    IntegerField stores a python int or long.
+    """
+
+    implements(IField)
+
+    def validateValue(self, value):
+        """
+        Validate that the supplied value is an int or long and is not larger
+        than 64-bit signed/unsigned.
+
+        :param value: The value to validate.
+        :type value: int or long
+        :returns: The value
+        :rtype: int or long
+        :raises TypeError: The value is of the wrong type.
+        """
+        if not isinstance(value, int) and not isinstance(value, long):
+            raise TypeError('value must be of type int or long')
+        if value < -(2**63) or value > ((2**64) - 1):
+            raise OverflowError("value %i is out of range" % value)
+        return value
+
+    def parseValue(self, value):
+        """
+        Process the specified integer value, returning a list containing one
+        tuple which contains the integer and None indicating there is no term
+        metadata.
+
+        :param value: The integer value to parse.
+        :type value: int or long
+        :returns: A list of (term, metadata) tuples.
+        :rtype: list
+        """
+        return [(value, None)]
+
+    def match_is(self, field, value):
+        """
+        Process the specified integer value, converting it to a unix
+        timestamp.
+
+        :param value: The string value to tokenize.
+        :type value: unicode or str
+        :returns: A list of tokenized terms.
+        :rtype: list
+        """
+        value = value.strip().lower()
+        if value.startswith('0x'):
+            value = int(value, 16)
+        elif value.startswith('0'):
+            value = int(value, 8)
+        else:
+            value = int(value, 10)
+        value = self.validateValue(value)
+        return Term(field, value)
+
+    defaultMatcher = match_is
+
 class DatetimeField(BaseField):
     """
     DatetimeField stores a python datetime.datetime.
@@ -215,9 +274,9 @@ class DatetimeField(BaseField):
         :returns: A list of (term, metadata) tuples.
         :rtype: list
         """
-        return [(self.terms(value)[0], None)]
+        return [(int(calendar.timegm(value.timetuple())), None)]
 
-    def match_is(self, fieldname, fieldtype, value):
+    def match_is(self, field, value):
         """
         Process the specified datetime.datetime value, converting it to a unix
         timestamp.
@@ -227,14 +286,16 @@ class DatetimeField(BaseField):
         :returns: A list of tokenized terms.
         :rtype: list
         """
-        # calculate the unix timestamp, with 1 second accuracy
+        value = datetime.datetime.strptime(value, "%Y/%m/%dT%H:%M:%S")
+        value = self.validateValue(value)
         ts = int(calendar.timegm(value.timetuple()))
-        return [ts,]
+        return Term(field, ts)
 
 class BaseFieldPlugin(Plugin):
     implements(IPlugin)
     components = [
         (IdentityField, IField, 'literal'),
         (TextField, IField, 'text'),
+        (IntegerField, IField, 'int'),
         (DatetimeField, IField, 'datetime'),
         ]

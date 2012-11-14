@@ -35,7 +35,7 @@ class NagiosFilter(Filter):
         self._contract.addAssertion(u'nagios_service', u'text', guarantees=False)
         self._contract.addAssertion(u'nagios_status', u'text', guarantees=False)
         self._contract.addAssertion(u'nagios_state', u'text', guarantees=False)
-        self._contract.addAssertion(u'nagios_attempt', u'text', guarantees=False)
+        self._contract.addAssertion(u'nagios_attempt', u'int', guarantees=False)
         self._contract.sign()
 
     def getContract(self):
@@ -80,7 +80,7 @@ class NagiosFilter(Filter):
             event[self._contract.field_nagios_host] = host
             event[self._contract.field_nagios_status] = status
             event[self._contract.field_nagios_state] = state
-            event[self._contract.field_nagios_attempt] = attempt
+            event[self._contract.field_nagios_attempt] = int(attempt)
             event[self._contract.field_message] = detail
             return event
         except Exception, e:
@@ -93,7 +93,7 @@ class NagiosFilter(Filter):
             event[self._contract.field_nagios_service] = service
             event[self._contract.field_nagios_status] = status
             event[self._contract.field_nagios_state] = state
-            event[self._contract.field_nagios_attempt] = attempt
+            event[self._contract.field_nagios_attempt] = int(attempt)
             event[self._contract.field_message] = detail
             return event
         except Exception, e:

@@ -44,8 +44,8 @@ class ApacheCommonFilter(Filter):
         self._contract.addAssertion(u'remotelog', u'text', expects=False, guarantees=True, ephemeral=False)
         self._contract.addAssertion(u'remoteuser', u'literal', expects=False, guarantees=True, ephemeral=False)
         self._contract.addAssertion(u'request', u'literal', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion(u'status', u'literal', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion(u'byteswritten', u'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'status', u'int', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'byteswritten', u'int', expects=False, guarantees=True, ephemeral=False)
         self._contract.sign()
 
     def getContract(self):
@@ -71,6 +71,8 @@ class ApacheCommonFilter(Filter):
             value = m.group(assertion.fieldname)
             if value == None:
                 raise FilterError("regex did not match '%s'" % assertion.fieldname)
+            if assertion.fieldtype == u'int':
+                value = int(value)
             event[assertion] = value
         return event
 
@@ -96,8 +98,8 @@ class ApacheCombinedFilter(Filter):
         self._contract.addAssertion(u'remotelog', u'literal', expects=False, guarantees=True, ephemeral=False)
         self._contract.addAssertion(u'remoteuser', u'literal', expects=False, guarantees=True, ephemeral=False)
         self._contract.addAssertion(u'request', u'text', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion(u'status', u'literal', expects=False, guarantees=True, ephemeral=False)
-        self._contract.addAssertion(u'byteswritten', u'literal', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'status', u'int', expects=False, guarantees=True, ephemeral=False)
+        self._contract.addAssertion(u'byteswritten', u'int', expects=False, guarantees=True, ephemeral=False)
         self._contract.addAssertion(u'referrer', u'text', expects=False, guarantees=True, ephemeral=False)
         self._contract.addAssertion(u'useragent', u'text', expects=False, guarantees=True, ephemeral=False)
         self._contract.sign()
@@ -125,6 +127,8 @@ class ApacheCombinedFilter(Filter):
             value = m.group(assertion.fieldname)
             if value == None:
                 raise FilterError("regex did not match '%s'" % assertion.fieldname)
+            if assertion.fieldtype == u'int':
+                value = int(value)
             event[assertion] = value
         return event
 

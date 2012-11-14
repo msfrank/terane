@@ -128,7 +128,7 @@ class SyslogInput(Input):
         self._contract = Contract()
         self._contract.addAssertion(u'syslog_facility', u'literal', guarantees=True)
         self._contract.addAssertion(u'syslog_severity', u'literal', guarantees=True)
-        self._contract.addAssertion(u'syslog_pid', u'literal', guarantees=False)
+        self._contract.addAssertion(u'syslog_pid', u'int', guarantees=False)
         self._contract.addAssertion(u'syslog_tag', u'text', guarantees=False)
         self._contract.sign()
 
@@ -202,7 +202,7 @@ class SyslogInput(Input):
         data = m.groups()
         if data[0] != None and data[1] != None:
             event[self._contract.field_syslog_tag] = data[0]
-            event[self._contract.field_syslog_pid] = data[1]
+            event[self._contract.field_syslog_pid] = int(data[1])
         elif data[2] != None:
             event[self._contract.field_syslog_tag] = data[2]
         else:
