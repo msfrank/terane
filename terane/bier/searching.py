@@ -162,7 +162,7 @@ class ResultSet(object):
             # filter out unwanted fields
             if self._fields != None:
                 fields = dict([(k,v) for k,v in fields.items() if k in self._fields])
-            self.events.append((str(evid), defaultfield, defaultvalue, fields))
+            self.events.append(((evid.ts,evid.offset), defaultfield, defaultvalue, fields))
             logger.trace("added event %s to resultset" % evid)
             # if we have reached our limit
             self._count += 1

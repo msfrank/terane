@@ -18,6 +18,7 @@
 import time, datetime
 from zope.interface import implements
 from terane.bier import IIndex
+from terane.bier.evid import EVID, EVID_MIN
 from terane.outputs.store import backend
 from terane.outputs.store.segment import Segment
 from terane.outputs.store.schema import Schema
@@ -48,7 +49,7 @@ class Index(backend.Index):
         self._indexSize = 0
         self._currentSize = 0
         self._lastModified = 0
-        self._lastId = 0
+        self._lastId = EVID_MIN
         backend.Index.__init__(self, env, name)
         try:
             # load schema
@@ -60,7 +61,9 @@ class Index(backend.Index):
                     last_update = segment.get_meta(txn, u'last-update')
                     self._currentSize = last_update[u'size']
                     self._indexSize += last_update[u'size']
-                    if last_update[u'last-id'] > self._lastId:
+                    lastId = last_update[u'last-id']
+                    lastId = EVID(lastId[0], lastId[1])
+                    if lastId > self._lastId:
                         self._lastId = last_update[u'last-id']
                     if last_update[u'last-modified'] > self._lastModified:
                         self._lastModified = last_update[u'last-modified']
@@ -71,14 +74,18 @@ class Index(backend.Index):
                     segmentId = self.new_segment(txn)
                     segment = Segment(txn, self, segmentId)
                     segment.set_meta(txn, u'created-on', int(time.time()))
-                    last_update = {u'size': 0, u'last-id': 0, u'last-modified': 0}
+                    last_update = {
+                        u'size': self._indexSize,
+                        u'last-id': [self._lastId.ts, self._lastId.offset],
+                        u'last-modified': self._lastModified
+                        }
                     segment.set_meta(txn, u'last-update', last_update)
                 self._segments.append(segment)
                 logger.info("created first segment for new index '%s'" % name)
             else:
-                logger.info("found %i documents in %i segments for index '%s'" % (
+                logger.info("found %i events in %i segments for index '%s'" % (
                     self._indexSize, len(self._segments), name))
-            logger.debug("last document id is %s" % self._lastId)
+            logger.debug("last evid is %s" % self._lastId)
             # get a reference to the current segment
             self._current = self._segments[-1]
             logger.debug("opened event index '%s'" % self.name)
@@ -128,7 +135,11 @@ class Index(backend.Index):
                 segmentId = self.new_segment(txn)
                 segment = Segment(txn, self, segmentId)
                 segment.set_meta(txn, u'created-on', int(time.time()))
-                last_update = {u'size': 0, u'last-id': 0, u'last-modified': 0}
+                last_update = {
+                    u'size': 0,
+                    u'last-id': [EVID_MIN.ts, EVID_MIN.offset],
+                    u'last-modified': 0
+                    }
                 segment.set_meta(txn, u'last-update', last_update)
             self._segments.append(segment)
             self._current = segment

@@ -18,6 +18,7 @@
 import os, sys, datetime, dateutil.tz, xmlrpclib
 from getpass import getpass
 from logging import StreamHandler, DEBUG, Formatter
+from pprint import pformat
 from twisted.web.xmlrpc import Proxy
 from twisted.web.error import Error as TwistedWebError
 from twisted.internet import reactor
@@ -64,13 +65,12 @@ class Searcher(object):
         return 0
 
     def printResult(self, result):
-        logger.debug("XMLRPC result: %s" % str(result))
+        logger.debug("XMLRPC result: %s" % pformat(result))
         if len(result) > 0:
             meta = result['meta']
             data = result['data']
             for evid,defaultfield,defaultvalue,fields in data:
-                evid = EVID.fromString(evid)
-                ts = datetime.datetime.fromtimestamp(evid.ts, dateutil.tz.tzutc())
+                ts = datetime.datetime.fromtimestamp(evid[0], dateutil.tz.tzutc())
                 if self.tz:
                     ts = ts.astimezone(self.tz)
                 print "%s: %s" % (ts.strftime("%d %b %Y %H:%M:%S %Z"), defaultvalue)
