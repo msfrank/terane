@@ -253,7 +253,7 @@ class SegmentSearcher(object):
             start = [field.fieldname, field.fieldtype, term, startId.ts, startId.offset]
             end = [field.fieldname, field.fieldtype, term, endId.ts, endId.offset]
             postings = self._segment.iter_postings(self._txn, start, end)
-        return PostingList(self, postings)
+        return PostingList(self, field, term, postings)
 
     def getEvent(self, evid):
         """
@@ -280,7 +280,7 @@ class PostingList(object):
     
     implements(IPostingList)
 
-    def __init__(self, searcher, postings):
+    def __init__(self, searcher, field, term, postings):
         """
         :param searcher:
         :type searcher: :class:`terane.outputs.store.searching.SegmentSearcher`
@@ -288,6 +288,8 @@ class PostingList(object):
         :type postings: :class:`terane.outputs.store.backend.Iter`
         """
         self._searcher = searcher
+        self._field = field
+        self._term = term
         self._postings = postings
     
     def nextPosting(self):
@@ -302,8 +304,12 @@ class PostingList(object):
             return None, None, None
         try:
             key,value = self._postings.next()
-            # key consists of: fieldname, fieldtype, term, ts, id
-            evid = EVID(key[3], key[4])
+            # posting key consists of: fieldname, fieldtype, term, ts, id
+            if len(key) == 5:
+                evid = EVID(key[3], key[4])
+            # term key consists of: ts, id
+            else:
+                evid = EVID(key[0], key[1])
             return evid, value, self._searcher
         except StopIteration:
             self._postings.close()
@@ -324,9 +330,20 @@ class PostingList(object):
         if self._postings == None:
             return None, None, None
         try:
-            key,value = self._postings.skip(targetId)
-            # key consists of: fieldname, fieldtype, term, ts, id
-            evid = EVID(key[3], key[4])
+            target = [
+                self._field.fieldname,
+                self._field.fieldtype,
+                self._term,
+                targetId.ts,
+                targetId.offset
+                ]
+            key,value = self._postings.skip(target)
+            # posting key consists of: fieldname, fieldtype, term, ts, id
+            if len(key) == 5:
+                evid = EVID(key[3], key[4])
+            # term key consists of: ts, id
+            else:
+                evid = EVID(key[0], key[1])
             return evid, value, self._searcher
         except IndexError:
             return None, None, None
