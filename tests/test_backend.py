@@ -53,7 +53,7 @@ class Backend_Index_Tests(unittest.TestCase):
             with index.new_txn() as txn:
                 index.add_field(txn, fieldname, fieldspec)
             self.failUnless(index.get_field(None, fieldname) == fieldspec)
-            fields = index.list_fields(None)
+            fields = list(index.iter_fields(None))
             self.failUnless(len(fields) == 1)
             self.failUnless(fields[0] == (fieldname,fieldspec))
         finally:

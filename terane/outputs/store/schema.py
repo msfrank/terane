@@ -34,7 +34,7 @@ class Schema(object):
         self._fieldstore = fieldstore
         # load schema data from the db
         with self._index.new_txn() as txn:
-            for fieldname,fieldspec in self._index.list_fields(txn):
+            for fieldname,fieldspec in self._index.iter_fields(txn):
                 self._fields[fieldname] = pickle.loads(str(fieldspec))
                 # verify that the field type is consistent
                 for fieldtype,stored in self._fields[fieldname].items():

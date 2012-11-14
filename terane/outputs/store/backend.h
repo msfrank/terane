@@ -140,9 +140,8 @@ PyObject * terane_Index_set_meta (terane_Index *self, PyObject *args);
 
 PyObject * terane_Index_get_field (terane_Index *self, PyObject *args);
 PyObject * terane_Index_add_field (terane_Index *self, PyObject *args);
-PyObject * terane_Index_remove_field (terane_Index *self, PyObject *args);
+PyObject * terane_Index_iter_fields (terane_Index *self, PyObject *args);
 PyObject * terane_Index_contains_field (terane_Index *self, PyObject *args);
-PyObject * terane_Index_list_fields (terane_Index *self, PyObject *args);
 PyObject * terane_Index_count_fields (terane_Index *self);
 
 PyObject * terane_Index_new_segment (terane_Index *self, PyObject *args);

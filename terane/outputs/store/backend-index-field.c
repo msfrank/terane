@@ -186,22 +186,44 @@ terane_Index_contains_field (terane_Index *self, PyObject *args)
 }
 
 /*
- * terane_Index_list_fields: return a list of the fields in the schema
+ * _Index_next_field: build a (fieldname,fieldspec) tuple
+ */
+static PyObject *
+_Index_next_field (terane_Iter *iter, DBT *key, DBT *data)
+{
+    PyObject *fieldname = NULL, *fieldspec = NULL, *tuple = NULL;
+
+    /* get the posting */
+    if (_terane_msgpack_load ((char *) key->data, key->size, &fieldname) < 0)
+        goto error;
+    /* get the value */
+    if (_terane_msgpack_load ((char *) data->data, data->size, &fieldspec) < 0)
+        goto error;
+    /* build the (posting,value) tuple */
+    tuple = PyTuple_Pack (2, fieldname, fieldspec);
+error:
+    Py_XDECREF (fieldname);
+    Py_XDECREF (fieldspec);
+    return tuple;
+}
+
+/*
+ * terane_Index_iter_fields: iterate through the fields in the schema.
  *
- * callspec: Index.list_fields(txn)
+ * callspec: Index.iter_fields(txn)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
- * returns: a list of (fieldname,pickledfield) tuples.
+ * returns: a list of (fieldname,fieldspec) tuples.
  * exceptions:
  *   terane.outputs.store.backend.Error: A db error occurred when trying to get the fields
  */
 PyObject *
-terane_Index_list_fields (terane_Index *self, PyObject *args)
+terane_Index_iter_fields (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
     DBC *cursor = NULL;
-    PyObject *fields = NULL, *tuple = NULL, *fieldname = NULL, *fieldspec = NULL;
-    DBT key, data;
+    PyObject *iter = NULL;
+    terane_Iter_ops ops = { .next = _Index_next_field };
     int dbret;
 
     /* parse parameters */
@@ -212,80 +234,20 @@ terane_Index_list_fields (terane_Index *self, PyObject *args)
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
 
-    /* allocate the list to return */
-    fields = PyList_New (0);
-    if (fields == NULL)
-        return PyErr_NoMemory ();
-
-    /* */
+    /* create a new cursor */
     dbret = self->schema->cursor (self->schema, txn? txn->txn : NULL, &cursor, 0);
-    if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to open schema cursor: %s",
+    /* if cursor allocation failed, return Error */
+    if (dbret != 0)
+        return PyErr_Format (terane_Exc_Error, "Failed to allocate document cursor: %s",
             db_strerror (dbret));
-        goto error;
-    }
 
-    /* loop through each schema item */
-    while (1) {
-        memset (&key, 0, sizeof (DBT));
-        key.flags = DB_DBT_MALLOC;
-        memset (&data, 0, sizeof (DBT));
-        data.flags = DB_DBT_MALLOC;
-        dbret = cursor->get (cursor, &key, &data, DB_NEXT);
-        if (dbret == DB_NOTFOUND)
-            break;
-        switch (dbret) {
-            case 0:
-                fieldname = PyString_FromStringAndSize (key.data, key.size - 1);
-                if (fieldname == NULL)
-                    goto error;
-                if (_terane_msgpack_load (data.data, data.size, &fieldspec) < 0)
-                    goto error;
-                tuple = PyTuple_Pack (2, fieldname, fieldspec);
-                if (tuple == NULL)
-                    goto error;
-                if (PyList_Append (fields, tuple) < 0)
-                    goto error;
-                Py_DECREF (fieldname);
-                fieldname = NULL;
-                Py_DECREF (fieldspec);
-                fieldspec = NULL;
-                Py_DECREF (tuple);
-                tuple = NULL;
-                if (key.data)
-                    PyMem_Free (key.data);
-                key.data = NULL;
-                if (data.data)
-                    PyMem_Free (data.data);
-                data.data = NULL;
-                break;
-            default:
-                PyErr_Format (terane_Exc_Error, "Failed to get next schema field: %s",
-                    db_strerror (dbret));
-                goto error;
-        }
-    }
-
-    cursor->close (cursor);
-    return fields;
-
-/* if there is an error, then free any locally allocated memory and references */
-error:
-    if (cursor != NULL)
+    /* allocate a new Iter object */
+    iter = terane_Iter_new ((PyObject *) self, cursor, &ops, 0);
+    if (iter == NULL) {
         cursor->close (cursor);
-    if (fieldname != NULL)
-        Py_DECREF (fieldname);
-    if (fieldspec != NULL)
-        Py_DECREF (fieldspec);
-    if (tuple != NULL)
-        Py_DECREF (tuple);
-    if (fields != NULL)
-        Py_DECREF (fields);
-    if (key.data != NULL)
-        PyMem_Free (key.data);
-    if (data.data != NULL)
-        PyMem_Free (data.data);
-    return NULL;
+        return NULL;
+    }
+    return iter;
 }
 
 /*
