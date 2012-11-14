@@ -33,7 +33,7 @@ class MysqlServerFilter(Filter):
 
     def configure(self, section):
         self._regex = re.compile(r'(?P<date>\d{6})\w+(?P<time>\d\d:\d\d\:\d\d)\w+(?P<msg>.*)')
-        self._contract = Contract()
+        self._contract = Contract().sign()
 
     def getContract(self):
         return self._contract
