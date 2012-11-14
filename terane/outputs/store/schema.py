@@ -66,7 +66,7 @@ class Schema(object):
         fieldspec = self._fields[fieldname]
         if fieldtype in fieldspec:
             return fieldspec[fieldtype]
-        if len(fieldspec) == 1:
+        if fieldtype == None and len(fieldspec) == 1:
             return fieldspec.values()[0]
         raise KeyError("%s:%s" % (fieldname, fieldtype))
 
