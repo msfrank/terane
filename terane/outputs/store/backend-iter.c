@@ -238,13 +238,13 @@ _Iter_cmp (terane_iterkey *lhs, DBT *rhs, int reverse, int *result)
     /* compare each item */
     for (i = 0; i < lhs->size; i++) {
         ret = _terane_msgpack_load_value (rhs->data, rhs->size, &pos, &value);
+        /* value failed to load, raise exception */
         if (ret < 0)
             PyErr_Format (PyExc_ValueError, "cmp failed: error loading value for rhs");
-        if (ret > 0) {
-            ret = _terane_msgpack_cmp_values (lhs->values[i], &value);
-            if (ret < 0)
-                PyErr_Format (PyExc_ValueError, "cmp failed: error comparing values");
-        }
+        /* loaded the value, so compare with lhs */
+        if (ret > 0)
+            *result = _terane_msgpack_cmp_values (lhs->values[i], &value);
+        /* there are no more rhs values to load */
         else if (ret == 0)
             *result = 1;
         if (ret < 0 || *result != 0)
@@ -318,7 +318,7 @@ _Iter_get (terane_Iter *iter, int itype, int flags, DBT *range_key)
             /* check that the key is between the start and end keys */
             if (_Iter_cmp (iter->start, &key, iter->reverse, &result) < 0)
                 break;
-            if (result <= 0)
+            if (result >= 0)
                 break;
             if (_Iter_cmp (iter->end, &key, iter->reverse, &result) < 0)
                 break;
@@ -347,6 +347,7 @@ static PyObject *
 _Iter_next (terane_Iter *self)
 {
     PyObject *item = NULL;
+    DBT *range = NULL;
     uint32_t flags = 0;
 
     if (self->cursor == NULL)
@@ -378,6 +379,8 @@ _Iter_next (terane_Iter *self)
                     /* otherwise we consume it and skip to the next record */
                     flags = DB_PREV;
                 }
+                else
+                    range = &self->range;
             }
             else
                 flags = self->reverse? DB_PREV : DB_NEXT;
@@ -385,7 +388,7 @@ _Iter_next (terane_Iter *self)
         default:
             return PyErr_Format (terane_Exc_Error, "No iterator type %i", self->itype);
     }
-    item = _Iter_get (self, self->itype, flags, NULL);
+    item = _Iter_get (self, self->itype, flags, range);
     if (item == NULL)
         terane_Iter_close (self);
     return item;
@@ -394,12 +397,13 @@ _Iter_next (terane_Iter *self)
 /*
  * terane_Iter_skip: Move the iterator to the specified item.
  *
- * callspec: Iter.skip(item)
+ * callspec: Iter.skip(target)
  * parameters:
- *   item (object): A python object that describes the item to skip to
+ *   target (object): A python object that describes the item to skip to
  * returns: The iterator value at the skipped-to position
  * exceptions:
  *  IndexError: Target item is out of range
+ *  ValueError: Target could not be serialized to a msgpack key
  *  terane.outputs.store.backend.Error: failed to move the DBC cursor
  */
 PyObject *
@@ -420,11 +424,6 @@ terane_Iter_skip (terane_Iter *self, PyObject *args)
      /* The skip function should set exception if it returns NULL */
     if (skip_obj == NULL)
         return NULL;
-    /* if the skip_obj is not a tuple, raise ValueError */
-    if (!PyTuple_CheckExact (skip_obj)) {
-        Py_DECREF (skip_obj);
-        return PyErr_Format (PyExc_ValueError, "skip target must be a tuple");
-    }
     /* dump the skip key object */
     memset (&skip_key, 0, sizeof (DBT));
     if (_terane_msgpack_dump (skip_obj, (char **) &skip_key.data, &skip_key.size) < 0) {
