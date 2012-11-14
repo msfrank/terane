@@ -93,8 +93,8 @@ class BaseHandler(object):
             else:
                 record['message'] = ' '.join(record['message'])
                 self.handle("%(time)s %(levelname)s %(loggername)s: %(message)s" % record)
-        except BaseException, e:
-            print >> sys.stderr, "*** ERROR *** failed to log error: %s" % str(e)
+        except Exception, e:
+            print >> sys.stderr, "*** ERROR *** caught %s while logging error: record is %s" % (e, record)
     def handle(self, message):
         pass
     def close(self):

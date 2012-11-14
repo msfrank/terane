@@ -57,17 +57,6 @@ class XMLRPCDispatcher(XMLRPC):
         self.tails = getStat('terane.protocols.xmlrpc.tail.count', 0)
         self.totaltailtime = getStat('terane.protocols.xmlrpc.tail.totaltime', 0.0)
 
-    def _handleError(self, failure):
-        try:
-            raise failure
-        except xmlrpclib.Fault:
-            raise
-        except (QuerySyntaxError, QueryExecutionError), e:
-            raise FaultBadRequest(e)
-        except BaseException, e:
-            logger.exception(failure)
-            raise FaultInternalError()
-
     @inlineCallbacks
     def xmlrpc_iterEvents(self, query, last=None, indices=None, limit=100, reverse=False, fields=None):
         try:
@@ -81,8 +70,13 @@ class XMLRPCDispatcher(XMLRPC):
             result = yield self._protocol._querymanager.iterEvents(unicode(query), last, indices, limit, reverse, fields)
             self.totalitertime += float(result.meta['runtime'])
             returnValue(result)
+        except xmlrpclib.Fault:
+            raise
+        except (QuerySyntaxError, QueryExecutionError), e:
+            raise FaultBadRequest(e)
         except Exception, e:
-            self._handleError(e)
+            logger.exception(e)
+            raise FaultInternalError()
 
     @inlineCallbacks
     def xmlrpc_tailEvents(self, query, last=None, indices=None, limit=100, fields=None):
@@ -97,8 +91,13 @@ class XMLRPCDispatcher(XMLRPC):
             result = yield self._protocol._querymanager.tailEvents(unicode(query), last, indices, limit, fields)
             self.totaltailtime += float(result.meta['runtime'])
             returnValue(result)
+        except xmlrpclib.Fault:
+            raise
+        except (QuerySyntaxError, QueryExecutionError), e:
+            raise FaultBadRequest(e)
         except Exception, e:
-            self._handleError(e)
+            logger.exception(e)
+            raise FaultInternalError()
 
     @inlineCallbacks
     def xmlrpc_listIndices(self):
@@ -110,29 +109,49 @@ class XMLRPCDispatcher(XMLRPC):
                 raise FaultNotAuthorized("not authorized to access the specified resource")
             result.data = indices
             returnValue(result)
+        except xmlrpclib.Fault:
+            raise
+        except (QuerySyntaxError, QueryExecutionError), e:
+            raise FaultBadRequest(e)
         except Exception, e:
-            self._handleError(e)
+            logger.exception(e)
+            raise FaultInternalError()
 
     def xmlrpc_showIndex(self, name):
         try:
             if not self._protocol._authmanager.canAccess(self.avatarId, 'index', name, 'PERM::XMLRPC::SHOWINDEX'):
                 raise FaultNotAuthorized("not authorized to access the specified resource")
             return self._protocol._querymanager.showIndex(name).addErrback(self._handleError)
-        except BaseException, e:
-            self._handleError(e)
+        except xmlrpclib.Fault:
+            raise
+        except (QuerySyntaxError, QueryExecutionError), e:
+            raise FaultBadRequest(e)
+        except Exception, e:
+            logger.exception(e)
+            raise FaultInternalError()
 
     def xmlrpc_showStats(self, name, recursive=False):
         try:
             return stats.showStats(name, recursive)
-        except BaseException, e:
-            self._handleError(e)
+        except xmlrpclib.Fault:
+            raise
+        except (QuerySyntaxError, QueryExecutionError), e:
+            raise FaultBadRequest(e)
+        except Exception, e:
+            logger.exception(e)
+            raise FaultInternalError()
 
     def xmlrpc_flushStats(self, flushAll=False):
         try:
             stats.flushStats(flushAll)
             return ({}, [])
-        except BaseException, e:
-            self._handleError(e)
+        except xmlrpclib.Fault:
+            raise
+        except (QuerySyntaxError, QueryExecutionError), e:
+            raise FaultBadRequest(e)
+        except Exception, e:
+            logger.exception(e)
+            raise FaultInternalError()
 
 class XMLRPCRealm(object):
     implements(IRealm)
