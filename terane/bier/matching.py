@@ -156,7 +156,51 @@ class Term(object):
         self._postings.close()
         self._postings = None
 
+class RangeGreaterThan(Term):
+    """
+    In order for an event to match, it must be greater than the term in the
+    specified field.
+    """
+
+    implements(IMatcher, IPostingList)
+
+    def __str__(self):
+        return "<RangeGreaterThan %s=%s>" % (self.field,self.value)
+
+    def matchesLength(self, searcher, startId, endId):
+        length = searcher.postingsLengthBetween(self.field, self.value, None, startId, endId)
+        logger.trace("%s: postingsLength() => %i" % (self, length))
+        return length
+
+    def iterMatches(self, searcher, startId, endId):
+        self._postings = searcher.iterPostingsBetween(self.field, self.value, None, startId, endId)
+        return self
+
+class RangeLessThan(Term):
+    """
+    In order for an event to match, it must be less than the term in the
+    specified field.
+    """
+
+    implements(IMatcher, IPostingList)
+
+    def __str__(self):
+        return "<RangeLessThan %s=%s>" % (self.field,self.value)
+
+    def matchesLength(self, searcher, startId, endId):
+        length = searcher.postingsLengthBetween(self.field, None, self.value, startId, endId)
+        logger.trace("%s: postingsLength() => %i" % (self, length))
+        return length
+
+    def iterMatches(self, searcher, startId, endId):
+        self._postings = searcher.iterPostingsBetween(self.field, None, self.value, startId, endId)
+        return self
+
 class Every(Term):
+    """
+    Matches every event within the specified period.
+    """
+
     def __init__(self):
         pass
     def __str__(self):
