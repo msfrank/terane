@@ -134,3 +134,76 @@ terane_Segment_set_term (terane_Segment *self, PyObject *args)
     }
     Py_RETURN_NONE;
 }
+
+/*
+ * _Segment_next_term: return the (term,value) tuple from the current cursor item
+ */
+static PyObject *
+_Segment_next_term (terane_Iter *iter, DBT *key, DBT *data)
+{
+    PyObject *term = NULL, *value = NULL, *tuple = NULL;
+
+    /* get the posting */
+    if (_terane_msgpack_load ((char *) key->data, key->size, &term) < 0)
+        goto error;
+    /* get the value */
+    if (_terane_msgpack_load ((char *) data->data, data->size, &value) < 0)
+        goto error;
+    /* build the (posting,value) tuple */
+    tuple = PyTuple_Pack (2, term, value);
+error:
+    Py_XDECREF (term);
+    Py_XDECREF (value);
+    return tuple;
+}
+
+/*
+ * terane_Segment_iter_terms: Iterate through all terms in the specified field.
+ *
+ * callspec: Segment.iter_terms(txn, start, end)
+ * parameters:
+ *   txn (Txn): A Txn object to wrap the operation in, or None
+ *   start (object): The term key marking the start of the range
+ *   end (object): The term key marking the end of the range
+ * returns: a new Iterator object.  Each iteration returns a tuple consisting
+ *  of (key,value).
+ * exceptions:
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
+ */
+PyObject *
+terane_Segment_iter_terms (terane_Segment *self, PyObject *args)
+{
+    terane_Txn *txn = NULL;
+    PyObject *start = NULL, *end = NULL;
+    DBC *cursor = NULL;
+    int dbret;
+    PyObject *iter = NULL;
+    terane_Iter_ops ops = { .next = _Segment_next_term };
+
+    /* parse parameters */
+    if (!PyArg_ParseTuple (args, "OOO", &txn, &start, &end))
+        return NULL;
+    if ((PyObject *) txn == Py_None)
+        txn = NULL;
+    if (txn && txn->ob_type != &terane_TxnType)
+        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
+    if (start == Py_None && end == Py_None)
+        return PyErr_Format (PyExc_TypeError, "start and end are None");
+
+    /* create a new cursor */
+    dbret = self->terms->cursor (self->terms, txn? txn->txn : NULL, &cursor, 0);
+    if (dbret != 0)
+        return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
+            db_strerror (dbret));
+
+    /* create the Iter */
+    if (end == Py_None)
+        iter = terane_Iter_new_prefix ((PyObject *) self, cursor, &ops, start, 0);
+    else if (start == Py_None)
+        iter = terane_Iter_new_prefix ((PyObject *) self, cursor, &ops, start, 1);
+    else
+        iter = terane_Iter_new_within ((PyObject *) self, cursor, &ops, start, end, 0);
+    if (iter == NULL) 
+        cursor->close (cursor);
+    return iter;
+}

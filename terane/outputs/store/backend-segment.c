@@ -324,6 +324,8 @@ PyMethodDef _Segment_methods[] =
         "Get metadata for a term in the segment." },
     { "set_term", (PyCFunction) terane_Segment_set_term, METH_VARARGS,
         "Set metadata for a term in the segment." },
+    { "iter_terms", (PyCFunction) terane_Segment_iter_terms, METH_VARARGS,
+        "Iterates through all terms in the segment." },
     { "get_posting", (PyCFunction) terane_Segment_get_posting, METH_VARARGS,
         "Get a posting in the segment inverted index." },
     { "contains_posting", (PyCFunction) terane_Segment_contains_posting, METH_VARARGS,

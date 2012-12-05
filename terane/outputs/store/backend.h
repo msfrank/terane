@@ -92,6 +92,7 @@ typedef struct _terane_Iter {
     int itype;
     terane_iterkey *start;
     terane_iterkey *end;
+    terane_iterkey *prefix;
     DBT range;
     int reverse;
     PyObject *(*next)(struct _terane_Iter *, DBT *, DBT *);
@@ -169,6 +170,7 @@ PyObject * terane_Segment_iter_events (terane_Segment *self, PyObject *args);
 
 PyObject * terane_Segment_get_term (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_set_term (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_iter_terms (terane_Segment *self, PyObject *args);
 
 PyObject * terane_Segment_get_posting (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_set_posting (terane_Segment *self, PyObject *args);
@@ -187,7 +189,7 @@ PyObject * terane_Txn_abort (terane_Txn *self);
 
 /* Iter methods */
 PyObject * terane_Iter_new (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, int reverse);
-PyObject * terane_Iter_new_range (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, PyObject *key, int reverse);
+PyObject * terane_Iter_new_prefix (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, PyObject *key, int reverse);
 PyObject * terane_Iter_new_from (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, PyObject *key, int reverse);
 PyObject * terane_Iter_new_within (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, PyObject *start, PyObject *end, int reverse);
 PyObject * terane_Iter_skip (terane_Iter *self, PyObject *args);
@@ -253,7 +255,7 @@ typedef enum {
  * iteration type constants
  */
 #define TERANE_ITER_ALL         1
-#define TERANE_ITER_RANGE       2
+#define TERANE_ITER_PREFIX      2
 #define TERANE_ITER_FROM        3
 #define TERANE_ITER_WITHIN      4
 

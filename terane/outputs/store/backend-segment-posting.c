@@ -279,19 +279,6 @@ error:
 }
 
 /*
- * _Segment_skip_posting: create a key to skip to the record specified by posting.
- */
-static PyObject *
-_Segment_skip_posting (terane_Iter *iter, PyObject *args)
-{
-    PyObject *posting = NULL;
-
-    if (!PyArg_ParseTuple (args, "O", &posting))
-        return NULL;
-    return posting;
-}
-
-/*
  * terane_Segment_iter_postings: Iterate through all postings associated
  *  with the specified term in the specified field.
  *
@@ -313,7 +300,7 @@ terane_Segment_iter_postings (terane_Segment *self, PyObject *args)
     DBC *cursor = NULL;
     int dbret;
     PyObject *iter = NULL;
-    terane_Iter_ops ops = { .next = _Segment_next_posting, .skip = _Segment_skip_posting };
+    terane_Iter_ops ops = { .next = _Segment_next_posting };
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OOO", &txn, &start, &end))
@@ -322,6 +309,8 @@ terane_Segment_iter_postings (terane_Segment *self, PyObject *args)
         txn = NULL;
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
+    if (start == Py_None && end == Py_None)
+        return PyErr_Format (PyExc_TypeError, "start and end are None");
 
     /* create a new cursor */
     dbret = self->postings->cursor (self->postings, txn? txn->txn : NULL, &cursor, 0);
@@ -330,7 +319,12 @@ terane_Segment_iter_postings (terane_Segment *self, PyObject *args)
             db_strerror (dbret));
 
     /* create the Iter */
-    iter = terane_Iter_new_within ((PyObject *) self, cursor, &ops, start, end, 0);
+    if (end == Py_None)
+        iter = terane_Iter_new_from ((PyObject *) self, cursor, &ops, start, 0);
+    else if (start == Py_None)
+        iter = terane_Iter_new_from ((PyObject *) self, cursor, &ops, start, 1);
+    else
+        iter = terane_Iter_new_within ((PyObject *) self, cursor, &ops, start, end, 0);
     if (iter == NULL) 
         cursor->close (cursor);
     return iter;

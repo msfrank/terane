@@ -61,6 +61,12 @@ class IndexSearcher(object):
             length += searcher.postingsLength(field, term, startId, endId)
         return length
 
+    def postingsLengthBetween(self, field, startTerm, endTerm, startId, endId):
+        length = 0
+        for searcher in self._segmentSearchers:
+            length += searcher.postingsLengthBetween(field, startTerm, endTerm, startId, endId)
+        return length
+
     def iterPostings(self, field, term, startId, endId):
         """
         Returns a MergedPostingList which yields postings for the term in the
@@ -79,7 +85,17 @@ class IndexSearcher(object):
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
-        iters = [s.iterPostings(field, term, startId, endId) for s in self._segmentSearchers]
+        iters = [s.iterPostings(field, term, startId, endId)
+                 for s in self._segmentSearchers]
+        if endId < startId:
+            compar = lambda d1,d2: cmp(d2,d1)
+        else:
+            compar = cmp
+        return MergedPostingList(iters, compar)
+
+    def iterPostingsBetween(self, field, startTerm, endTerm, startId, endId):
+        iters = [s.iterPostingsBetween(field, startTerm, endTerm, startId, endId)
+                 for s in self._segmentSearchers]
         if endId < startId:
             compar = lambda d1,d2: cmp(d2,d1)
         else:
@@ -87,6 +103,9 @@ class IndexSearcher(object):
         return MergedPostingList(iters, compar)
 
     def close(self):
+        """
+        Close the ISearcher, freeing any held resources.
+        """
         for searcher in self._segmentSearchers: searcher.close()
         self._segmentSearchers = None
         self._txn.abort()
@@ -172,6 +191,9 @@ class MergedPostingList(object):
         return posting
 
     def close(self):
+        """
+        Close the IPostingList, freeing any held resources.
+        """
         for i in self._iters: i.close()
         self._iters = None
         self._smallestPostings = None
@@ -227,6 +249,24 @@ class SegmentSearcher(object):
         except KeyError:
             return 0
 
+    def postingsLengthBetween(self, field, startTerm, endTerm, startId, endId):
+        """
+        """
+        length = 0
+        if startTerm == None:
+            startKey = None
+        else:
+            startKey = [field.fieldname, field.fieldtype, startTerm]
+        if endTerm == None:
+            endKey = None
+        else:
+            endKey = [field.fieldname, field.fieldtype, endTerm]
+        terms = self._segment.iter_terms(self._txn, startKey, endKey)
+        for t in terms:
+            length += self.postingsLength(field, t, startId, endId)
+        terms.close()
+        return length
+
     def iterPostings(self, field, term, startId, endId):
         """
         Returns a PostingList which yields postings for the term in the
@@ -255,6 +295,32 @@ class SegmentSearcher(object):
             postings = self._segment.iter_postings(self._txn, start, end)
         return PostingList(self, field, term, postings)
 
+    def iterPostingsBetween(self, field, startTerm, endTerm, startId, endId):
+        """
+        """
+        # get an iterator yielding the terms
+        if startTerm == None:
+            startKey = None
+        else:
+            startKey = [field.fieldname, field.fieldtype, startTerm]
+        if endTerm == None:
+            endKey = None
+        else:
+            endKey = [field.fieldname, field.fieldtype, endTerm]
+        terms = self._segment.iter_terms(self._txn, startKey, endKey)
+        # get an iterator yielding the postings
+        if startTerm == None:
+            startKey = None
+        else:
+            startKey = [field.fieldname, field.fieldtype, startTerm, startId.ts, startId.offset]
+        if endTerm == None:
+            endKey = None
+        else:
+            endKey = [field.fieldname, field.fieldtype, endTerm, endId.ts, endId.offset]
+        postings = self._segment.iter_postings(self._txn, startKey, endKey)
+        # return posting list
+        return MultiTermPostingList(self, field, terms, postings, startId, endId)
+
     def getEvent(self, evid):
         """
         Returns the event specified by evid.
@@ -271,6 +337,9 @@ class SegmentSearcher(object):
         return defaultfield, defaultvalue, fields
 
     def close(self):
+        """
+        Close the ISearcher, freeing any held resources.
+        """
         self._txn = None
 
 class PostingList(object):
@@ -353,7 +422,96 @@ class PostingList(object):
         return None, None, None
 
     def close(self):
+        """
+        Close the IPostingList, freeing any held resources.
+        """
         if not self._postings == None:
             self._postings.close()
+        self._postings = None
+        self._searcher = None
+
+class MultiTermPostingList(object):
+
+    implements(IPostingList)
+
+    def __init__(self, searcher, field, terms, postings, startId, endId):
+        """
+        :param searcher:
+        :type searcher: :class:`terane.outputs.store.searching.SegmentSearcher`
+        :param field:
+        :type field:
+        :param terms:
+        :type terms: :class:`terane.outputs.store.backend.Iter`
+        :param postings:
+        :type postings: :class:`terane.outputs.store.backend.Iter`
+        """
+        self._searcher = searcher
+        self._field = field
+        self._terms = terms
+        self._postings = postings
+        self._startId = startId
+        self._endId = endId
+        self._currId = startId
+        if startId > endId:
+            self._cmp = lambda x,y: cmp(y, x)
+        else:
+            self._cmp = cmp
+
+    def nextPosting(self):
+        """
+        Returns the next posting, or None if iteration is finished.
+
+        :returns: The next posting, which is a tuple containing the evid, the
+          term value, and the searcher, or (None,None,None)
+        :rtype: tuple
+        """
+        smallestId = None
+        nextPosting = (None, None, None)
+        # find the next posting closest to the smallestId
+        for termKey,termValue in self._terms:
+            if smallestId == None:
+                closestKey = termKey + [self._currId.ts, self._currId.offset] 
+            else:
+                closestKey = termKey + [smallestId.ts, smallestId.offset] 
+            try:
+                postingKey,postingValue = self._postings.skip(closestKey, True)
+            except IndexError:
+                continue
+            currId = EVID(postingKey[3], postingKey[4])
+            if smallestId == None or self._cmp(currId, smallestId) <= 0:
+                if self._cmp(currId, self._endId) <= 0:
+                    smallestId = currId
+                    nextPosting = (currId, postingValue, self._searcher)
+        # reset iterators if necessary
+        if nextPosting != (None, None, None):
+            self._terms.reset()
+            self._postings.reset()
+        # if the lowest id is greater than the endId, then we are done
+        if smallestId == None or self._cmp(smallestId, self._endId) > 0:
+            return (None, None, None)
+        return nextPosting
+
+    def skipPosting(self, targetId):
+        """
+        Skips to the targetId, returning the posting or None if the posting
+        doesn't exist.
+
+        :param targetId: The target evid to skip to.
+        :type targetId: :class:`terane.bier.evid.EVID`
+        :returns: The target posting, which is a tuple containing the evid,
+          the term value, and the searcher, or (None,None,None)
+        :rtype: tuple
+        """
+        return None, None, None
+
+    def close(self):
+        """
+        Close the IPostingList, freeing any held resources.
+        """
+        if not self._terms == None:
+            self._terms.close()
+        if not self._postings == None:
+            self._postings.close()
+        self._terms = None
         self._postings = None
         self._searcher = None
