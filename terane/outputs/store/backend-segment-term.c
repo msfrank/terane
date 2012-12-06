@@ -200,7 +200,7 @@ terane_Segment_iter_terms (terane_Segment *self, PyObject *args)
     if (end == Py_None)
         iter = terane_Iter_new_prefix ((PyObject *) self, cursor, &ops, start, 0);
     else if (start == Py_None)
-        iter = terane_Iter_new_prefix ((PyObject *) self, cursor, &ops, start, 1);
+        iter = terane_Iter_new_prefix ((PyObject *) self, cursor, &ops, end, 1);
     else
         iter = terane_Iter_new_within ((PyObject *) self, cursor, &ops, start, end, 0);
     if (iter == NULL) 
