@@ -451,7 +451,7 @@ class MultiTermPostingList(object):
         self._postings = postings
         self._startId = startId
         self._endId = endId
-        self._currId = startId
+        self._lastId = None
         if startId > endId:
             self._cmp = lambda x,y: cmp(y, x)
         else:
@@ -469,19 +469,21 @@ class MultiTermPostingList(object):
         nextPosting = (None, None, None)
         # find the next posting closest to the smallestId
         for termKey,termValue in self._terms:
-            if smallestId == None:
-                closestKey = termKey + [self._currId.ts, self._currId.offset] 
+            if self._lastId == None:
+                closestKey = termKey + [self._startId.ts, self._startId.offset] 
             else:
-                closestKey = termKey + [smallestId.ts, smallestId.offset] 
+                closestKey = termKey + [self._lastId.ts, self._lastId.offset + 1] 
             try:
                 postingKey,postingValue = self._postings.skip(closestKey, True)
             except IndexError:
                 continue
             currId = EVID(postingKey[3], postingKey[4])
-            if smallestId == None or self._cmp(currId, smallestId) <= 0:
-                if self._cmp(currId, self._endId) <= 0:
-                    smallestId = currId
-                    nextPosting = (currId, postingValue, self._searcher)
+            #
+            if ((smallestId == None or self._cmp(currId, smallestId) <= 0) and
+              termKey == postingKey[0:3] and
+              self._cmp(currId, self._endId) <= 0):
+                smallestId = currId
+                nextPosting = (smallestId, postingValue, self._searcher)
         # reset iterators if necessary
         if nextPosting != (None, None, None):
             self._terms.reset()
@@ -489,6 +491,7 @@ class MultiTermPostingList(object):
         # if the lowest id is greater than the endId, then we are done
         if smallestId == None or self._cmp(smallestId, self._endId) > 0:
             return (None, None, None)
+        self._lastId = smallestId
         return nextPosting
 
     def skipPosting(self, targetId):
