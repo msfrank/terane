@@ -164,16 +164,23 @@ class RangeGreaterThan(Term):
 
     implements(IMatcher, IPostingList)
 
+    def __init__(self, field, value, exclusive=False):
+        Term.__init__(self, field, value)
+        self.exclusive = exclusive
+
     def __str__(self):
-        return "<RangeGreaterThan %s=%s>" % (self.field,self.value)
+        return "<RangeGreaterThan %s=%s, exclusive=%s>" % (
+            self.field,self.value, self.exclusive)
 
     def matchesLength(self, searcher, startId, endId):
-        length = searcher.postingsLengthBetween(self.field, self.value, None, startId, endId)
+        length = searcher.postingsLengthBetween(self.field,
+            self.value, None, self.exlusive, False, startId, endId)
         logger.trace("%s: postingsLength() => %i" % (self, length))
         return length
 
     def iterMatches(self, searcher, startId, endId):
-        self._postings = searcher.iterPostingsBetween(self.field, self.value, None, startId, endId)
+        self._postings = searcher.iterPostingsBetween(self.field,
+            self.value, None, self.exclusive, False, startId, endId)
         return self
 
 class RangeLessThan(Term):
@@ -184,16 +191,23 @@ class RangeLessThan(Term):
 
     implements(IMatcher, IPostingList)
 
+    def __init__(self, field, value, exclusive=False):
+        Term.__init__(self, field, value)
+        self.exclusive = exclusive
+
     def __str__(self):
-        return "<RangeLessThan %s=%s>" % (self.field,self.value)
+        return "<RangeLessThan %s=%s, exclusive=%s>" % (
+            self.field,self.value, self.exclusive)
 
     def matchesLength(self, searcher, startId, endId):
-        length = searcher.postingsLengthBetween(self.field, None, self.value, startId, endId)
+        length = searcher.postingsLengthBetween(self.field,
+            None, self.value, False, self.exclusive, startId, endId)
         logger.trace("%s: postingsLength() => %i" % (self, length))
         return length
 
     def iterMatches(self, searcher, startId, endId):
-        self._postings = searcher.iterPostingsBetween(self.field, None, self.value, startId, endId)
+        self._postings = searcher.iterPostingsBetween(self.field,
+            None, self.value, False, self.exclusive, startId, endId)
         return self
 
 class Every(Term):

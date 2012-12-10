@@ -238,10 +238,16 @@ class IntegerField(BaseField):
     defaultMatcher = match_is
 
     def match_gt(self, field, value):
-        return RangeGreaterThan(field, self._str2int(value))
+        return RangeGreaterThan(field, self._str2int(value), exclusive=True)
 
     def match_lt(self, field, value):
-        return RangeLessThan(field, self._str2int(value))
+        return RangeLessThan(field, self._str2int(value), exclusive=True)
+
+    def match_ge(self, field, value):
+        return RangeGreaterThan(field, self._str2int(value), exclusive=False)
+
+    def match_le(self, field, value):
+        return RangeLessThan(field, self._str2int(value), exclusive=False)
 
 class DatetimeField(BaseField):
     """

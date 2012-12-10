@@ -61,10 +61,11 @@ class IndexSearcher(object):
             length += searcher.postingsLength(field, term, startId, endId)
         return length
 
-    def postingsLengthBetween(self, field, startTerm, endTerm, startId, endId):
+    def postingsLengthBetween(self, field, startTerm, endTerm, startEx, endEx, startId, endId):
         length = 0
         for searcher in self._segmentSearchers:
-            length += searcher.postingsLengthBetween(field, startTerm, endTerm, startId, endId)
+            length += searcher.postingsLengthBetween(field,
+                startTerm, endTerm, startId, endId)
         return length
 
     def iterPostings(self, field, term, startId, endId):
@@ -93,8 +94,9 @@ class IndexSearcher(object):
             compar = cmp
         return MergedPostingList(iters, compar)
 
-    def iterPostingsBetween(self, field, startTerm, endTerm, startId, endId):
-        iters = [s.iterPostingsBetween(field, startTerm, endTerm, startId, endId)
+    def iterPostingsBetween(self, field, startTerm, endTerm, startEx, endEx, startId, endId):
+        iters = [s.iterPostingsBetween(field,
+                 startTerm, endTerm, startEx, endEx, startId, endId)
                  for s in self._segmentSearchers]
         if endId < startId:
             compar = lambda d1,d2: cmp(d2,d1)
@@ -249,21 +251,19 @@ class SegmentSearcher(object):
         except KeyError:
             return 0
 
-    def postingsLengthBetween(self, field, startTerm, endTerm, startId, endId):
+    def postingsLengthBetween(self, field, startTerm, endTerm, startEx, endEx, startId, endId):
         """
         """
         length = 0
-        if startTerm == None:
-            startKey = None
-        else:
-            startKey = [field.fieldname, field.fieldtype, startTerm]
-        if endTerm == None:
-            endKey = None
-        else:
-            endKey = [field.fieldname, field.fieldtype, endTerm]
+        startKey = None if startTerm == None else [field.fieldname, field.fieldtype, startTerm]
+        endKey = None if endTerm == None else [field.fieldname, field.fieldtype, endTerm]
         terms = self._segment.iter_terms(self._txn, startKey, endKey)
-        for t in terms:
-            length += self.postingsLength(field, t, startId, endId)
+        for term in terms:
+            if startEx and term == startTerm:
+                continue
+            if endEx and term == endTerm:
+                continue
+            length += self.postingsLength(field, term, startId, endId)
         terms.close()
         return length
 
@@ -295,31 +295,26 @@ class SegmentSearcher(object):
             postings = self._segment.iter_postings(self._txn, start, end)
         return PostingList(self, field, term, postings)
 
-    def iterPostingsBetween(self, field, startTerm, endTerm, startId, endId):
+    def iterPostingsBetween(self, field, startTerm, endTerm, startEx, endEx, startId, endId):
         """
         """
         # get an iterator yielding the terms
-        if startTerm == None:
-            startKey = None
-        else:
-            startKey = [field.fieldname, field.fieldtype, startTerm]
-        if endTerm == None:
-            endKey = None
-        else:
-            endKey = [field.fieldname, field.fieldtype, endTerm]
+        startKey = None if startTerm == None else \
+            [field.fieldname, field.fieldtype, startTerm]
+        endKey = None if endTerm == None else \
+            [field.fieldname, field.fieldtype, endTerm]
         terms = self._segment.iter_terms(self._txn, startKey, endKey)
         # get an iterator yielding the postings
-        if startTerm == None:
-            startKey = None
-        else:
-            startKey = [field.fieldname, field.fieldtype, startTerm, startId.ts, startId.offset]
-        if endTerm == None:
-            endKey = None
-        else:
-            endKey = [field.fieldname, field.fieldtype, endTerm, endId.ts, endId.offset]
+        startKey = None if startTerm == None else \
+            [field.fieldname, field.fieldtype, startTerm, startId.ts, startId.offset]
+        endKey = None if endTerm == None else \
+            [field.fieldname, field.fieldtype, endTerm, endId.ts, endId.offset]
         postings = self._segment.iter_postings(self._txn, startKey, endKey)
         # return posting list
-        return MultiTermPostingList(self, field, terms, postings, startId, endId)
+        startEx = startTerm if startEx == True else None
+        endEx = endTerm if endEx == True else None
+        return MultiTermPostingList(self, field, terms, startEx, endEx,
+            postings, startId, endId)
 
     def getEvent(self, evid):
         """
@@ -434,7 +429,7 @@ class MultiTermPostingList(object):
 
     implements(IPostingList)
 
-    def __init__(self, searcher, field, terms, postings, startId, endId):
+    def __init__(self, searcher, field, terms, startEx, endEx, postings, startId, endId):
         """
         :param searcher:
         :type searcher: :class:`terane.outputs.store.searching.SegmentSearcher`
@@ -448,6 +443,8 @@ class MultiTermPostingList(object):
         self._searcher = searcher
         self._field = field
         self._terms = terms
+        self._startEx = startEx
+        self._endEx = endEx
         self._postings = postings
         self._startId = startId
         self._endId = endId
@@ -467,8 +464,15 @@ class MultiTermPostingList(object):
         """
         smallestId = None
         nextPosting = (None, None, None)
+        import pdb; pdb.set_trace()
         # find the next posting closest to the smallestId
         for termKey,termValue in self._terms:
+            # check whether we should exclude this term
+            if self._startEx and self._startEx == termKey[2]:
+                continue
+            if self._endEx and self._endEx == termKey[2]:
+                continue
+            # jump to the next closest key
             if self._lastId == None:
                 closestKey = termKey + [self._startId.ts, self._startId.offset] 
             else:
@@ -478,7 +482,7 @@ class MultiTermPostingList(object):
             except IndexError:
                 continue
             currId = EVID(postingKey[3], postingKey[4])
-            #
+            # check whether this posting is the smallest so far
             if ((smallestId == None or self._cmp(currId, smallestId) <= 0) and
               termKey == postingKey[0:3] and
               self._cmp(currId, self._endId) <= 0):
