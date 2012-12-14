@@ -151,7 +151,7 @@ _Index_init (terane_Index *self, PyObject *args, PyObject *kwds)
     }
     /* open the segments store */
     dbret = self->segments->open (self->segments, txn, tocname, "segments",
-        DB_RECNO, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
+        DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open segments: %s",
             db_strerror (dbret));
@@ -221,7 +221,7 @@ terane_Index_close (terane_Index *self)
     if (self->metadata != NULL) {
         dbret = self->metadata->close (self->metadata, 0);
         if (dbret != 0)
-            PyErr_Format (terane_Exc_Error, "Failed to close _metadata: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to close metadata: %s",
                 db_strerror (dbret));
     }
     self->metadata = NULL;
@@ -230,7 +230,7 @@ terane_Index_close (terane_Index *self)
     if (self->schema != NULL) {
         dbret = self->schema->close (self->schema, 0);
         if (dbret != 0)
-            PyErr_Format (terane_Exc_Error, "Failed to close _schema: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to close schema: %s",
                 db_strerror (dbret));
     }
     self->schema = NULL;
@@ -239,10 +239,11 @@ terane_Index_close (terane_Index *self)
     if (self->segments != NULL) {
         dbret = self->segments->close (self->segments, 0);
         if (dbret != 0)
-            PyErr_Format (terane_Exc_Error, "Failed to close _segments: %s",
+            PyErr_Format (terane_Exc_Error, "Failed to close segments: %s",
                 db_strerror (dbret));
     }
     self->segments = NULL;
+
     Py_RETURN_NONE;
 }
 
@@ -263,10 +264,10 @@ PyMethodDef _Index_methods[] =
         "Iterate through all fields in the Index." },
     { "count_fields", (PyCFunction) terane_Index_count_fields, METH_NOARGS,
         "Return the count of fields in the Index." },
-    { "new_segment", (PyCFunction) terane_Index_new_segment, METH_VARARGS,
-        "Allocate a new segment ID." },
+    { "add_segment", (PyCFunction) terane_Index_add_segment, METH_VARARGS,
+        "Add a new segment." },
     { "iter_segments", (PyCFunction) terane_Index_iter_segments, METH_VARARGS,
-        "Iterate all segment IDs in the Index." },
+        "Iterate all segments in the Index." },
     { "delete_segment", (PyCFunction) terane_Index_delete_segment, METH_VARARGS,
         "Delete the segment from the Index." },
     { "new_txn", (PyCFunction) terane_Index_new_txn, METH_VARARGS|METH_KEYWORDS,

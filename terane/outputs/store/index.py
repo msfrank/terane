@@ -44,20 +44,23 @@ class Index(backend.Index):
     implements(IIndex)
 
     def __init__(self, env, name, fieldstore):
+        backend.Index.__init__(self, env, name)
         self.name = name
+        self._env = env
         self._segments = []
         self._indexSize = 0
+        self._current = None
         self._currentSize = 0
+        self._currentSid = None
         self._lastModified = 0
         self._lastId = EVID_MIN
-        backend.Index.__init__(self, env, name)
         try:
             # load schema
             self._schema = Schema(self, fieldstore)
             # load data segments
             with self.new_txn() as txn:
-                for segmentId in self.iter_segments(txn):
-                    segment = Segment(txn, self, segmentId)
+                for segmentName,_ in self.iter_segments(txn):
+                    segment = Segment(env, txn, segmentName)
                     last_update = segment.get_meta(txn, u'last-update')
                     self._currentSize = last_update[u'size']
                     self._indexSize += last_update[u'size']
@@ -68,19 +71,16 @@ class Index(backend.Index):
                     if last_update[u'last-modified'] > self._lastModified:
                         self._lastModified = last_update[u'last-modified']
                     self._segments.append(segment)
+                    logger.debug("opened event index segment '%s'" % segmentName)
+            # get the current segment id
+            with self.new_txn() as txn:
+                try:
+                    self._currentSid = self.get_meta(txn, u'last-segment-id')
+                except KeyError:
+                    self._currentSid = 0
             # if the index has no segments, create one
             if self._segments == []:
-                with self.new_txn() as txn:
-                    segmentId = self.new_segment(txn)
-                    segment = Segment(txn, self, segmentId)
-                    segment.set_meta(txn, u'created-on', int(time.time()))
-                    last_update = {
-                        u'size': self._indexSize,
-                        u'last-id': [self._lastId.ts, self._lastId.offset],
-                        u'last-modified': self._lastModified
-                        }
-                    segment.set_meta(txn, u'last-update', last_update)
-                self._segments.append(segment)
+                self._makeSegment()
                 logger.info("created first segment for new index '%s'" % name)
             else:
                 logger.info("found %i events in %i segments for index '%s'" % (
@@ -124,6 +124,26 @@ class Index(backend.Index):
             "last-event": self._lastId
             }
 
+    def _makeSegment(self):
+        with self.new_txn() as txn:
+            segmentId = self._currentSid + 1
+            segmentName = u"%s.%i" % (self.name, segmentId)
+            self.add_segment(txn, segmentName, None)
+            segment = Segment(self._env, txn, segmentName)
+            segment.set_meta(txn, u'created-on', int(time.time()))
+            last_update = {
+                u'size': 0,
+                u'last-id': [EVID_MIN.ts, EVID_MIN.offset],
+                u'last-modified': 0
+                }
+            segment.set_meta(txn, u'last-update', last_update)
+            self.set_meta(txn, u'last-segment-id', segmentId)
+        self._currentSid = segmentId
+        self._current = segment
+        self._currentSize = 0
+        self._segments.append(segment)
+        return segment
+
     def rotateSegments(self, segRotation, segRetention):
         """
         Allocate a new Segment, making it the new current segment.
@@ -131,20 +151,8 @@ class Index(backend.Index):
         # if the current segment contains more events than specified by
         # segRotation, then rotate the index to generate a new segment.
         if segRotation > 0 and self._currentSize >= segRotation:
-            with self.new_txn() as txn:
-                segmentId = self.new_segment(txn)
-                segment = Segment(txn, self, segmentId)
-                segment.set_meta(txn, u'created-on', int(time.time()))
-                last_update = {
-                    u'size': 0,
-                    u'last-id': [EVID_MIN.ts, EVID_MIN.offset],
-                    u'last-modified': 0
-                    }
-                segment.set_meta(txn, u'last-update', last_update)
-            self._segments.append(segment)
-            self._current = segment
-            self._currentSize = 0
-            logger.debug("rotated current segment, new segment is %s" % segment.fullName)
+            self._makeSegment()
+            logger.debug("rotated current segment, new segment is %s" % segment.name)
             # if the index contains more segments than specified by segRetention,
             # then delete the oldest segment.
             if segRetention > 0:
@@ -156,15 +164,15 @@ class Index(backend.Index):
         """
         Delete the specified Segment.
         """
-        fullName = segment.fullName
+        segmentName = segment.name
         # remove the segment from the segment list
         self._segments.remove(segment)
         # remove the segment from the TOC.  this also marks the segment
         # for eventual physical deletion, when the Segment is deallocated.
         with self.new_txn() as txn:
-            self.delete_segment(txn, segment.segmentId)
+            self.delete_segment(txn, segmentName)
         segment.delete()
-        logger.debug("deleted segment %s" % fullName)
+        logger.debug("deleted segment %s" % segmentName)
 
     def close(self):
         """

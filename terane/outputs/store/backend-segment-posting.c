@@ -257,28 +257,6 @@ error:
 }
 
 /*
- * _Segment_next_posting: return the (posting,value) tuple from the current cursor item
- */
-static PyObject *
-_Segment_next_posting (terane_Iter *iter, DBT *key, DBT *data)
-{
-    PyObject *posting = NULL, *value = NULL, *tuple = NULL;
-
-    /* get the posting */
-    if (_terane_msgpack_load ((char *) key->data, key->size, &posting) < 0)
-        goto error;
-    /* get the value */
-    if (_terane_msgpack_load ((char *) data->data, data->size, &value) < 0)
-        goto error;
-    /* build the (posting,value) tuple */
-    tuple = PyTuple_Pack (2, posting, value);
-error:
-    Py_XDECREF (posting);
-    Py_XDECREF (value);
-    return tuple;
-}
-
-/*
  * terane_Segment_iter_postings: Iterate through all postings associated
  *  with the specified term in the specified field.
  *
@@ -300,7 +278,6 @@ terane_Segment_iter_postings (terane_Segment *self, PyObject *args)
     DBC *cursor = NULL;
     int dbret;
     PyObject *iter = NULL;
-    terane_Iter_ops ops = { .next = _Segment_next_posting };
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OOO", &txn, &start, &end))
@@ -320,11 +297,11 @@ terane_Segment_iter_postings (terane_Segment *self, PyObject *args)
 
     /* create the Iter */
     if (end == Py_None)
-        iter = terane_Iter_new_from ((PyObject *) self, cursor, &ops, start, 0);
+        iter = terane_Iter_new_from ((PyObject *) self, cursor, start, 0);
     else if (start == Py_None)
-        iter = terane_Iter_new_from ((PyObject *) self, cursor, &ops, end, 1);
+        iter = terane_Iter_new_from ((PyObject *) self, cursor, end, 1);
     else
-        iter = terane_Iter_new_within ((PyObject *) self, cursor, &ops, start, end, 0);
+        iter = terane_Iter_new_within ((PyObject *) self, cursor, start, end, 0);
     if (iter == NULL) 
         cursor->close (cursor);
     return iter;

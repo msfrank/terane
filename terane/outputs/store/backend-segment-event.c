@@ -334,22 +334,6 @@ error:
         PyMem_Free (end_key.data);
     return estimate;
 }
-/*
- * _Segment_next_evid: build a (evid,None) tuple from the current cursor item
- */
-static PyObject *
-_Segment_next_evid (terane_Iter *iter, DBT *key, DBT *data)
-{
-    PyObject *evid, *tuple;
-
-    /* get the event id */
-    if (_terane_msgpack_load ((char *) key->data, key->size, &evid) < 0)
-        return NULL;
-    /* build the (evid,None) tuple */
-    tuple = PyTuple_Pack (2, evid, Py_None);
-    Py_XDECREF (evid);
-    return tuple;
-}
 
 /*
  * terane_Segment_iter_events: Iterate through all event ids between
@@ -373,7 +357,6 @@ terane_Segment_iter_events (terane_Segment *self, PyObject *args)
     DBC *cursor = NULL;
     PyObject *iter = NULL;
     int dbret, reverse = 0;
-    terane_Iter_ops ops = { .next = _Segment_next_evid };
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OOO", &txn, &start, &end))
@@ -397,8 +380,7 @@ terane_Segment_iter_events (terane_Segment *self, PyObject *args)
             db_strerror (dbret));
 
     /* allocate a new Iter object */
-    iter = terane_Iter_new_within ((PyObject *) self, cursor,
-        &ops, start, end, reverse);
+    iter = terane_Iter_new_within ((PyObject *) self, cursor, start, end, reverse);
     if (iter == NULL) {
         cursor->close (cursor);
         return NULL;

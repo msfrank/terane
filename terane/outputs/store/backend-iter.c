@@ -115,14 +115,12 @@ _make_prefixkey (PyObject *list)
 PyObject *
 terane_Iter_new (PyObject *             parent,
                  DBC *                  cursor,
-                 terane_Iter_ops *      ops,
                  int                    reverse)
 {
     terane_Iter *iter;
 
     assert (parent != NULL);
     assert (cursor != NULL);
-    assert (ops != NULL);
 
     iter = PyObject_New (terane_Iter, &terane_IterType);
     if (iter == NULL)
@@ -137,8 +135,6 @@ terane_Iter_new (PyObject *             parent,
     iter->end = NULL;
     iter->prefix = NULL;
     memset (&iter->range, 0, sizeof (DBT));
-    iter->next = ops->next;
-    iter->skip = ops->skip;
     iter->reverse = reverse;
     return (PyObject *) iter;
 }
@@ -153,7 +149,6 @@ terane_Iter_new (PyObject *             parent,
 PyObject *
 terane_Iter_new_prefix (PyObject *          parent,
                         DBC *               cursor,
-                        terane_Iter_ops *   ops,
                         PyObject *          key,
                         int                 reverse)
 {
@@ -161,7 +156,7 @@ terane_Iter_new_prefix (PyObject *          parent,
 
     assert (PyTuple_CheckExact (key));
 
-    iter = (terane_Iter *) terane_Iter_new (parent, cursor, ops, reverse);
+    iter = (terane_Iter *) terane_Iter_new (parent, cursor, reverse);
     if (iter == NULL)
         return NULL;
     iter->itype = TERANE_ITER_PREFIX;
@@ -190,7 +185,6 @@ terane_Iter_new_prefix (PyObject *          parent,
 PyObject *
 terane_Iter_new_from (PyObject *            parent,
                       DBC *                 cursor,
-                      terane_Iter_ops *     ops,
                       PyObject *            key,
                       int                   reverse)
 {
@@ -198,7 +192,7 @@ terane_Iter_new_from (PyObject *            parent,
 
     assert (PyTuple_CheckExact (key));
 
-    iter = (terane_Iter *) terane_Iter_new (parent, cursor, ops, reverse);
+    iter = (terane_Iter *) terane_Iter_new (parent, cursor, reverse);
     if (iter == NULL)
         return NULL;
     iter->itype = TERANE_ITER_FROM;
@@ -222,7 +216,6 @@ terane_Iter_new_from (PyObject *            parent,
 PyObject *
 terane_Iter_new_within (PyObject *          parent,
                         DBC *               cursor,
-                        terane_Iter_ops *   ops,
                         PyObject *          start,
                         PyObject *          end,
                         int                 reverse)
@@ -232,7 +225,7 @@ terane_Iter_new_within (PyObject *          parent,
     assert (PyTuple_CheckExact (start));
     assert (PyTuple_CheckExact (end));
 
-    iter = (terane_Iter *) terane_Iter_new (parent, cursor, ops, reverse);
+    iter = (terane_Iter *) terane_Iter_new (parent, cursor, reverse);
     if (iter == NULL)
         return NULL;
     iter->itype = TERANE_ITER_WITHIN;
@@ -331,6 +324,28 @@ _Iter_cmp (terane_iterkey *lhs, DBT *rhs, int reverse, int *result)
 }
 
 /*
+ * _Iter_load:
+ */
+static PyObject *
+_Iter_load (terane_Iter *iter, DBT *key, DBT *data)
+{
+    PyObject *_key = NULL, *_data = NULL, *tuple = NULL;
+
+    /* load the key */
+    if (_terane_msgpack_load ((char *) key->data, key->size, &_key) < 0)
+        goto error;
+    /* load the data */
+    if (_terane_msgpack_load ((char *) data->data, data->size, &_data) < 0)
+        goto error;
+    /* build the (posting,value) tuple */
+    tuple = PyTuple_Pack (2, _key, _data);
+error:
+    Py_XDECREF (_key);
+    Py_XDECREF (_data);
+    return tuple;
+}
+
+/*
  * _Iter_get: retreive the iterator item from the cursor.
  */
 static PyObject *
@@ -381,7 +396,7 @@ _Iter_get (terane_Iter *iter, int itype, int flags, DBT *range_key)
         case TERANE_ITER_PREFIX:
             /* check that the key prefix matches */
             if (_Iter_prefix (iter->prefix, &key) > 0)
-                item = iter->next (iter, &key, &data);
+                item = _Iter_load (iter, &key, &data);
             break;
         case TERANE_ITER_WITHIN:
             /* check that the key is between the start and end keys */
@@ -393,10 +408,10 @@ _Iter_get (terane_Iter *iter, int itype, int flags, DBT *range_key)
                 break;
             if (result <= 0)
                 break;
-            item = iter->next (iter, &key, &data);
+            item = _Iter_load (iter, &key, &data);
             break;
         default:
-            item = iter->next (iter, &key, &data);
+            item = _Iter_load (iter, &key, &data);
             break;
     }
 
@@ -438,8 +453,6 @@ _Iter_next (terane_Iter *self)
 
     if (self->cursor == NULL)
         return PyErr_Format (terane_Exc_Error, "iterator is closed");
-    if (self->next == NULL)
-        return PyErr_Format (terane_Exc_Error, "No next callback for iterator");
 
     /* initialize the cursor position, if necessary */
     switch (self->itype)

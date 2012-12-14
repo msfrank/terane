@@ -136,28 +136,6 @@ terane_Segment_set_term (terane_Segment *self, PyObject *args)
 }
 
 /*
- * _Segment_next_term: return the (term,value) tuple from the current cursor item
- */
-static PyObject *
-_Segment_next_term (terane_Iter *iter, DBT *key, DBT *data)
-{
-    PyObject *term = NULL, *value = NULL, *tuple = NULL;
-
-    /* get the posting */
-    if (_terane_msgpack_load ((char *) key->data, key->size, &term) < 0)
-        goto error;
-    /* get the value */
-    if (_terane_msgpack_load ((char *) data->data, data->size, &value) < 0)
-        goto error;
-    /* build the (posting,value) tuple */
-    tuple = PyTuple_Pack (2, term, value);
-error:
-    Py_XDECREF (term);
-    Py_XDECREF (value);
-    return tuple;
-}
-
-/*
  * terane_Segment_iter_terms: Iterate through all terms in the specified field.
  *
  * callspec: Segment.iter_terms(txn, start, end)
@@ -165,6 +143,7 @@ error:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   start (object): The term key marking the start of the range
  *   end (object): The term key marking the end of the range
+ *   reverse (bool): Iterate in the reverse direction
  * returns: a new Iterator object.  Each iteration returns a tuple consisting
  *  of (key,value).
  * exceptions:
@@ -174,14 +153,13 @@ PyObject *
 terane_Segment_iter_terms (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    PyObject *start = NULL, *end = NULL;
+    PyObject *start = NULL, *end = NULL, *reverse = Py_False;
     DBC *cursor = NULL;
     int dbret;
     PyObject *iter = NULL;
-    terane_Iter_ops ops = { .next = _Segment_next_term };
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OOO", &txn, &start, &end))
+    if (!PyArg_ParseTuple (args, "OOO|O", &txn, &start, &end, &reverse))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
@@ -189,6 +167,8 @@ terane_Segment_iter_terms (terane_Segment *self, PyObject *args)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
     if (start == Py_None && end == Py_None)
         return PyErr_Format (PyExc_TypeError, "start and end are None");
+    if (reverse != Py_True && reverse != Py_False)
+        return PyErr_Format (PyExc_TypeError, "reverse must be True or False");
 
     /* create a new cursor */
     dbret = self->terms->cursor (self->terms, txn? txn->txn : NULL, &cursor, 0);
@@ -198,11 +178,11 @@ terane_Segment_iter_terms (terane_Segment *self, PyObject *args)
 
     /* create the Iter */
     if (end == Py_None)
-        iter = terane_Iter_new_prefix ((PyObject *) self, cursor, &ops, start, 0);
+        iter = terane_Iter_new_prefix ((PyObject *) self, cursor, start, 0);
     else if (start == Py_None)
-        iter = terane_Iter_new_prefix ((PyObject *) self, cursor, &ops, end, 1);
+        iter = terane_Iter_new_prefix ((PyObject *) self, cursor, end, 1);
     else
-        iter = terane_Iter_new_within ((PyObject *) self, cursor, &ops, start, end, 0);
+        iter = terane_Iter_new_within ((PyObject *) self, cursor, start, end, 0);
     if (iter == NULL) 
         cursor->close (cursor);
     return iter;

@@ -65,13 +65,12 @@ terane_Index_get_meta (terane_Index *self, PyObject *args)
         case DB_NOTFOUND:
         case DB_KEYEMPTY:
             /* metadata doesn't exist, raise KeyError */
-            PyErr_Format (PyExc_KeyError, "Metadata id %s doesn't exist",
-                (char *) key.data);
+            PyErr_Format (PyExc_KeyError, "Metadata doesn't exist");
             break;
         default:
             /* some other db error, raise Exception */
-            PyErr_Format (terane_Exc_Error, "Failed to get metadata %s: %s",
-                (char *) key.data, db_strerror (dbret));
+            PyErr_Format (terane_Exc_Error, "Failed to get metadata: %s",
+                db_strerror (dbret));
             break;
     }
 
@@ -107,7 +106,7 @@ terane_Index_set_meta (terane_Index *self, PyObject *args)
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "O!OO", &terane_TxnType, &txn, &id, &metadata))
         return NULL;
-    /*  use the metadata name asthe key */
+    /*  use the metadata name as the key */
     memset (&key, 0, sizeof (DBT));
     if (_terane_msgpack_dump (id, (char **) &key.data, &key.size) < 0)
         return NULL;
@@ -119,16 +118,17 @@ terane_Index_set_meta (terane_Index *self, PyObject *args)
     }
     /* set the record */
     dbret = self->metadata->put (self->metadata, txn->txn, &key, &data, 0);
-    /* db error, raise Exception */
+    if (key.data)
+        PyMem_Free (key.data);
+    if (data.data)
+        PyMem_Free (data.data);
     switch (dbret) {
         case 0:
             break;
+        /* db error, raise Exception */
         default:
-            PyErr_Format (terane_Exc_Error, "Failed to set metadata %s: %s",
-                (char *) key.data, db_strerror (dbret));
-            break;
+            return PyErr_Format (terane_Exc_Error, "Failed to set metadata: %s",
+                db_strerror (dbret));
     }
-    if (data.data)
-        PyMem_Free (data.data);
     Py_RETURN_NONE;
 }

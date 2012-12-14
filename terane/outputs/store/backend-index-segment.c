@@ -20,84 +20,53 @@
 #include "backend.h"
 
 /*
- * terane_Index_new_segment: allocate a new Segment id.
+ * terane_Index_add_segment: add a new segment to the index.
  *
- * callspec: Index.new_segment(txn)
+ * callspec: Index.add_segment(txn, name, value)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
- * returns: A long representing the segment id.
+ *   id (object): The segment id
+ *   value (object): The segment metadata to store
+ * returns: None
  * exceptions:
- *   terane.outputs.store.backend.Error: A db error occurred when trying to allocate the segment.
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to add the record.
  */
 PyObject *
-terane_Index_new_segment (terane_Index *self, PyObject *args)
+terane_Index_add_segment (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    db_recno_t sid = 0;
+    PyObject *id = NULL;
+    PyObject *metadata = NULL;
     DBT key, data;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!", &terane_TxnType, &txn))
+    if (!PyArg_ParseTuple (args, "O!OO", &terane_TxnType, &txn, &id, &metadata))
         return NULL;
-
-    /* allocate a new segment record */
+    /*  use the segment name as the key */
     memset (&key, 0, sizeof (DBT));
-    key.flags = DB_DBT_MALLOC;
+    if (_terane_msgpack_dump (id, (char **) &key.data, &key.size) < 0)
+        return NULL;
+    /* serialize the metadata */
     memset (&data, 0, sizeof (DBT));
-    dbret = self->schema->put (self->segments, txn->txn, &key, &data, DB_APPEND);
-    switch (dbret) {
-        case 0:
-            break;
-        default:
-            PyErr_Format (terane_Exc_Error, "Failed to allocate new segment: %s",
-                db_strerror (dbret));
-            return NULL;
+    if (_terane_msgpack_dump (metadata, (char **) &data.data, &data.size) < 0) {
+        PyMem_Free (key.data);
+        return NULL;
     }
-    /* return the segment record number */
-    sid = *((db_recno_t *) key.data);
-    /* free allocated memory */
+    /* add the record */
+    dbret = self->segments->put (self->segments, txn->txn, &key, &data, DB_NOOVERWRITE);
     if (key.data)
         PyMem_Free (key.data);
-    return PyLong_FromUnsignedLong ((unsigned long) sid);
-}
-
-/*
- * Index_contains_segment: return true if segment exists in the Index
- */
-int
-terane_Index_contains_segment (terane_Index *self, terane_Txn *txn, db_recno_t sid)
-{
-    DBT key;
-    int dbret;
-
-    memset (&key, 0, sizeof (key));
-    key.data = &sid;
-    key.size = sizeof (sid);
-    dbret = self->schema->exists (self->segments, txn? txn->txn : NULL, &key, 0);
+    if (data.data)
+        PyMem_Free (data.data);
     switch (dbret) {
         case 0:
-            return 1;
-        case DB_NOTFOUND:
-            return 0;
-        default:
-            PyErr_Format (terane_Exc_Error, "Failed to lookup segment %lu in segments: %s",
-                (unsigned long int) sid, db_strerror (dbret));
             break;
+        default:
+            return PyErr_Format (terane_Exc_Error, "Failed to add segment: %s",
+                db_strerror (dbret));
     }
-    return -1;
-}
-
-/*
- * _Index_next_segment: return the segment id from the current cursor item
- */
-static PyObject *
-_Index_next_segment (terane_Iter *iter, DBT *key, DBT *data)
-{
-    db_recno_t sid = 0;
-
-    sid = *((db_recno_t *) key->data);
-    return PyLong_FromUnsignedLong ((unsigned long) sid);
+    Py_RETURN_NONE;
 }
 
 /*
@@ -106,8 +75,8 @@ _Index_next_segment (terane_Iter *iter, DBT *key, DBT *data)
  * callspec: Index.iter_segments(txn)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
- * returns: a new Iter object.  Each iteration returns a long representing the
- *  segment id.
+ * returns: a new Iter object.  Each iteration returns a tuple consisting of
+ *  (id, metadata).
  * exceptions:
  *   terane.outputs.store.backend.Error: A db error occurred when trying to create the iterator
  */
@@ -117,7 +86,6 @@ terane_Index_iter_segments (terane_Index *self, PyObject *args)
     terane_Txn *txn = NULL;
     DBC *cursor = NULL;
     PyObject *iter = NULL;
-    terane_Iter_ops ops = { .next = _Index_next_segment };
     int dbret;
 
     /* parse parameters */
@@ -136,7 +104,7 @@ terane_Index_iter_segments (terane_Index *self, PyObject *args)
             db_strerror (dbret));
         return NULL;
     }
-    iter = terane_Iter_new ((PyObject *) self, cursor, &ops, 0);
+    iter = terane_Iter_new ((PyObject *) self, cursor, 0);
     if (iter == NULL)
         cursor->close (cursor);
     return iter;
@@ -148,7 +116,7 @@ terane_Index_iter_segments (terane_Index *self, PyObject *args)
  * callspec: Index.delete_segment(txn, segment)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
- *   id (long): The identifier of the Segment to delete
+ *   id (object): The id of the segment to delete
  * returns: None
  * exceptions:
  *   terane.outputs.store.backend.Error: A db error occurred when trying count the segments
@@ -157,26 +125,27 @@ PyObject *
 terane_Index_delete_segment (terane_Index *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    db_recno_t sid = 0;
+    PyObject *id = NULL;
     DBT key;
     int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!k", &terane_TxnType, &txn, &sid))
+    if (!PyArg_ParseTuple (args, "O!O", &terane_TxnType, &txn, &id))
         return NULL;
 
     /* delete segment id from the Index */
     memset (&key, 0, sizeof (DBT));
-    key.data = &sid;
-    key.size = sizeof (db_recno_t);
+    if (_terane_msgpack_dump (id, (char **) &key.data, &key.size) < 0)
+        return NULL;
     dbret = self->segments->del (self->segments, txn->txn, &key, 0);
+    if (key.data)
+        PyMem_Free (key.data);
     switch (dbret) {
         case 0:
             break;
         default:
-            PyErr_Format (terane_Exc_Error, "Failed to delete segment: %s",
+            return PyErr_Format (terane_Exc_Error, "Failed to delete segment: %s",
                 db_strerror (dbret));
-            break;
     }
     Py_RETURN_NONE;
 }
