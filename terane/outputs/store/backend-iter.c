@@ -209,6 +209,37 @@ terane_Iter_new_from (PyObject *            parent,
 }
 
 /*
+ * terane_Iter_new_until: allocate a new Iter object using the supplied DB cursor.
+ * 
+ * returns: A new Iter object
+ */
+PyObject *
+terane_Iter_new_until (PyObject *           parent,
+                       DBC *                cursor,
+                       PyObject *           key,
+                       int                  reverse)
+{
+    terane_Iter *iter;
+
+    assert (PyTuple_CheckExact (key));
+
+    iter = (terane_Iter *) terane_Iter_new (parent, cursor, reverse);
+    if (iter == NULL)
+        return NULL;
+    iter->itype = TERANE_ITER_UNTIL;
+    iter->end = _make_iterkey (key);
+    if (iter->end == NULL) {
+        Py_DECREF (iter);
+        return NULL;
+    }
+    if (_terane_msgpack_dump (key, (char **) &iter->range.data, &iter->range.size) < 0) {
+        Py_DECREF (iter);
+        return NULL;
+    }
+    return (PyObject *) iter;
+}
+
+/*
  * terane_Iter_new_within: allocate a new Iter object using the supplied DB cursor.
  * 
  * returns: A new Iter object
@@ -239,7 +270,8 @@ terane_Iter_new_within (PyObject *          parent,
         Py_DECREF (iter);
         return NULL;
     }
-    if (_terane_msgpack_dump (start, (char **) &iter->range.data, &iter->range.size) < 0) {
+    if (_terane_msgpack_dump (reverse? end : start,
+        (char **) &iter->range.data, &iter->range.size) < 0) {
         Py_DECREF (iter);
         return NULL;
     }
@@ -402,11 +434,27 @@ _Iter_get (terane_Iter *iter, int itype, int flags, DBT *range_key)
             /* check that the key is between the start and end keys */
             if (_Iter_cmp (iter->start, &key, iter->reverse, &result) < 0)
                 break;
-            if (result >= 0)
+            if (result > 0)
                 break;
             if (_Iter_cmp (iter->end, &key, iter->reverse, &result) < 0)
                 break;
-            if (result <= 0)
+            if (result < 0)
+                break;
+            item = _Iter_load (iter, &key, &data);
+            break;
+        case TERANE_ITER_FROM:
+            /* check that the key is greater than or equal to the start key */
+            if (_Iter_cmp (iter->start, &key, iter->reverse, &result) < 0)
+                break;
+            if (result > 0)
+                break;
+            item = _Iter_load (iter, &key, &data);
+            break;
+        case TERANE_ITER_UNTIL:
+            /* check that the key is less than or equal to the end key */
+            if (_Iter_cmp (iter->end, &key, iter->reverse, &result) < 0)
+                break;
+            if (result < 0)
                 break;
             item = _Iter_load (iter, &key, &data);
             break;
@@ -464,8 +512,29 @@ _Iter_next (terane_Iter *self)
                 flags = !self->initialized ?  DB_LAST : DB_PREV;
             item = _Iter_get (self, self->itype, flags, NULL);
             break;
-        case TERANE_ITER_PREFIX:
+        case TERANE_ITER_UNTIL:
+            if (self->initialized)
+                item = _Iter_get (self, self->itype, self->reverse ? DB_PREV : DB_NEXT,
+                    &self->range);
+            else {
+                if (self->reverse)
+                    item = _Iter_closest (self, &self->range);
+                else
+                    item = _Iter_get (self, self->itype, DB_FIRST, NULL);
+            }
+            break;
         case TERANE_ITER_FROM:
+            if (self->initialized)
+                item = _Iter_get (self, self->itype, self->reverse ? DB_PREV : DB_NEXT,
+                    &self->range);
+            else {
+                if (!self->reverse)
+                    item = _Iter_closest (self, &self->range);
+                else
+                    item = _Iter_get (self, self->itype, DB_LAST, NULL);
+            }
+            break;
+        case TERANE_ITER_PREFIX:
         case TERANE_ITER_WITHIN:
             if (!self->initialized)
                 item = _Iter_closest (self, &self->range);

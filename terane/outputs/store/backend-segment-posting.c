@@ -164,6 +164,7 @@ terane_Segment_contains_posting (terane_Segment *self, PyObject *args)
     memset (&key, 0, sizeof (DBT));
     if (_terane_msgpack_dump (posting, (char **) &key.data, &key.size) < 0)
         return NULL;
+    key.flags = DB_DBT_REALLOC;
 
     /* check if key exists in the db */
     dbret = self->postings->exists (self->postings, txn? txn->txn : NULL, &key, 0);
@@ -265,6 +266,7 @@ error:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   start (object): The posting key marking the start of the range
  *   end (object): The posting key marking the end of the range
+ *   reverse (bool): If True, then terate in reverse
  * returns: a new Iterator object.  Each iteration returns a tuple consisting
  *  of (key,value).
  * exceptions:
@@ -274,20 +276,20 @@ PyObject *
 terane_Segment_iter_postings (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    PyObject *start = NULL, *end = NULL;
+    PyObject *start = NULL, *end = NULL, *reverse = NULL;
     DBC *cursor = NULL;
     int dbret;
     PyObject *iter = NULL;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OOO", &txn, &start, &end))
+    if (!PyArg_ParseTuple (args, "OOOO", &txn, &start, &end, &reverse))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-    if (start == Py_None && end == Py_None)
-        return PyErr_Format (PyExc_TypeError, "start and end are None");
+    if (reverse != Py_True && reverse != Py_False)
+        return PyErr_Format (PyExc_TypeError, "reverse must be True or False");
 
     /* create a new cursor */
     dbret = self->postings->cursor (self->postings, txn? txn->txn : NULL, &cursor, 0);
@@ -296,12 +298,18 @@ terane_Segment_iter_postings (terane_Segment *self, PyObject *args)
             db_strerror (dbret));
 
     /* create the Iter */
-    if (end == Py_None)
-        iter = terane_Iter_new_from ((PyObject *) self, cursor, start, 0);
+    if (start == Py_None && end == Py_None)
+        iter = terane_Iter_new ((PyObject *) self, cursor,
+            reverse == Py_True ? 1 : 0);
+    else if (end == Py_None)
+        iter = terane_Iter_new_from ((PyObject *) self, cursor,
+            start, reverse == Py_True ? 1 : 0);
     else if (start == Py_None)
-        iter = terane_Iter_new_from ((PyObject *) self, cursor, end, 1);
+        iter = terane_Iter_new_until ((PyObject *) self, cursor,
+            end, reverse == Py_True ? 1 : 0);
     else
-        iter = terane_Iter_new_within ((PyObject *) self, cursor, start, end, 0);
+        iter = terane_Iter_new_within ((PyObject *) self, cursor,
+            start, end, reverse == Py_True ? 1 : 0);
     if (iter == NULL) 
         cursor->close (cursor);
     return iter;

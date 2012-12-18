@@ -159,14 +159,12 @@ terane_Segment_iter_terms (terane_Segment *self, PyObject *args)
     PyObject *iter = NULL;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OOO|O", &txn, &start, &end, &reverse))
+    if (!PyArg_ParseTuple (args, "OOOO", &txn, &start, &end, &reverse))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-    if (start == Py_None && end == Py_None)
-        return PyErr_Format (PyExc_TypeError, "start and end are None");
     if (reverse != Py_True && reverse != Py_False)
         return PyErr_Format (PyExc_TypeError, "reverse must be True or False");
 
@@ -177,12 +175,18 @@ terane_Segment_iter_terms (terane_Segment *self, PyObject *args)
             db_strerror (dbret));
 
     /* create the Iter */
+    if (start == Py_None && end == Py_None)
+        iter = terane_Iter_new ((PyObject *) self, cursor,
+            reverse == Py_True ? 1 : 0);
     if (end == Py_None)
-        iter = terane_Iter_new_prefix ((PyObject *) self, cursor, start, 0);
+        iter = terane_Iter_new_from ((PyObject *) self, cursor,
+            start, reverse == Py_True ? 1 : 0);
     else if (start == Py_None)
-        iter = terane_Iter_new_prefix ((PyObject *) self, cursor, end, 1);
+        iter = terane_Iter_new_until ((PyObject *) self, cursor,
+            end, reverse == Py_True ? 1 : 0);
     else
-        iter = terane_Iter_new_within ((PyObject *) self, cursor, start, end, 0);
+        iter = terane_Iter_new_within ((PyObject *) self, cursor,
+            start, end, reverse == Py_True ? 1 : 0);
     if (iter == NULL) 
         cursor->close (cursor);
     return iter;

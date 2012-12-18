@@ -243,6 +243,7 @@ terane_Segment_contains_event (terane_Segment *self, PyObject *args)
     memset (&key, 0, sizeof (DBT));
     if (_terane_msgpack_dump (evid, (char **) &key.data, &key.size) < 0)
         return NULL;
+    key.flags = DB_DBT_REALLOC;
     /* check for the record */
     dbret = self->events->exists (self->events, txn? txn->txn : NULL, &key, 0);
     PyMem_Free (key.data);
@@ -253,8 +254,8 @@ terane_Segment_contains_event (terane_Segment *self, PyObject *args)
             break;
         default:
             /* some other db error, raise Exception */
-            return PyErr_Format (terane_Exc_Error, "Failed to find event %s: %s", 
-                (char *) key.data, db_strerror (dbret));
+            return PyErr_Format (terane_Exc_Error, "Failed to find event: %s", 
+                db_strerror (dbret));
     }
     if (dbret == 0)
         Py_RETURN_TRUE;
@@ -353,24 +354,20 @@ PyObject *
 terane_Segment_iter_events (terane_Segment *self, PyObject *args)
 {
     terane_Txn *txn = NULL;
-    PyObject *start = NULL, *end = NULL;
+    PyObject *start = NULL, *end = NULL, *reverse = NULL;
     DBC *cursor = NULL;
     PyObject *iter = NULL;
-    int dbret, reverse = 0;
+    int dbret;
 
     /* parse parameters */
-    if (!PyArg_ParseTuple (args, "OOO", &txn, &start, &end))
+    if (!PyArg_ParseTuple (args, "OOOO", &txn, &start, &end, &reverse))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
-
-    /* determine whether ordering is reversed */
-    if (PyObject_Cmp (start, end, &reverse) < 0)
-        return PyErr_Format (terane_Exc_Error, "comparison of start and end failed");
-    if (reverse < 0)
-        reverse = 0;
+    if (reverse != Py_True && reverse != Py_False)
+        return PyErr_Format (PyExc_TypeError, "reverse must be True or False");
 
     /* create a new cursor */
     dbret = self->events->cursor (self->events, txn? txn->txn : NULL, &cursor, 0);
@@ -380,10 +377,19 @@ terane_Segment_iter_events (terane_Segment *self, PyObject *args)
             db_strerror (dbret));
 
     /* allocate a new Iter object */
-    iter = terane_Iter_new_within ((PyObject *) self, cursor, start, end, reverse);
-    if (iter == NULL) {
+    if (start == Py_None && end == Py_None)
+        iter = terane_Iter_new ((PyObject *) self, cursor,
+            reverse == Py_True ? 1 : 0);
+    else if (end == Py_None)
+        iter = terane_Iter_new_from ((PyObject *) self, cursor,
+            start, reverse == Py_True ? 1 : 0);
+    else if (start == Py_None)
+        iter = terane_Iter_new_until ((PyObject *) self, cursor,
+            end, reverse == Py_True ? 1 : 0);
+    else
+        iter = terane_Iter_new_within ((PyObject *) self, cursor,
+            start, end, reverse == Py_True ? 1 : 0);
+    if (iter == NULL)
         cursor->close (cursor);
-        return NULL;
-    }
     return iter;
 }
