@@ -257,7 +257,7 @@ class SegmentSearcher(object):
         length = 0
         startKey = None if startTerm == None else [field.fieldname, field.fieldtype, startTerm]
         endKey = None if endTerm == None else [field.fieldname, field.fieldtype, endTerm]
-        terms = self._segment.iter_terms(self._txn, startKey, endKey)
+        terms = self._segment.iter_terms(self._txn, startKey, endKey, False)
         for term in terms:
             if startEx and term == startTerm:
                 continue
@@ -288,28 +288,31 @@ class SegmentSearcher(object):
         if field == None and term == None:
             start = [startId.ts, startId.offset]
             end = [endId.ts, endId.offset]
-            postings = self._segment.iter_events(self._txn, start, end)
+            postings = self._segment.iter_events(self._txn, start, end,
+                True if startId > endId else False)
         else:
             start = [field.fieldname, field.fieldtype, term, startId.ts, startId.offset]
             end = [field.fieldname, field.fieldtype, term, endId.ts, endId.offset]
-            postings = self._segment.iter_postings(self._txn, start, end)
+            postings = self._segment.iter_postings(self._txn, start, end,
+                True if startId > endId else False)
         return PostingList(self, field, term, postings)
 
     def iterPostingsBetween(self, field, startTerm, endTerm, startEx, endEx, startId, endId):
         """
         """
         # get an iterator yielding the terms
-        startKey = None if startTerm == None else \
+        startKey = [field.fieldname, field.fieldtype] if startTerm == None else \
             [field.fieldname, field.fieldtype, startTerm]
         endKey = None if endTerm == None else \
             [field.fieldname, field.fieldtype, endTerm]
-        terms = self._segment.iter_terms(self._txn, startKey, endKey)
+        terms = self._segment.iter_terms(self._txn, startKey, endKey, False)
         # get an iterator yielding the postings
         startKey = None if startTerm == None else \
             [field.fieldname, field.fieldtype, startTerm, startId.ts, startId.offset]
         endKey = None if endTerm == None else \
             [field.fieldname, field.fieldtype, endTerm, endId.ts, endId.offset]
-        postings = self._segment.iter_postings(self._txn, startKey, endKey)
+        postings = self._segment.iter_postings(self._txn, startKey, endKey,
+            True if startId > endId else False)
         # return posting list
         startEx = startTerm if startEx == True else None
         endEx = endTerm if endEx == True else None
@@ -449,8 +452,9 @@ class MultiTermPostingList(object):
         self._startId = startId
         self._endId = endId
         self._lastId = None
-        if startId > endId:
-            self._cmp = lambda x,y: cmp(y, x)
+        self._reverse = True if startId > endId else False
+        if self._reverse:
+            self._cmp = lambda x,y: cmp(y,x)
         else:
             self._cmp = cmp
 
@@ -462,9 +466,9 @@ class MultiTermPostingList(object):
           term value, and the searcher, or (None,None,None)
         :rtype: tuple
         """
+        prefix = [self._field.fieldname, self._field.fieldtype]
         smallestId = None
         nextPosting = (None, None, None)
-        import pdb; pdb.set_trace()
         # find the next posting closest to the smallestId
         for termKey,termValue in self._terms:
             # check whether we should exclude this term
@@ -472,29 +476,34 @@ class MultiTermPostingList(object):
                 continue
             if self._endEx and self._endEx == termKey[2]:
                 continue
+            # check if we have iterated past the last term for the specified field
+            if termKey[0:2] != prefix:
+                break
             # jump to the next closest key
             if self._lastId == None:
                 closestKey = termKey + [self._startId.ts, self._startId.offset] 
             else:
-                closestKey = termKey + [self._lastId.ts, self._lastId.offset + 1] 
+                if self._reverse:
+                    closestKey = termKey + [self._lastId.ts, self._lastId.offset - 1] 
+                else:
+                    closestKey = termKey + [self._lastId.ts, self._lastId.offset + 1] 
             try:
                 postingKey,postingValue = self._postings.skip(closestKey, True)
             except IndexError:
                 continue
+            logger.trace("found range posting: %s" % postingKey)
             currId = EVID(postingKey[3], postingKey[4])
             # check whether this posting is the smallest so far
-            if ((smallestId == None or self._cmp(currId, smallestId) <= 0) and
-              termKey == postingKey[0:3] and
-              self._cmp(currId, self._endId) <= 0):
+            if ((smallestId == None or self._cmp(currId, smallestId) < 0) and
+              termKey == postingKey[0:3] and self._cmp(currId, self._endId) <= 0):
                 smallestId = currId
                 nextPosting = (smallestId, postingValue, self._searcher)
-        # reset iterators if necessary
-        if nextPosting != (None, None, None):
-            self._terms.reset()
-            self._postings.reset()
-        # if the lowest id is greater than the endId, then we are done
-        if smallestId == None or self._cmp(smallestId, self._endId) > 0:
+        # no more ids, we are done
+        if smallestId == None:
             return (None, None, None)
+        # rewind the iterators
+        self._terms.reset()
+        self._postings.reset()
         self._lastId = smallestId
         return nextPosting
 
@@ -515,9 +524,9 @@ class MultiTermPostingList(object):
         """
         Close the IPostingList, freeing any held resources.
         """
-        if not self._terms == None:
+        if self._terms:
             self._terms.close()
-        if not self._postings == None:
+        if self._postings:
             self._postings.close()
         self._terms = None
         self._postings = None

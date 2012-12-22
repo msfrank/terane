@@ -543,8 +543,7 @@ _Iter_next (terane_Iter *self)
             break;
         case TERANE_ITER_UNTIL:
             if (self->initialized)
-                item = _Iter_get (self, self->itype, self->reverse ? DB_PREV : DB_NEXT,
-                    &self->range);
+                item = _Iter_get (self, self->itype, self->reverse ? DB_PREV : DB_NEXT, NULL);
             else {
                 if (self->reverse)
                     item = _Iter_get (self, self->itype, DB_SET_RANGE, &self->range);
@@ -554,8 +553,7 @@ _Iter_next (terane_Iter *self)
             break;
         case TERANE_ITER_FROM:
             if (self->initialized)
-                item = _Iter_get (self, self->itype, self->reverse ? DB_PREV : DB_NEXT,
-                    &self->range);
+                item = _Iter_get (self, self->itype, self->reverse ? DB_PREV : DB_NEXT, NULL);
             else {
                 if (!self->reverse)
                     item = _Iter_get (self, self->itype, DB_SET_RANGE, &self->range);
