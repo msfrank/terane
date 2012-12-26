@@ -64,8 +64,8 @@ class IndexSearcher(object):
     def postingsLengthBetween(self, field, startTerm, endTerm, startEx, endEx, startId, endId):
         length = 0
         for searcher in self._segmentSearchers:
-            length += searcher.postingsLengthBetween(field,
-                startTerm, endTerm, startId, endId)
+            length += searcher.postingsLengthBetween(field, startTerm, endTerm,
+                startEx, endEx, startId, endId)
         return length
 
     def iterPostings(self, field, term, startId, endId):
@@ -258,12 +258,12 @@ class SegmentSearcher(object):
         startKey = None if startTerm == None else [field.fieldname, field.fieldtype, startTerm]
         endKey = None if endTerm == None else [field.fieldname, field.fieldtype, endTerm]
         terms = self._segment.iter_terms(self._txn, startKey, endKey, False)
-        for term in terms:
-            if startEx and term == startTerm:
+        for termKey,termValue in terms:
+            if startEx and termKey == startTerm:
                 continue
-            if endEx and term == endTerm:
+            if endEx and termKey == endTerm:
                 continue
-            length += self.postingsLength(field, term, startId, endId)
+            length += self.postingsLength(field, termKey[2], startId, endId)
         terms.close()
         return length
 
@@ -491,7 +491,7 @@ class MultiTermPostingList(object):
                 postingKey,postingValue = self._postings.skip(closestKey, True)
             except IndexError:
                 continue
-            logger.trace("found range posting: %s" % postingKey)
+            logger.trace("next range posting: %s" % postingKey)
             currId = EVID(postingKey[3], postingKey[4])
             # check whether this posting is the smallest so far
             if ((smallestId == None or self._cmp(currId, smallestId) < 0) and
@@ -518,7 +518,31 @@ class MultiTermPostingList(object):
           the term value, and the searcher, or (None,None,None)
         :rtype: tuple
         """
-        return None, None, None
+        prefix = [self._field.fieldname, self._field.fieldtype]
+        nextPosting = (None, None, None)
+        # find the next posting closest to the smallestId
+        for termKey,termValue in self._terms:
+            # check whether we should exclude this term
+            if self._startEx and self._startEx == termKey[2]:
+                continue
+            if self._endEx and self._endEx == termKey[2]:
+                continue
+            # check if we have iterated past the last term for the specified field
+            if termKey[0:2] != prefix:
+                break
+            # jump to the next closest key
+            targetKey = termKey + [targetId.ts, targetId.offset]
+            try:
+                postingKey,postingValue = self._postings.skip(targetKey, False)
+            except IndexError:
+                continue
+            logger.trace("skip range posting: %s" % postingKey)
+            currId = EVID(postingKey[3], postingKey[4])
+            nextPosting = (currId, postingValue, self._searcher)
+        # rewind the iterators
+        self._terms.reset()
+        self._postings.reset()
+        return nextPosting
 
     def close(self):
         """

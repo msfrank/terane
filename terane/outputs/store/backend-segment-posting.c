@@ -217,9 +217,9 @@ terane_Segment_estimate_postings (terane_Segment *self, PyObject *args)
 
     /* build the start and end keys */
     memset (&start_key, 0, sizeof (DBT));
+    memset (&end_key, 0, sizeof (DBT));
     if (_terane_msgpack_dump (start, (char **) &start_key.data, &start_key.size) < 0)
         goto error;
-    memset (&end_key, 0, sizeof (DBT));
     if (_terane_msgpack_dump (end, (char **) &end_key.data, &end_key.size) < 0)
         goto error;
 

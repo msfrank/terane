@@ -174,7 +174,7 @@ class RangeGreaterThan(Term):
 
     def matchesLength(self, searcher, startId, endId):
         length = searcher.postingsLengthBetween(self.field,
-            self.value, None, self.exlusive, False, startId, endId)
+            self.value, None, self.exclusive, False, startId, endId)
         logger.trace("%s: postingsLength() => %i" % (self, length))
         return length
 
