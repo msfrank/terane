@@ -284,25 +284,28 @@ class AND(object):
         children = []
         excludes = [] 
         for child in self.children:
-            # optimize each child query
-            child = child.optimizeMatcher(index)
             # if the child is an AND operator, then move all of the child's children
             # into this instance.
             if isinstance(child, AND):
                 for subchild in child.children: children.append(subchild)
             # if the child is a NOT operator, then move it to the excludes list
             elif isinstance(child, NOT):
-                excludes.append(child)
+                excludes.append(child.child)
             # if the child has been optimized away, then toss it
             elif child != None:
                 children.append(child)
         self.children = children
+        # if there are any NOT operators, then we wrap this matcher and the combined NOTs in a Sieve.
+        if len(excludes) > 0:
+            return Sieve(self, OR(excludes)).optimizeMatcher(index)
+        # optimize each child matcher
+        self.children = [child.optimizeMatcher(index) for child in children]
         # if there are no children, then we can toss this matcher too
         if len(self.children) == 0:
             return None
-        # if there are any NOT operators, then we wrap this matcher and the combined NOTs in a Sieve.
-        if len(excludes) > 0:
-            return Sieve(self, excludes)
+        # if there is one child, then return it instead
+        if len(self.children) == 1:
+            return self.children[0]
         return self
 
     def matchesLength(self, searcher, startId, endId):
@@ -418,25 +421,28 @@ class OR(object):
         children = []
         excludes = []
         for child in self.children:
-            # optimize each child matcher
-            child = child.optimizeMatcher(index)
             # if the child is an OR operator, then move all of the child's children
             # into this instance.
             if isinstance(child, OR):
                 for subchild in child.children: children.append(subchild)
             # if the child is a NOT operator, then move it to the excludes list
             elif isinstance(child, NOT):
-                excludes.append(child)
+                excludes.append(child.child)
             # if the child has been optimized away, then toss it
             elif child != None:
                 children.append(child)
         self.children = children
+        # if there are any NOT operators, then we wrap this matcher and the combined NOTs in a Sieve.
+        if len(excludes) > 0:
+            return Sieve(self, OR(excludes)).optimizeMatcher(index)
+        # optimize each child matcher
+        self.children = [child.optimizeMatcher(index) for child in children]
         # if there are no children, then we can toss this matcher too
         if len(self.children) == 0:
             return None
-        # if there are any NOT operators, then we wrap this matcher and the combined NOTs in a Sieve.
-        if len(excludes) > 0:
-            return Sieve(self, excludes)
+        # if there is one child, then return it instead
+        if len(self.children) == 1:
+            return self.children[0]
         return self
 
     def matchesLength(self, searcher, startId, endId):
@@ -576,10 +582,7 @@ class NOT(object):
         :returns: The optimized query.
         :rtype: An object implementing :class:`terane.bier.searching.IQuery`
         """
-        self.child = self.child.optimizeMatcher(index)
-        if self.child == None:
-            return None
-        return self
+        return Sieve(Every(), self.child).optimizeMatcher(index)
 
     def matchesLength(self, searcher, startId, endId):
         """
@@ -638,7 +641,7 @@ class Sieve(object):
 
     implements(IMatcher, IPostingList)
 
-    def __init__(self, source, filters):
+    def __init__(self, source, filter):
         """
         :param source: The query which returns possible candidate events.
         :type source: An object implementing :class:`terane.bier.searching.IQuery`
@@ -646,10 +649,10 @@ class Sieve(object):
         :type filters: An object implementing :class:`terane.bier.searching.IQuery`
         """
         self.source = source
-        self.filters = OR(filters)
+        self.filter = filter
 
     def __str__(self):
-        return "<Sieve source=%s, filters=%s>" % (str(self.source), str(self.filters))
+        return "<Sieve source=%s, filter=%s>" % (str(self.source), str(self.filter))
 
     def optimizeMatcher(self, index):
         """
@@ -660,6 +663,14 @@ class Sieve(object):
         :returns: The optimized query.
         :rtype: An object implementing :class:`terane.bier.searching.IQuery`
         """
+        source = self.source.optimizeMatcher(index)
+        if source == None:
+            return None
+        filter = self.filter.optimizeMatcher(index)
+        if filter == None:
+            return source
+        self.source = source
+        self.filter = filter
         return self
 
     def matchesLength(self, searcher, startId, endId):
@@ -689,7 +700,7 @@ class Sieve(object):
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
         self._sourceIter = self.source.iterMatches(searcher, startId, endId)
-        self._filterIter = self.filters.iterMatches(searcher, startId, endId)
+        self._filterIter = self.filter.iterMatches(searcher, startId, endId)
         return self
 
     def nextPosting(self):
@@ -857,7 +868,7 @@ class Phrase(object):
                     return (None, None, None)
                 postings.append(posting)
             if self._positionsMatch(postings) == True:
-                return posting[0]
+                return postings[0]
             return (None, None, None)
         posting = _skip()
         logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
