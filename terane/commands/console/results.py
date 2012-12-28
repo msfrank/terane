@@ -25,11 +25,13 @@ from terane.loggers import getLogger
 logger = getLogger('terane.commands.console.results')
 
 class Result(urwid.WidgetWrap):
-    def __init__(self, evid, event):
+    def __init__(self, evid, defaultfield, defaultvalue, fields):
         self.evid = evid
         self.ts = datetime.datetime.fromtimestamp(evid.ts, dateutil.tz.tzutc())
-        self.default = event['default']
-        self.fields = dict([(k,v) for k,v in event.items() if k != 'default'])
+        self.offset = evid.offset
+        self.defaultfield = defaultfield
+        self.defaultvalue = defaultvalue
+        self.fields = dict(fields)
         self.visible = True
         self.highlighted = False
         self._text = urwid.Text('', wrap='any')
@@ -74,7 +76,7 @@ class Result(urwid.WidgetWrap):
             ts = self.ts
         # we always display these fields
         text = [(console.palette['date'], "%s: " % ts.strftime("%d %b %Y %H:%M:%S %Z"))]
-        text.extend(_highlight(self.default, console.palette['text'], console.palette['highlight']))
+        text.extend(_highlight(self.defaultvalue, console.palette['text'], console.palette['highlight']))
         # if we are not collapsed, then show all fields
         if not resultslist.collapsed:
             fields = sorted([(k,v) for k,v in self.fields.items() if k not in resultslist.hidefields and v != ''])
@@ -171,8 +173,8 @@ class ResultsListbox(urwid.WidgetWrap):
         self._listbox = urwid.ListBox(self._results)
         urwid.WidgetWrap.__init__(self, self._listbox)
  
-    def append(self, evid, event):
-        result = Result(evid, event).reformat(self)
+    def append(self, evid, defaultfield, defaultvalue, fields):
+        result = Result(evid, defaultfield, defaultvalue, fields).reformat(self)
         self._results.append(result)
         self._fields += [f for f in result.fields.keys() if f not in self._fields]
 
