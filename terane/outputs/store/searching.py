@@ -95,6 +95,8 @@ class IndexSearcher(object):
         return MergedPostingList(iters, compar)
 
     def iterPostingsBetween(self, field, startTerm, endTerm, startEx, endEx, startId, endId):
+        """
+        """
         iters = [s.iterPostingsBetween(field,
                  startTerm, endTerm, startEx, endEx, startId, endId)
                  for s in self._segmentSearchers]
@@ -286,14 +288,18 @@ class SegmentSearcher(object):
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
         if field == None and term == None:
-            start = [startId.ts, startId.offset]
-            end = [endId.ts, endId.offset]
-            postings = self._segment.iter_events(self._txn, start, end,
+            startKey = [startId.ts, startId.offset]
+            endKey = [endId.ts, endId.offset]
+            if startId > endId:
+                startKey, endKey = endKey, startKey
+            postings = self._segment.iter_events(self._txn, startKey, endKey,
                 True if startId > endId else False)
         else:
-            start = [field.fieldname, field.fieldtype, term, startId.ts, startId.offset]
-            end = [field.fieldname, field.fieldtype, term, endId.ts, endId.offset]
-            postings = self._segment.iter_postings(self._txn, start, end,
+            startKey = [field.fieldname, field.fieldtype, term, startId.ts, startId.offset]
+            endKey = [field.fieldname, field.fieldtype, term, endId.ts, endId.offset]
+            if startId > endId:
+                startKey, endKey = endKey, startKey
+            postings = self._segment.iter_postings(self._txn, startKey, endKey,
                 True if startId > endId else False)
         return PostingList(self, field, term, postings)
 

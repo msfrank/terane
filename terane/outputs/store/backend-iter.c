@@ -431,8 +431,8 @@ _Iter_get (terane_Iter *iter, int itype, int flags, DBT *range_key)
                 PyMem_Free (data.data);
                 goto error;
             }
-            /* if the key is not equal to the range key, retreive the prev key */
-            if (result != 0) {
+            /* if the key is greater than the range key, retrieve the prev key */
+            if (result > 0) {
                 PyMem_Free (key.data);
                 PyMem_Free (data.data);
                 /* set the cursor to the last item */
