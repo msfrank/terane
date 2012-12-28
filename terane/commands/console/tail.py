@@ -60,7 +60,7 @@ class Tailer(Window):
         Window.stopService(self)
 
     def _tail(self):
-        self._deferred = self._proxy.callRemote('tail', self._query, self._lastId)
+        self._deferred = self._proxy.callRemote('tailEvents', self._query, self._lastId)
         self._deferred.addCallback(self._getResult)
         self._deferred.addErrback(self._getError)
 
@@ -74,8 +74,9 @@ class Tailer(Window):
             self._lastId = meta['lastId']
             logger.debug("tail returned %i results, last id is %s" % (len(results), self._lastId))
             if len(results) > 0:
-                for evid,event in results:
-                    self._results.append(EVID.fromString(evid), event)
+                for evid,defaultfield,defaultvalue,fields in results:
+                    evid = EVID(evid[0], evid[1])
+                    self._results.append(evid, defaultfield, defaultvalue, fields)
                 console.redraw()
             from twisted.internet import reactor
             self._delayed = reactor.callLater(self.interval, self._tail)

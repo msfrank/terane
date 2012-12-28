@@ -53,14 +53,16 @@ class Searcher(Window):
         Window.stopService(self)
 
     @useMainThread
-    def _getResult(self, results):
+    def _getResult(self, result):
         """
         Append each search result into the ResultsListbox.
         """
         try:
-            self._meta = results.pop(0)
-            for evid,event in results:
-                self._results.append(EVID.fromString(evid), event)
+            self._meta = result['meta']
+            data = result['data']
+            for evid,defaultfield,defaultvalue,fields in data:
+                evid = EVID(evid[0], evid[1])
+                self._results.append(evid, defaultfield, defaultvalue, fields)
             console.redraw()
         except Exception, e:
             logger.exception(e)
@@ -89,7 +91,7 @@ class Searcher(Window):
             self._deferred.cancel()
         self._results.clear()
         proxy = Proxy(self._url, user=self._user, password=self._pass, allowNone=True)
-        self._deferred = proxy.callRemote('iter', self._query)
+        self._deferred = proxy.callRemote('iterEvents', self._query)
         self._deferred.addCallback(self._getResult)
         self._deferred.addErrback(self._getError)
         logger.debug("searching with query '%s'" % self._query)
