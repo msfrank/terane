@@ -54,10 +54,7 @@ def parseIterQuery(string):
     :rtype: tuple
     """
     try:
-        if string.strip() == '':
-            query,where = Every(), None
-        else:
-            query,where = iterQuery.parseString(string, parseAll=True).asList()[0]
+        query,where = iterQuery.parseString(string, parseAll=True).asList()[0]
         if where == None:
             utcnow = datetime.datetime.utcnow()
             onehourago = utcnow - datetime.timedelta(hours=1)
@@ -77,8 +74,6 @@ def parseTailQuery(string):
     :rtype: tuple
     """
     try:
-        if string.strip() == '':
-            return Every()
         return tailQuery.parseString(string, parseAll=True).asList()[0]
     except ParseBaseException, e:
         raise QuerySyntaxError(e, string)
