@@ -186,28 +186,6 @@ terane_Index_contains_field (terane_Index *self, PyObject *args)
 }
 
 /*
- * _Index_next_field: build a (fieldname,fieldspec) tuple
- */
-static PyObject *
-_Index_next_field (terane_Iter *iter, DBT *key, DBT *data)
-{
-    PyObject *fieldname = NULL, *fieldspec = NULL, *tuple = NULL;
-
-    /* get the posting */
-    if (_terane_msgpack_load ((char *) key->data, key->size, &fieldname) < 0)
-        goto error;
-    /* get the value */
-    if (_terane_msgpack_load ((char *) data->data, data->size, &fieldspec) < 0)
-        goto error;
-    /* build the (posting,value) tuple */
-    tuple = PyTuple_Pack (2, fieldname, fieldspec);
-error:
-    Py_XDECREF (fieldname);
-    Py_XDECREF (fieldspec);
-    return tuple;
-}
-
-/*
  * terane_Index_iter_fields: iterate through the fields in the schema.
  *
  * callspec: Index.iter_fields(txn)
@@ -223,7 +201,6 @@ terane_Index_iter_fields (terane_Index *self, PyObject *args)
     terane_Txn *txn = NULL;
     DBC *cursor = NULL;
     PyObject *iter = NULL;
-    terane_Iter_ops ops = { .next = _Index_next_field };
     int dbret;
 
     /* parse parameters */
@@ -242,7 +219,7 @@ terane_Index_iter_fields (terane_Index *self, PyObject *args)
             db_strerror (dbret));
 
     /* allocate a new Iter object */
-    iter = terane_Iter_new ((PyObject *) self, cursor, &ops, 0);
+    iter = terane_Iter_new ((PyObject *) self, cursor, 0);
     if (iter == NULL) {
         cursor->close (cursor);
         return NULL;

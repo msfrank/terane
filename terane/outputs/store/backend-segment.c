@@ -26,12 +26,12 @@ static void
 _Segment_dealloc (terane_Segment *self)
 {
     terane_Segment_close (self);
-    if (self->index != NULL)
-        Py_DECREF (self->index);
-    self->index = NULL;
     if (self->name != NULL)
         PyMem_Free (self->name);
     self->name = NULL;
+    if (self->env != NULL)
+        Py_DECREF (self->env);
+    self->env = NULL;
     self->ob_type->tp_free ((PyObject *) self);
 }
 
@@ -53,9 +53,9 @@ _Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
  *
  * callspec: Segment.__init__(txn, index, sid)
  * parameters:
+ *  env (Env): An Env object to use as the environment
  *  txn (Txn): A Txn object to wrap the operation in
- *  index (Index): An Index object to use for bookkeeping
- *  sid (long): The segment id
+ *  name (string): The name of the Segment
  * returns: 0 on success, otherwise -1
  * exceptions:
  *  terane.outputs.store.backend.Error: failed to create/open the Segment
@@ -63,48 +63,33 @@ _Segment_new (PyTypeObject *type, PyObject *args, PyObject *kwds)
 static int
 _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
 {
+    terane_Env *env = NULL;
     terane_Txn *txn = NULL;
-    db_recno_t segment_id = 0;
-    DB_TXN *segment_txn = NULL;
-    int exists, dbret;
+    char *segname = NULL;
+    int dbret;
 
     /* __init__ has already been called, don't repeat initialization */
-    if (self->index != NULL)
+    if (self->name != NULL)
         return 0;
     /* parse constructor parameters */
-    if (!PyArg_ParseTuple (args, "O!O!k",
-        &terane_TxnType, &txn, &terane_IndexType, &self->index, &segment_id))
+    if (!PyArg_ParseTuple (args, "O!O!s",
+        &terane_EnvType, &env, &terane_TxnType, &txn, &segname))
         goto error;
-    Py_INCREF (self->index);
 
-    /* verify the segment exists in the TOC */
-    exists = terane_Index_contains_segment (self->index, txn, segment_id);
-    if (exists < 0)
-        goto error;
-    if (exists == 0) {
-        PyErr_Format (PyExc_KeyError, "Segment %lu doesn't exist",
-            (unsigned long int) segment_id);
-        goto error;
-    }
-    /* allocate a buffer large enough to hold the longest segment name */
-    self->name = PyMem_Malloc (PyString_Size (self->index->name) + 12);
+    /* keep a private copy of the segment name */
+    self->name = PyMem_Malloc (strlen (segname) + 1);
     if (self->name == NULL) {
         PyErr_NoMemory ();
         goto error;
     }
-    sprintf (self->name, "%s.%lu", PyString_AsString (self->index->name),
-        (unsigned long int) segment_id);
+    strcpy (self->name, segname);
 
-    /* wrap db creation in a transaction */
-    dbret = self->index->env->env->txn_begin (self->index->env->env, txn->txn, &segment_txn, 0);
-    if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to create transaction: %s",
-            db_strerror (dbret));
-        goto error;
-    }
+    /* keep a reference to the environment */
+    self->env = env;
+    Py_INCREF (self->env);
 
     /* create the DB handle for metadata */
-    dbret = db_create (&self->metadata, self->index->env->env, 0);
+    dbret = db_create (&self->metadata, env->env, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create handle for metadata: %s",
             db_strerror (dbret));
@@ -113,7 +98,7 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
     /* set compare function */
     self->metadata->set_bt_compare (self->metadata, _terane_msgpack_DB_compare);
     /* open the metadata DB */
-    dbret = self->metadata->open (self->metadata, segment_txn, self->name,
+    dbret = self->metadata->open (self->metadata, txn->txn, self->name,
         "metadata", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open metadata: %s",
@@ -122,7 +107,7 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
     }
 
     /* create the DB handle for events */
-    dbret = db_create (&self->events, self->index->env->env, 0);
+    dbret = db_create (&self->events, env->env, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create handle for events: %s",
             db_strerror (dbret));
@@ -131,7 +116,7 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
     /* set compare function */
     self->events->set_bt_compare (self->events, _terane_msgpack_DB_compare);
     /* open the events DB */
-    dbret = self->events->open (self->events, segment_txn, self->name,
+    dbret = self->events->open (self->events, txn->txn, self->name,
         "events", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open events: %s",
@@ -140,7 +125,7 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
     }
 
     /* create the DB handle for postings */
-    dbret = db_create (&self->postings, self->index->env->env, 0);
+    dbret = db_create (&self->postings, env->env, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create handle for postings: %s",
             db_strerror (dbret));
@@ -149,7 +134,7 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
     /* set compare function */
     self->postings->set_bt_compare (self->postings, _terane_msgpack_DB_compare);
     /* open the postings DB */
-    dbret = self->postings->open (self->postings, segment_txn, self->name,
+    dbret = self->postings->open (self->postings, txn->txn, self->name,
         "postings", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open postings: %s",
@@ -158,7 +143,7 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
     }
 
     /* create the DB handle for fields */
-    dbret = db_create (&self->fields, self->index->env->env, 0);
+    dbret = db_create (&self->fields, env->env, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create handle for fields: %s",
             db_strerror (dbret));
@@ -167,7 +152,7 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
     /* set compare function */
     self->fields->set_bt_compare (self->fields, _terane_msgpack_DB_compare);
     /* open the fields DB */
-    dbret = self->fields->open (self->fields, segment_txn, self->name,
+    dbret = self->fields->open (self->fields, txn->txn, self->name,
         "fields", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open fields: %s",
@@ -176,7 +161,7 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
     }
 
     /* create the DB handle for terms */
-    dbret = db_create (&self->terms, self->index->env->env, 0);
+    dbret = db_create (&self->terms, env->env, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to create handle for terms: %s",
             db_strerror (dbret));
@@ -185,20 +170,11 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
     /* set compare function */
     self->terms->set_bt_compare (self->terms, _terane_msgpack_DB_compare);
     /* open the terms DB */
-    dbret = self->terms->open (self->terms, segment_txn, self->name,
+    dbret = self->terms->open (self->terms, txn->txn, self->name,
         "terms", DB_BTREE, DB_CREATE | DB_THREAD | DB_MULTIVERSION, 0);
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to open terms: %s",
             db_strerror (dbret));
-        goto error;
-    }
-
-    /* commit new databases */
-    dbret = segment_txn->commit (segment_txn, 0);
-    if (dbret != 0) {
-        PyErr_Format (terane_Exc_Error, "Failed to commit transaction: %s",
-            db_strerror (dbret));
-        txn = NULL;
         goto error;
     }
 
@@ -207,8 +183,6 @@ _Segment_init (terane_Segment *self, PyObject *args, PyObject *kwds)
 
 /* if there is an error, then free any locally allocated memory and references */
 error:
-    if (segment_txn != NULL)
-        segment_txn->abort (segment_txn);
     if (self)
         _Segment_dealloc ((terane_Segment *) self);
     return -1;
@@ -285,7 +259,7 @@ terane_Segment_close (terane_Segment *self)
 
     /* if this segment is marked to be deleted */
     if (self->deleted) {
-        dbret = self->index->env->env->dbremove (self->index->env->env, NULL,
+        dbret = self->env->env->dbremove (self->env->env, NULL,
             self->name, NULL, DB_AUTO_COMMIT);
         if (dbret != 0)
             PyErr_Format (terane_Exc_Error, "Failed to delete segment: %s",
@@ -324,6 +298,8 @@ PyMethodDef _Segment_methods[] =
         "Get metadata for a term in the segment." },
     { "set_term", (PyCFunction) terane_Segment_set_term, METH_VARARGS,
         "Set metadata for a term in the segment." },
+    { "iter_terms", (PyCFunction) terane_Segment_iter_terms, METH_VARARGS,
+        "Iterates through all terms in the segment." },
     { "get_posting", (PyCFunction) terane_Segment_get_posting, METH_VARARGS,
         "Get a posting in the segment inverted index." },
     { "contains_posting", (PyCFunction) terane_Segment_contains_posting, METH_VARARGS,

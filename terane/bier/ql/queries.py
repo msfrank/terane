@@ -46,6 +46,11 @@ def _parseOrGroup(tokens):
             i += 1
     return q
 
+allTerms = pp.Suppress('ALL')
+def _parseAllTerms(tokens):
+    return Every()
+allTerms.setParseAction(_parseAllTerms)
+
 # -----------------
 # iterQuery grammar
 # -----------------
@@ -53,22 +58,19 @@ def _parseOrGroup(tokens):
 #  <IterNotGroup>    ::= [ 'NOT' ] <IterSubject> | '(' <IterOrGroup> ')'
 #  <IterAndGroup>    ::= <IterSubject>  [ 'AND' <IterNotGroup> ]*
 #  <IterOrGroup>     ::= <IterAndGroup> [ 'OR' <IterAndGroup> ]*
-#  <IterQuery>       ::= <IterOrGroup> [ 'WHERE' <subjectDate> ]
+#  <IterQuery>       ::= ( 'ALL' | <IterOrGroup> ) [ 'WHERE' <subjectDate> ]
 
-iterTerms = pp.operatorPrecedence(subjectTerm, [
+iterTerms = allTerms | pp.operatorPrecedence(subjectTerm, [
     (pp.Suppress('NOT'), 1, pp.opAssoc.RIGHT, _parseNotGroup),
     (pp.Suppress('AND'), 2, pp.opAssoc.LEFT,  _parseAndGroup),
     (pp.Suppress('OR'),  2, pp.opAssoc.LEFT,  _parseOrGroup),
     ])
-iterTermsAndWhere = iterTerms + pp.Optional((pp.Suppress('WHERE') + subjectDate))
-def parseIterTermsAndWhere(tokens):
+iterQuery = iterTerms + pp.Optional((pp.Suppress('WHERE') + subjectDate))
+def _parseIterQuery(tokens):
     if len(tokens) > 1:
         return tokens[0], tokens[1]
     return tokens[0], None
-iterTermsAndWhere.setParseAction(parseIterTermsAndWhere)
-iterWhereOnly = pp.Suppress('WHERE') + subjectDate
-iterWhereOnly.setParseAction(lambda t: (Every(), t[0]))
-iterQuery = iterWhereOnly | iterTermsAndWhere
+iterQuery.setParseAction(_parseIterQuery)
 
 # -----------------
 # tailQuery grammar
@@ -79,7 +81,7 @@ iterQuery = iterWhereOnly | iterTermsAndWhere
 #  <TailOrGroup>     ::= <TailAndGroup> [ 'OR' <TailAndGroup> ]*
 #  <TailQuery>       ::= <TailOrGroup>
 
-tailQuery = pp.operatorPrecedence(subjectTerm, [
+tailQuery = allTerms | pp.operatorPrecedence(subjectTerm, [
     (pp.Suppress('NOT'), 1, pp.opAssoc.RIGHT, _parseNotGroup),
     (pp.Suppress('AND'), 2, pp.opAssoc.LEFT,  _parseAndGroup),
     (pp.Suppress('OR'),  2, pp.opAssoc.LEFT,  _parseOrGroup),

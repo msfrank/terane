@@ -93,6 +93,8 @@ class EVID(object):
         return cmp((self.ts,self.offset), (other.ts,other.offset))
 
     def __add__(self, other):
+        if isinstance(other, int):
+            other = EVID(0, other)
         ts = self.ts + other.ts
         offset = self.offset + other.offset
         if offset > OFFSET_MAX:
@@ -103,6 +105,8 @@ class EVID(object):
         return EVID(ts, offset)
 
     def __sub__(self, other):
+        if isinstance(other, int):
+            other = EVID(0, other)
         ts = self.ts - other.ts
         offset = self.offset - other.offset
         if offset < 0:

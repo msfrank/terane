@@ -119,4 +119,6 @@ class StoreOutputPlugin(Plugin):
         Plugin.stopService(self)
         # close the DB environment
         self._env.close()
+        self._logfd.stopReading()
+        self._logfd = None
         logger.debug("[%s] closed database environment" % self.name)

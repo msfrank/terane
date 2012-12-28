@@ -23,16 +23,9 @@ logger = getLogger('terane.outputs.store.segment')
 
 class Segment(backend.Segment):
 
-    def __init__(self, txn, index, segmentId):
-        backend.Segment.__init__(self, txn, index, segmentId)
-        self.segmentId = segmentId
-        self.segmentName = index.name
-        self.fullName = "%s.%i" % (index.name, segmentId)
-
-    def __cmp__(self, other):
-        if self.segmentName != other.segmentName:
-            raise TypeError()
-        return cmp(self.fullName, other.fullName)
+    def __init__(self, env, txn, name):
+        backend.Segment.__init__(self, env, txn, name)
+        self.name = name
 
     def __str__(self):
         return "<terane.outputs.store.Segment '%s'>" % self.name

@@ -134,3 +134,60 @@ terane_Segment_set_term (terane_Segment *self, PyObject *args)
     }
     Py_RETURN_NONE;
 }
+
+/*
+ * terane_Segment_iter_terms: Iterate through all terms in the specified field.
+ *
+ * callspec: Segment.iter_terms(txn, start, end)
+ * parameters:
+ *   txn (Txn): A Txn object to wrap the operation in, or None
+ *   start (object): The term key marking the start of the range
+ *   end (object): The term key marking the end of the range
+ *   reverse (bool): Iterate in the reverse direction
+ * returns: a new Iterator object.  Each iteration returns a tuple consisting
+ *  of (key,value).
+ * exceptions:
+ *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
+ */
+PyObject *
+terane_Segment_iter_terms (terane_Segment *self, PyObject *args)
+{
+    terane_Txn *txn = NULL;
+    PyObject *start = NULL, *end = NULL, *reverse = Py_False;
+    DBC *cursor = NULL;
+    int dbret;
+    PyObject *iter = NULL;
+
+    /* parse parameters */
+    if (!PyArg_ParseTuple (args, "OOOO", &txn, &start, &end, &reverse))
+        return NULL;
+    if ((PyObject *) txn == Py_None)
+        txn = NULL;
+    if (txn && txn->ob_type != &terane_TxnType)
+        return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
+    if (reverse != Py_True && reverse != Py_False)
+        return PyErr_Format (PyExc_TypeError, "reverse must be True or False");
+
+    /* create a new cursor */
+    dbret = self->terms->cursor (self->terms, txn? txn->txn : NULL, &cursor, 0);
+    if (dbret != 0)
+        return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
+            db_strerror (dbret));
+
+    /* create the Iter */
+    if (start == Py_None && end == Py_None)
+        iter = terane_Iter_new ((PyObject *) self, cursor,
+            reverse == Py_True ? 1 : 0);
+    if (end == Py_None)
+        iter = terane_Iter_new_from ((PyObject *) self, cursor,
+            start, reverse == Py_True ? 1 : 0);
+    else if (start == Py_None)
+        iter = terane_Iter_new_until ((PyObject *) self, cursor,
+            end, reverse == Py_True ? 1 : 0);
+    else
+        iter = terane_Iter_new_within ((PyObject *) self, cursor,
+            start, end, reverse == Py_True ? 1 : 0);
+    if (iter == NULL) 
+        cursor->close (cursor);
+    return iter;
+}

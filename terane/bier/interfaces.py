@@ -170,6 +170,13 @@ class ISearcher(Interface):
         :returns: An estimate of the number of postings.
         :rtype: int
         """
+    def postingsLengthBetween(field, startTerm, endTerm, startEx, endEx, startId, endId):
+        """
+        Returns an estimate of the number of possible postings for all the terms
+        between startTerm and endTerm.  If startTerm is None, then start from the
+        first term.  If endTerm is None, then end at the last term.  If startEx
+        or endEx are True, then exclude the start or end terms, respectively.
+        """
     def iterPostings(field, term, startId, endId):
         """
         Returns an object implementing IPostingList which yields postings for the
@@ -187,6 +194,13 @@ class ISearcher(Interface):
         :type endId: :class:`terane.bier.evid.EVID`
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
+        """
+    def iterPostingsBetween(field, startTerm, endTerm, startEx, endEx, startId, endId):
+        """
+        Returns an object implementing IPostingList which yields postings for all
+        of the terms between startTerm and endTerm.  If startTerm is None, then
+        start from the first term.  If endTerm is None, then end at the last term.
+        If startEx or endEx are True, then exclude the start or end terms, respectively.
         """
     def close():
         """

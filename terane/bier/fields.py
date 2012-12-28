@@ -19,7 +19,7 @@ import datetime, calendar, dateutil.tz, re
 from zope.interface import implements
 from terane.plugins import ILoadable, IPlugin, Plugin
 from terane.bier.interfaces import IField
-from terane.bier.matching import Term, Phrase
+from terane.bier.matching import Term, Phrase, RangeGreaterThan, RangeLessThan
 from terane.loggers import getLogger
 
 logger = getLogger('terane.bier.schema')
@@ -213,6 +213,16 @@ class IntegerField(BaseField):
         """
         return [(value, None)]
 
+    def _str2int(self, value):
+        value = value.strip().lower()
+        if value.startswith('0x'):
+            value = int(value, 16)
+        elif value.startswith('0'):
+            value = int(value, 8)
+        else:
+            value = int(value, 10)
+        return self.validateValue(value)
+
     def match_is(self, field, value):
         """
         Process the specified integer value, converting it to a unix
@@ -223,17 +233,21 @@ class IntegerField(BaseField):
         :returns: A list of tokenized terms.
         :rtype: list
         """
-        value = value.strip().lower()
-        if value.startswith('0x'):
-            value = int(value, 16)
-        elif value.startswith('0'):
-            value = int(value, 8)
-        else:
-            value = int(value, 10)
-        value = self.validateValue(value)
-        return Term(field, value)
+        return Term(field, self._str2int(value))
 
     defaultMatcher = match_is
+
+    def match_gt(self, field, value):
+        return RangeGreaterThan(field, self._str2int(value), exclusive=True)
+
+    def match_lt(self, field, value):
+        return RangeLessThan(field, self._str2int(value), exclusive=True)
+
+    def match_ge(self, field, value):
+        return RangeGreaterThan(field, self._str2int(value), exclusive=False)
+
+    def match_le(self, field, value):
+        return RangeLessThan(field, self._str2int(value), exclusive=False)
 
 class DatetimeField(BaseField):
     """

@@ -74,6 +74,40 @@ _make_iterkey (PyObject *list)
 }
 
 /*
+ * _make_prefixkey:
+ */
+static terane_iterkey *
+_make_prefixkey (PyObject *list)
+{
+    terane_iterkey *iter_key = NULL;
+    Py_ssize_t size;
+    int i;
+
+    assert (PyList_CheckExact (list));
+
+    iter_key = PyMem_Malloc (sizeof (terane_iterkey));
+    if (iter_key == NULL)
+        return NULL;
+    size = PyList_GET_SIZE (list) - 1;
+    iter_key->values = PyMem_New (terane_value *, size);
+    if (iter_key->values == NULL) {
+        _free_iterkey (iter_key);
+        return NULL;
+    }
+    memset (iter_key->values, 0, sizeof (terane_value *) * size);
+    iter_key->size = size;
+    for (i = 0; i < iter_key->size; i++ ) {
+        PyObject *item = PyList_GET_ITEM (list, i);
+        iter_key->values[i] = _terane_msgpack_make_value (item);
+        if (iter_key->values[i] < 0) {
+            _free_iterkey (iter_key);
+            return NULL;
+        }
+    }
+    return iter_key;
+}
+
+/*
  * terane_Iter_new: allocate a new Iter object using the supplied DB cursor.
  * 
  * returns: A new Iter object
@@ -81,14 +115,12 @@ _make_iterkey (PyObject *list)
 PyObject *
 terane_Iter_new (PyObject *             parent,
                  DBC *                  cursor,
-                 terane_Iter_ops *      ops,
                  int                    reverse)
 {
     terane_Iter *iter;
 
     assert (parent != NULL);
     assert (cursor != NULL);
-    assert (ops != NULL);
 
     iter = PyObject_New (terane_Iter, &terane_IterType);
     if (iter == NULL)
@@ -101,35 +133,38 @@ terane_Iter_new (PyObject *             parent,
     iter->itype = TERANE_ITER_ALL;
     iter->start = NULL;
     iter->end = NULL;
+    iter->prefix = NULL;
     memset (&iter->range, 0, sizeof (DBT));
-    iter->next = ops->next;
-    iter->skip = ops->skip;
     iter->reverse = reverse;
     return (PyObject *) iter;
 }
 
 
 /*
- * terane_Iter_new_range: allocate a new Iter object using the supplied DB
+ * terane_Iter_new_prefix: allocate a new Iter object using the supplied DB
  *  cursor.
  * 
  * returns: A new Iter object
  */
 PyObject *
-terane_Iter_new_range (PyObject *           parent,
-                       DBC *                cursor,
-                       terane_Iter_ops *    ops,
-                       PyObject *           key,
-                       int                  reverse)
+terane_Iter_new_prefix (PyObject *          parent,
+                        DBC *               cursor,
+                        PyObject *          key,
+                        int                 reverse)
 {
     terane_Iter *iter;
 
     assert (PyTuple_CheckExact (key));
 
-    iter = (terane_Iter *) terane_Iter_new (parent, cursor, ops, reverse);
+    iter = (terane_Iter *) terane_Iter_new (parent, cursor, reverse);
     if (iter == NULL)
         return NULL;
-    iter->itype = TERANE_ITER_RANGE;
+    iter->itype = TERANE_ITER_PREFIX;
+    iter->prefix = _make_prefixkey (key);
+    if (iter->prefix == NULL) {
+        Py_DECREF (iter);
+        return NULL;
+    }
     iter->start = _make_iterkey (key);
     if (iter->start == NULL) {
         Py_DECREF (iter);
@@ -150,7 +185,6 @@ terane_Iter_new_range (PyObject *           parent,
 PyObject *
 terane_Iter_new_from (PyObject *            parent,
                       DBC *                 cursor,
-                      terane_Iter_ops *     ops,
                       PyObject *            key,
                       int                   reverse)
 {
@@ -158,12 +192,43 @@ terane_Iter_new_from (PyObject *            parent,
 
     assert (PyTuple_CheckExact (key));
 
-    iter = (terane_Iter *) terane_Iter_new (parent, cursor, ops, reverse);
+    iter = (terane_Iter *) terane_Iter_new (parent, cursor, reverse);
     if (iter == NULL)
         return NULL;
     iter->itype = TERANE_ITER_FROM;
     iter->start = _make_iterkey (key);
     if (iter->start == NULL) {
+        Py_DECREF (iter);
+        return NULL;
+    }
+    if (_terane_msgpack_dump (key, (char **) &iter->range.data, &iter->range.size) < 0) {
+        Py_DECREF (iter);
+        return NULL;
+    }
+    return (PyObject *) iter;
+}
+
+/*
+ * terane_Iter_new_until: allocate a new Iter object using the supplied DB cursor.
+ * 
+ * returns: A new Iter object
+ */
+PyObject *
+terane_Iter_new_until (PyObject *           parent,
+                       DBC *                cursor,
+                       PyObject *           key,
+                       int                  reverse)
+{
+    terane_Iter *iter;
+
+    assert (PyTuple_CheckExact (key));
+
+    iter = (terane_Iter *) terane_Iter_new (parent, cursor, reverse);
+    if (iter == NULL)
+        return NULL;
+    iter->itype = TERANE_ITER_UNTIL;
+    iter->end = _make_iterkey (key);
+    if (iter->end == NULL) {
         Py_DECREF (iter);
         return NULL;
     }
@@ -182,7 +247,6 @@ terane_Iter_new_from (PyObject *            parent,
 PyObject *
 terane_Iter_new_within (PyObject *          parent,
                         DBC *               cursor,
-                        terane_Iter_ops *   ops,
                         PyObject *          start,
                         PyObject *          end,
                         int                 reverse)
@@ -192,7 +256,7 @@ terane_Iter_new_within (PyObject *          parent,
     assert (PyTuple_CheckExact (start));
     assert (PyTuple_CheckExact (end));
 
-    iter = (terane_Iter *) terane_Iter_new (parent, cursor, ops, reverse);
+    iter = (terane_Iter *) terane_Iter_new (parent, cursor, reverse);
     if (iter == NULL)
         return NULL;
     iter->itype = TERANE_ITER_WITHIN;
@@ -206,7 +270,8 @@ terane_Iter_new_within (PyObject *          parent,
         Py_DECREF (iter);
         return NULL;
     }
-    if (_terane_msgpack_dump (start, (char **) &iter->range.data, &iter->range.size) < 0) {
+    if (_terane_msgpack_dump (reverse? end : start,
+        (char **) &iter->range.data, &iter->range.size) < 0) {
         Py_DECREF (iter);
         return NULL;
     }
@@ -224,12 +289,43 @@ _Iter_iter (terane_Iter *self)
 }
 
 /*
+ * _Iter_prefix: compare lhs and rhs, and return 1 if lhs is a prefix of rhs,
+ *  0 if lhs is not a prefix of rhs, or -1 if there was an error while performing
+ *  the comparison.
+ */
+static int
+_Iter_prefix (terane_iterkey *lhs, DBT *rhs)
+{
+    char *pos = NULL;
+    terane_value value;
+    int i, ret;
+
+    /* compare each item */
+    for (i = 0; i < lhs->size; i++) {
+        ret = _terane_msgpack_load_value (rhs->data, rhs->size, &pos, &value);
+        /* value failed to load, raise exception */
+        if (ret < 0) {
+            PyErr_Format (PyExc_ValueError, "prefix failed: error loading value for rhs");
+            return -1;
+        }
+        /* there are no more rhs values to load */
+        if (ret == 0)
+            return 0;
+        /* loaded the value, so compare with lhs */
+        ret = _terane_msgpack_cmp_values (lhs->values[i], &value);
+        if (ret != 0)
+            return 0;
+    }
+    return 1;
+}
+
+/*
  * _Iter_cmp: compare lhs and rhs, and set *result to be less than, equal
  *  to, or greater than zero if the lhr is less than, equal to, or greater
  *  than the rhs.
  */
 static int
-_Iter_cmp (terane_iterkey *lhs, DBT *rhs, int reverse, int *result)
+_Iter_cmp (terane_iterkey *lhs, DBT *rhs, int *result)
 {
     char *pos = NULL;
     terane_value value;
@@ -260,6 +356,28 @@ _Iter_cmp (terane_iterkey *lhs, DBT *rhs, int reverse, int *result)
 }
 
 /*
+ * _Iter_load:
+ */
+static PyObject *
+_Iter_load (terane_Iter *iter, DBT *key, DBT *data)
+{
+    PyObject *_key = NULL, *_data = NULL, *tuple = NULL;
+
+    /* load the key */
+    if (_terane_msgpack_load ((char *) key->data, key->size, &_key) < 0)
+        goto error;
+    /* load the data */
+    if (_terane_msgpack_load ((char *) data->data, data->size, &_data) < 0)
+        goto error;
+    /* build the (posting,value) tuple */
+    tuple = PyTuple_Pack (2, _key, _data);
+error:
+    Py_XDECREF (_key);
+    Py_XDECREF (_data);
+    return tuple;
+}
+
+/*
  * _Iter_get: retreive the iterator item from the cursor.
  */
 static PyObject *
@@ -281,63 +399,124 @@ _Iter_get (terane_Iter *iter, int itype, int flags, DBT *range_key)
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
     dbret = iter->cursor->get (iter->cursor, &key, &data, flags);    
-    switch (dbret) {
-        /* success */
-        case 0:
-            /* we have now completed one successful iteration */ 
-            iter->initialized = 1;
-            break;
-        case DB_NOTFOUND:
-            /* if no item is found, then return NULL */
-            return NULL;
-        /* for any other error, set exception and return NULL */
-        case DB_LOCK_DEADLOCK:
-            PyErr_Format (terane_Exc_Deadlock, "Failed to get next item: %s",
-                db_strerror (dbret));
-            return NULL;
-        case DB_LOCK_NOTGRANTED:
-            PyErr_Format (terane_Exc_LockTimeout, "Failed to get next item: %s",
-                db_strerror (dbret));
-            return NULL;
-        default:
-            PyErr_Format (terane_Exc_Error, "Failed to get next item: %s",
-                db_strerror (dbret));
-            return NULL;
+
+    /* handle cursor range movement */
+    if (flags == DB_SET_RANGE) {
+        /* if we are performing a forward range query */
+        if (!iter->reverse) {
+            if (dbret != 0)
+                goto error;
+        }
+        /* if we are performing a reverse range query */
+        else {
+            switch (dbret) {
+                case 0:
+                    break;
+                case DB_NOTFOUND:
+                    /* set the cursor to the last item */
+                    memset (&key, 0, sizeof (DBT));
+                    key.flags = DB_DBT_MALLOC;
+                    memset (&data, 0, sizeof (DBT));
+                    data.flags = DB_DBT_MALLOC;
+                    dbret = iter->cursor->get (iter->cursor, &key, &data, DB_LAST);
+                    if (dbret != 0)
+                        goto error;
+                    break;
+                default:
+                    goto error;
+            }
+            if (_terane_msgpack_cmp (key.data, key.size, 
+              range_key->data, range_key->size, &result) < 0) {
+                PyMem_Free (key.data);
+                PyMem_Free (data.data);
+                goto error;
+            }
+            /* if the key is greater than the range key, retrieve the prev key */
+            if (result > 0) {
+                PyMem_Free (key.data);
+                PyMem_Free (data.data);
+                /* set the cursor to the last item */
+                memset (&key, 0, sizeof (DBT));
+                key.flags = DB_DBT_MALLOC;
+                memset (&data, 0, sizeof (DBT));
+                data.flags = DB_DBT_MALLOC;
+                dbret = iter->cursor->get (iter->cursor, &key, &data, DB_PREV);
+                if (dbret != 0)
+                    goto error;
+            }
+        }
+    }
+    /* handle any other type of cursor movement */
+    else {
+        if (dbret != 0)
+            goto error;
     }
 
     /* perform post-retrieval checks */
     switch (itype) {
-        case TERANE_ITER_RANGE:
+        case TERANE_ITER_PREFIX:
             /* check that the key prefix matches */
-            if (_Iter_cmp (iter->start, &key, iter->reverse, &result) < 0)
-                break;
-            if (result > 0)
-                item = iter->next (iter, &key, &data);
+            if (_Iter_prefix (iter->prefix, &key) > 0)
+                item = _Iter_load (iter, &key, &data);
             break;
         case TERANE_ITER_WITHIN:
             /* check that the key is between the start and end keys */
-            if (_Iter_cmp (iter->start, &key, iter->reverse, &result) < 0)
+            if (_Iter_cmp (iter->start, &key, &result) < 0)
                 break;
-            if (result >= 0)
+            if (result > 0)
                 break;
-            if (_Iter_cmp (iter->end, &key, iter->reverse, &result) < 0)
+            if (_Iter_cmp (iter->end, &key, &result) < 0)
                 break;
-            if (result <= 0)
+            if (result < 0)
                 break;
-            item = iter->next (iter, &key, &data);
+            item = _Iter_load (iter, &key, &data);
             break;
-        default:
-            item = iter->next (iter, &key, &data);
+        case TERANE_ITER_FROM:
+            /* check that the key is greater than or equal to the start key */
+            if (_Iter_cmp (iter->start, &key, &result) < 0)
+                break;
+            if (result > 0)
+                break;
+            item = _Iter_load (iter, &key, &data);
+            break;
+        case TERANE_ITER_UNTIL:
+            /* check that the key is less than or equal to the end key */
+            if (_Iter_cmp (iter->end, &key, &result) < 0)
+                break;
+            if (result < 0)
+                break;
+            item = _Iter_load (iter, &key, &data);
+            break;
+        case TERANE_ITER_ALL:
+            item = _Iter_load (iter, &key, &data);
             break;
     }
 
-    /* free allocated memory */
-    if (key.data)
-        PyMem_Free (key.data);
-    if (data.data)
-        PyMem_Free (data.data);
+    /* we have now completed one successful iteration */ 
+    if (item)
+        iter->initialized = 1;
 
+    PyMem_Free (key.data);
+    PyMem_Free (data.data);
     return item;
+
+error:
+    switch (dbret) {
+        /* if no item is found, don't set exception */
+        case DB_NOTFOUND:
+            break;
+        /* for any other error, set exception and return NULL */
+        case DB_LOCK_DEADLOCK:
+            PyErr_Format (terane_Exc_Deadlock, "Failed to get next item: %s",
+                db_strerror (dbret));
+        case DB_LOCK_NOTGRANTED:
+            PyErr_Format (terane_Exc_LockTimeout, "Failed to get next item: %s",
+                db_strerror (dbret));
+        default:
+            PyErr_Format (terane_Exc_Error, "Failed to get next item: %s",
+                db_strerror (dbret));
+    }
+    return NULL;
 }
 
 /*
@@ -347,13 +526,10 @@ static PyObject *
 _Iter_next (terane_Iter *self)
 {
     PyObject *item = NULL;
-    DBT *range = NULL;
     uint32_t flags = 0;
 
     if (self->cursor == NULL)
         return PyErr_Format (terane_Exc_Error, "iterator is closed");
-    if (self->next == NULL)
-        return PyErr_Format (terane_Exc_Error, "No next callback for iterator");
 
     /* initialize the cursor position, if necessary */
     switch (self->itype)
@@ -363,34 +539,38 @@ _Iter_next (terane_Iter *self)
                 flags = !self->initialized ?  DB_FIRST : DB_NEXT;
             else
                 flags = !self->initialized ?  DB_LAST : DB_PREV;
+            item = _Iter_get (self, self->itype, flags, NULL);
             break;
-        case TERANE_ITER_RANGE:
-        case TERANE_ITER_FROM:
-        case TERANE_ITER_WITHIN:
-            if (!self->initialized) {
-                /* find the key to start iterating at */
-                flags = DB_SET_RANGE;
-                if (self->reverse) {
-                    /* peek at the first key, it may be past our start */
-                    item = _Iter_get (self, self->itype, flags, &self->range);
-                    /* if the first record is valid, then return it */
-                    if (item != NULL)
-                        return item;
-                    /* otherwise we consume it and skip to the next record */
-                    flags = DB_PREV;
-                }
+        case TERANE_ITER_UNTIL:
+            if (self->initialized)
+                item = _Iter_get (self, self->itype, self->reverse ? DB_PREV : DB_NEXT, NULL);
+            else {
+                if (self->reverse)
+                    item = _Iter_get (self, self->itype, DB_SET_RANGE, &self->range);
                 else
-                    range = &self->range;
+                    item = _Iter_get (self, self->itype, DB_FIRST, NULL);
             }
+            break;
+        case TERANE_ITER_FROM:
+            if (self->initialized)
+                item = _Iter_get (self, self->itype, self->reverse ? DB_PREV : DB_NEXT, NULL);
+            else {
+                if (!self->reverse)
+                    item = _Iter_get (self, self->itype, DB_SET_RANGE, &self->range);
+                else
+                    item = _Iter_get (self, self->itype, DB_LAST, NULL);
+            }
+            break;
+        case TERANE_ITER_PREFIX:
+        case TERANE_ITER_WITHIN:
+            if (!self->initialized)
+                item = _Iter_get (self, self->itype, DB_SET_RANGE, &self->range);
             else
-                flags = self->reverse? DB_PREV : DB_NEXT;
+                item = _Iter_get (self, self->itype, self->reverse? DB_PREV : DB_NEXT, NULL);
             break;
         default:
             return PyErr_Format (terane_Exc_Error, "No iterator type %i", self->itype);
     }
-    item = _Iter_get (self, self->itype, flags, range);
-    if (item == NULL)
-        terane_Iter_close (self);
     return item;
 }
 
@@ -400,6 +580,7 @@ _Iter_next (terane_Iter *self)
  * callspec: Iter.skip(target)
  * parameters:
  *   target (object): A python object that describes the item to skip to
+ *   closest (bool): If True, return the object closest
  * returns: The iterator value at the skipped-to position
  * exceptions:
  *  IndexError: Target item is out of range
@@ -409,41 +590,46 @@ _Iter_next (terane_Iter *self)
 PyObject *
 terane_Iter_skip (terane_Iter *self, PyObject *args)
 {
+    PyObject *target = NULL;
+    PyObject *closest = NULL;
     DBT skip_key;
-    PyObject *skip_obj = NULL;
     PyObject *item = NULL;
-    int itype;
 
+    if (!PyArg_ParseTuple (args, "O|O", &target, &closest))
+        return NULL;
     if (self->cursor == NULL)
         return PyErr_Format (terane_Exc_Error, "iterator is closed");
-    if (self->skip == NULL)
-        return PyErr_Format (terane_Exc_Error, "No skip callback for iterator");
 
-    /* generate the key to skip to, or return NULL */
-    skip_obj = self->skip (self, args);
-     /* The skip function should set exception if it returns NULL */
-    if (skip_obj == NULL)
-        return NULL;
     /* dump the skip key object */
     memset (&skip_key, 0, sizeof (DBT));
-    if (_terane_msgpack_dump (skip_obj, (char **) &skip_key.data, &skip_key.size) < 0) {
-        Py_DECREF (skip_obj);
+    if (_terane_msgpack_dump (target, (char **) &skip_key.data, &skip_key.size) < 0)
         return NULL;
-    }
-    Py_DECREF (skip_obj);
-    /* set the itype in order to correctly perform post-retrieval check */
-    if (self->itype == TERANE_ITER_WITHIN)
-        itype = TERANE_ITER_WITHIN;
+
+    /* retrieve the item associated with the target */
+    if (closest)
+        item = _Iter_get (self, self->itype, DB_SET_RANGE, &skip_key);
     else
-        itype = TERANE_ITER_RANGE;
-    /* retrieve the item associated with the key */
-    item = _Iter_get (self, itype, DB_SET, &skip_key);
+        item = _Iter_get (self, self->itype, DB_SET, &skip_key);
     PyMem_Free (skip_key.data);
     /* raise IndexError if the item was not found */
     if (item == NULL && !PyErr_Occurred())
         return PyErr_Format (PyExc_IndexError, "Target ID does not exist");
     /* otherwise return the item */
     return item;
+}
+
+/*
+ * terane_Iter_reset: Reset the Iter to an uninitialized state.
+ *
+ * callspec: Iter.reset()
+ * parameters: None
+ * returns: None
+ */
+PyObject *
+terane_Iter_reset (terane_Iter *self)
+{
+    self->initialized = 0;
+    Py_RETURN_NONE;
 }
 
 /*
@@ -507,6 +693,8 @@ PyMethodDef _Iter_methods[] =
 {
     { "skip", (PyCFunction) terane_Iter_skip, METH_VARARGS,
         "Move the iterator to the specified item." },
+    { "reset", (PyCFunction) terane_Iter_reset, METH_NOARGS,
+        "Reset the iterator to an uninitialized state." },
     { "close", (PyCFunction) terane_Iter_close, METH_NOARGS,
         "Free resources allocated by the iterator." },
     { NULL, NULL, 0, NULL }

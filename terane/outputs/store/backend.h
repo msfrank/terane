@@ -92,19 +92,10 @@ typedef struct _terane_Iter {
     int itype;
     terane_iterkey *start;
     terane_iterkey *end;
+    terane_iterkey *prefix;
     DBT range;
     int reverse;
-    PyObject *(*next)(struct _terane_Iter *, DBT *, DBT *);
-    PyObject *(*skip)(struct _terane_Iter *, PyObject *);
 } terane_Iter;
-
-typedef PyObject *(*terane_Iter_next_cb)(terane_Iter *, DBT *, DBT *);
-typedef PyObject *(*terane_Iter_skip_cb)(terane_Iter *, PyObject *);
-
-typedef struct _terane_Iter_ops {
-    terane_Iter_next_cb next;
-    terane_Iter_skip_cb skip;
-} terane_Iter_ops;
 
 typedef struct _terane_Txn {
     PyObject_HEAD
@@ -116,8 +107,8 @@ typedef struct _terane_Txn {
 
 typedef struct _terane_Segment {
     PyObject_HEAD
-    terane_Index *index;    /* reference to the table of contents */
     char *name;             /* name of the segment file */
+    terane_Env *env;        /* reference to the object holding the DB_ENV handle */
     DB *metadata;           /* DB handle to the segment metadata */
     DB *events;             /* DB handle to the segment events */
     DB *postings;           /* DB handle to the segment postings */
@@ -144,11 +135,10 @@ PyObject * terane_Index_iter_fields (terane_Index *self, PyObject *args);
 PyObject * terane_Index_contains_field (terane_Index *self, PyObject *args);
 PyObject * terane_Index_count_fields (terane_Index *self);
 
-PyObject * terane_Index_new_segment (terane_Index *self, PyObject *args);
-int        terane_Index_contains_segment (terane_Index *self, terane_Txn *txn, db_recno_t sid);
+PyObject * terane_Index_add_segment (terane_Index *self, PyObject *args);
 PyObject * terane_Index_iter_segments (terane_Index *self, PyObject *args);
-PyObject * terane_Index_count_segments (terane_Index *self);
 PyObject * terane_Index_delete_segment (terane_Index *self, PyObject *args);
+
 PyObject * terane_Index_new_txn (terane_Index *self, PyObject *args, PyObject *kwds);
 PyObject * terane_Index_close (terane_Index *self);
 
@@ -169,6 +159,7 @@ PyObject * terane_Segment_iter_events (terane_Segment *self, PyObject *args);
 
 PyObject * terane_Segment_get_term (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_set_term (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_iter_terms (terane_Segment *self, PyObject *args);
 
 PyObject * terane_Segment_get_posting (terane_Segment *self, PyObject *args);
 PyObject * terane_Segment_set_posting (terane_Segment *self, PyObject *args);
@@ -186,10 +177,11 @@ PyObject * terane_Txn_commit (terane_Txn *self);
 PyObject * terane_Txn_abort (terane_Txn *self);
 
 /* Iter methods */
-PyObject * terane_Iter_new (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, int reverse);
-PyObject * terane_Iter_new_range (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, PyObject *key, int reverse);
-PyObject * terane_Iter_new_from (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, PyObject *key, int reverse);
-PyObject * terane_Iter_new_within (PyObject *parent, DBC *cursor, terane_Iter_ops *ops, PyObject *start, PyObject *end, int reverse);
+PyObject * terane_Iter_new (PyObject *parent, DBC *cursor, int reverse);
+PyObject * terane_Iter_new_prefix (PyObject *parent, DBC *cursor, PyObject *key, int reverse);
+PyObject * terane_Iter_new_from (PyObject *parent, DBC *cursor, PyObject *key, int reverse);
+PyObject * terane_Iter_new_until (PyObject *parent, DBC *cursor, PyObject *key, int reverse);
+PyObject * terane_Iter_new_within (PyObject *parent, DBC *cursor, PyObject *start, PyObject *end, int reverse);
 PyObject * terane_Iter_skip (terane_Iter *self, PyObject *args);
 PyObject * terane_Iter_close (terane_Iter *self);
 
@@ -253,9 +245,10 @@ typedef enum {
  * iteration type constants
  */
 #define TERANE_ITER_ALL         1
-#define TERANE_ITER_RANGE       2
+#define TERANE_ITER_PREFIX      2
 #define TERANE_ITER_FROM        3
-#define TERANE_ITER_WITHIN      4
+#define TERANE_ITER_UNTIL       4
+#define TERANE_ITER_WITHIN      5
 
 /* 
  * logging levels.  these values correspond to the logging levels in

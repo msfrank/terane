@@ -34,12 +34,14 @@ class EventProcessor(object):
     def __init__(self, event, filters, fieldstore):
         self.event = event
         self._filters = filters
+        self._curr = 0
         self._fieldstore = fieldstore
 
     def next(self):
-        if len(self._filters) == 0:
+        if self._curr == len(self._filters):
             raise StopIteration()
-        filter = self._filters.pop(0)
+        filter = self._filters[self._curr]
+        self._curr += 1
         contract = filter.getContract()
         contract.validateEventBefore(self.event, self._fieldstore)
         self.event = filter.filter(self.event)
