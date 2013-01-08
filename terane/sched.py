@@ -16,12 +16,13 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 from time import time
+from types import GeneratorType
 from twisted.internet.task import Cooperator
 from twisted.internet.defer import Deferred
 
 class Scheduler(object):
     """
-    The toplevel scheduler which manages Coroutines and dispatches work
+    The toplevel scheduler which manages Tasks and dispatches work
     using a round-robin algorithm.
     """
 
@@ -36,7 +37,7 @@ class Scheduler(object):
         """
         self.timeslice = timeslice
         self._epsilon = epsilon
-        self._coroutines = set()
+        self._tasks = set()
         if reactor_ == None:
             from twisted.internet import reactor
             self._reactor = reactor
@@ -46,30 +47,30 @@ class Scheduler(object):
     def _invoke(self, callable_, *args, **kwds):
         return self._reactor.callLater(self._epsilon, callable_, *args, **kwds)
 
-    def addCoroutine(self, title='', nice=1.0):
+    def addTask(self, name='', nice=1.0):
         """
-        Create a new Coroutine and add it to the Scheduler.
+        Create a new Task and add it to the Scheduler.
 
-        :param title: The title.  Useful for identifying a coroutine's purpose.
-        :type title: str
+        :param name: The name.  Useful for identifying a task's purpose.
+        :type name: str
         :param nice: The timeslice multiplier.
         :type nice: float
-        :returns: A new Coroutine object.
-        :rtype: :class:`terane.sched.Coroutine`
+        :returns: A new Task object.
+        :rtype: :class:`terane.sched.Task`
         """
-        co = Coroutine(self, title, nice)
-        self._coroutines.add(co)
-        return co
+        task = Task(self, name, nice)
+        self._tasks.add(task)
+        return task
 
-    def iterCoroutines(self):
+    def iterTasks(self):
         """
-        Returns an iterator enumerating each Coroutine registered with
+        Returns an iterator enumerating each Task registered with
         the scheduler.
 
-        :returns: An iterator enumerating :class:`terane.sched.Coroutine` objects.
+        :returns: An iterator enumerating :class:`terane.sched.Task` objects.
         :rtype: iter
         """
-        return iter(self._coroutines)
+        return iter(self._tasks)
 
 STATE_READY = 0
 STATE_RUNNING = 1
@@ -79,21 +80,22 @@ STATE_DONE = 4
 
 class Governor(object):
 
-    def __init__(self, co, sched):
-        self._end = time() + (sched.timeslice * co.nice)
+    def __init__(self, task, sched):
+        self._end = time() + (sched.timeslice * task.nice)
 
     def __call__(self):
         return time() >= self._end
 
-class Coroutine(object):
+class Task(object):
     
-    def __init__(self, sched, title, nice):
+    def __init__(self, sched, name, nice):
         self._sched = sched
         self._cooperator = Cooperator(self._check, self._schedule)
-        self.title = title
+        self._whenStateChanges = None
+        self.name = name
         self.nice = nice
-        self.runningtasks = 0
-        self.completedtasks = 0
+        self.runningworkers = 0
+        self.completedworkers = 0
         self.runningtime = 0.0
         self.waitingtime = 0.0
         self.state = STATE_READY
@@ -105,86 +107,143 @@ class Coroutine(object):
     def _schedule(self, callable_):
         return self._sched._invoke(callable_)
 
-    def addTask(self, iterator):
+    def _changeState(self, state):
+        if state == self.state:
+            return
+        self.state = state
+        if self._whenStateChanges != None:
+            d = self._whenStateChanges
+            self._whenStateChanges = None
+            d.callback(self)
+
+    def addWorker(self, iterator):
         """
-        Returns a Task object.
+        Adds a worker to the Task.  The worker needs to conform to the
+        iterator interface.
+
+        :param iterator: the worker which is executed a step at a time.
+        :type iterator: iter
+        :returns: A new Worker.
+        :rtype: :class:`terane.sched.Worker`
         """
-        task = Task(self, iterator)
-        self.runningtasks += 1
+        worker = Worker(self, iterator)
+        self.runningworkers += 1
         if self.state == STATE_READY:
-            self.state = STATE_RUNNING
-        task.done.addCallbacks(self._taskDone, self._taskError)
-        return task
+            self._changeState(STATE_RUNNING)
+        worker.whenDone().addCallbacks(self._taskDone, self._taskError)
+        return worker
+
+    def whenStateChanges(self):
+        """
+        Returns a Deferred which will fire when the state of the Task changes.
+        The result passed to the Deferred is the Task.  The new state can be
+        retrieved from the Task.state attribute.
+
+        :returns: The Deferred.
+        :rtype: :class:`twisted.internet.defer.Deferred`
+        """
+        if self._whenStateChanges == None:
+            self._whenStateChanges = Deferred()
+        return self._whenStateChanges
 
     def _taskDone(self, result):
-        self.completedtasks += 1
-        self.runningtasks -= 1
-        if self.runningtasks == 0:
-            self.state = STATE_READY
+        self.completedworkers += 1
+        self.runningworkers -= 1
+        if self.runningworkers == 0:
+            self._changeState(STATE_READY)
         return result
 
     def _taskError(self, failure):
-        self.completedtasks += 1
-        self.runningtasks -= 1
-        if self.runningtasks == 0:
-            self.state = STATE_READY
+        self.completedworkers += 1
+        self.runningworkers -= 1
+        if self.runningworkers == 0:
+            self._changeState(STATE_READY)
         return failure
 
-class Task(object):
+class Worker(object):
+    """
+    """
 
-    def __init__(self, co, iterator):
-        self._co = co
-        self._iterator = iterator
-        self._waiting_start = None
-        self._task = co._cooperator.cooperate(self)
-        self.done = self._task.whenDone().addCallbacks(self._taskDone, self._taskError)
+    def __init__(self, task, iterable):
+        self._task = task
+        self._iterable = iterable
+        self._waitingStart = None
+        self._ctask = task._cooperator.cooperate(self)
+        self._ctask.whenDone().addCallbacks(self._workerDone, self._workerError)
+        self._whenDone = None
+        self.iterable = iterable
         self.state = STATE_RUNNING
+
+    def whenDone(self):
+        """
+        Returns a Deferred which will fire when the Worker is finished.  The
+        result passed to the Deferred is the Worker.
+
+        :returns: The Deferred.
+        :rtype: :class:`twisted.internet.defer.Deferred`
+        """
+        if self._whenDone == None:
+            self._whenDone = Deferred()
+        return self._whenDone
 
     def __iter__(self):
         return self
 
     def next(self):
+        return self._run(self._iterable.next)
+
+    def _run(self, op):
         caught = None
-        running_start = time()
+        runningStart = time()
         try:
-            result = self._iterator.next()
+            result = op()
+            if isinstance(result, GeneratorType):
+                self._iterable = result
+                result = self._iterable.next()
         except Exception, caught:
             pass
-        running_end = time()
-        self._co.runningtime += running_end - running_start
+        runningEnd = time()
+        self._task.runningtime += runningEnd - runningStart
         if not caught == None:
             raise caught
         if isinstance(result, Deferred):
-            self._waiting_start = running_end
+            self._waitingStart = runningEnd
             self.state = STATE_WAITING
             result.addCallbacks(self._waitDone, self._waitError)
         return result
 
     def _waitDone(self, result):
-        waiting_end = time()
-        self._co.waitingtime += waiting_end - self._waiting_start
-        self._waiting_start = None
+        waitingEnd = time()
+        self._task.waitingtime += waitingEnd - self._waitingStart
+        self._waitingStart = None
         self.state = STATE_RUNNING
+        if isinstance(self._iterable, GeneratorType):
+            return self._run(lambda: self._iterable.send(result))
         return result
 
     def _waitError(self, failure):
-        waiting_end = time()
-        self._co.waitingtime += waiting_end - self._waiting_start
-        self.state = STATE_DONE
+        waitingEnd = time()
+        self._task.waitingtime += waitingEnd - self._waitingStart
+        self._waitingStart = None
+        self.state = STATE_RUNNING
+        if isinstance(self._iterable, GeneratorType):
+            return self._run(lambda: self._iterable.throw(failure))
         return failure
 
-    def _taskDone(self, result):
-        if self._waiting_start:
-            waiting_end = time()
-            self._co.waitingtime += waiting_end - self._waiting_start
-            self._waiting_start = None
+    def _workerDone(self, result):
+        if self._waitingStart:
+            waitingEnd = time()
+            self._task.waitingtime += waitingEnd - self._waitingStart
+            self._waitingStart = None
         self.state = STATE_DONE
-        return result
+        if self._whenDone != None:
+            self._whenDone.callback(self)
 
-    def _taskError(self, failure):
-        if self._waiting_start:
-            waiting_end = time()
-            self._co.waitingtime += waiting_end - self._waiting_start
-            self._waiting_start = None
+    def _workerError(self, failure):
+        if self._waitingStart:
+            waitingEnd = time()
+            self._task.waitingtime += waitingEnd - self._waitingStart
+            self._waitingStart = None
         self.state = STATE_DONE
-        return failure
+        if self._whenDone != None:
+            self._whenDone.errback(failure)
