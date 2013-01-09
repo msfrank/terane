@@ -17,8 +17,23 @@
 
 from time import time
 from types import GeneratorType
+from zope.interface import Interface, implements
 from twisted.internet.task import Cooperator
 from twisted.internet.defer import Deferred
+
+class IScheduler(Interface):
+    def addTask(name, nice):
+        """
+        Create a new Task and add it to the Scheduler.
+        """
+    def removeTask(task):
+        """
+        Remove the specified task from the Scheduler.
+        """
+    def iterTasks():
+        """
+        Returns an iterator which yields each Task in the Scheduler.
+        """
 
 class Scheduler(object):
     """
@@ -26,7 +41,9 @@ class Scheduler(object):
     using a round-robin algorithm.
     """
 
-    def __init__(self, timeslice=0.01, epsilon=0.00000001, reactor_=None):
+    implements(IScheduler)
+
+    def __init__(self, timeslice=0.01, epsilon=0.00000001, reactor=None):
         """
         :param timeslice: The amount of time in seconds given to each Coroutine.
         :type timeslice: float
@@ -38,11 +55,11 @@ class Scheduler(object):
         self.timeslice = timeslice
         self._epsilon = epsilon
         self._tasks = set()
-        if reactor_ == None:
-            from twisted.internet import reactor
-            self._reactor = reactor
-        else:
+        if reactor == None:
+            from twisted.internet import reactor as reactor_
             self._reactor = reactor_
+        else:
+            self._reactor = reactor
 
     def _invoke(self, callable_, *args, **kwds):
         return self._reactor.callLater(self._epsilon, callable_, *args, **kwds)
@@ -167,6 +184,7 @@ class Worker(object):
     def __init__(self, task, iterable):
         self._task = task
         self._iterable = iterable
+        self._waitResume = None
         self._waitingStart = None
         self._ctask = task._cooperator.cooperate(self)
         self._ctask.whenDone().addCallbacks(self._workerDone, self._workerError)
@@ -190,7 +208,12 @@ class Worker(object):
         return self
 
     def next(self):
-        return self._run(self._iterable.next)
+        if self._waitResume != None:
+            toResume = self._waitResume
+            self._waitResume = None
+            return self._run(toResume)
+        else:
+            return self._run(self._iterable.next)
 
     def _run(self, op):
         caught = None
@@ -218,8 +241,9 @@ class Worker(object):
         self._waitingStart = None
         self.state = STATE_RUNNING
         if isinstance(self._iterable, GeneratorType):
-            return self._run(lambda: self._iterable.send(result))
-        return result
+            self._waitResume = lambda: self._iterable.send(result)
+        else:
+            return result
 
     def _waitError(self, failure):
         waitingEnd = time()
@@ -227,8 +251,9 @@ class Worker(object):
         self._waitingStart = None
         self.state = STATE_RUNNING
         if isinstance(self._iterable, GeneratorType):
-            return self._run(lambda: self._iterable.throw(failure))
-        return failure
+            self._waitResume = lambda: self._iterable.throw(failure.value)
+        else:
+            return failure
 
     def _workerDone(self, result):
         if self._waitingStart:
