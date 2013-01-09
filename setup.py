@@ -26,7 +26,7 @@ setup(
     # package description
     name = "Terane",
     version = versionstring(),
-    description="Distributed Log Search",
+    description="Distributed event indexing and search",
     author="Michael Frank",
     author_email="msfrank@syntaxockey.com",
     # installation dependencies
@@ -35,7 +35,8 @@ setup(
         "pyparsing",
         "python-dateutil",
         "urwid",
-        "zope.interface"
+        "zope.interface",
+        "zope.component",
         ],
     # package classifiers for PyPI
     classifiers=[

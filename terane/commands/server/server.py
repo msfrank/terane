@@ -17,10 +17,11 @@
 
 import os, sys, pwd, grp, signal, atexit
 from logging import StreamHandler, FileHandler, Formatter
+from zope.component import provideUtility
 from twisted.internet import reactor
 from twisted.application.service import MultiService
 from twisted.internet.defer import maybeDeferred
-from terane.registry import getRegistry
+from terane.sched import Scheduler, IScheduler
 from terane.plugins import PluginManager
 from terane.bier import EventManager
 from terane.auth import AuthManager
@@ -133,7 +134,9 @@ class Server(MultiService):
         f.write("%i\n" % os.getpid())
         f.close()
         atexit.register(self._removePid)
-        registry = getRegistry()
+        # register the scheduler
+        scheduler = Scheduler()
+        provideUtility(scheduler, IScheduler)
         # configure the statistics manager
         stats.setServiceParent(self)
         stats.configure(self.settings)
