@@ -21,7 +21,6 @@ from twisted.internet.defer import Deferred
 from zope.interface import implements
 from terane.plugins import Plugin, IPlugin
 from terane.inputs import Input, IInput
-from terane.registry import getRegistry
 from terane.signals import Signal
 from terane.bier.event import Contract, Assertion
 from terane.loggers import getLogger

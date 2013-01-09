@@ -20,7 +20,6 @@ from zope.interface import Interface, implements
 from twisted.internet.defer import succeed
 from twisted.python.failure import Failure
 from terane.manager import IManager, Manager
-from terane.registry import getRegistry
 from terane.routes import IIndexStore
 from terane.bier.evid import EVID
 from terane.bier.ql import parseIterQuery, parseTailQuery
