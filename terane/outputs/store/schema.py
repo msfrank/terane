@@ -17,7 +17,7 @@
 
 import pickle
 from zope.interface import implements
-from terane.registry import getRegistry
+from twisted.internet.defer import succeed, fail
 from terane.bier import IField, ISchema
 from terane.bier.fields import QualifiedField
 from terane.loggers import getLogger
@@ -44,39 +44,48 @@ class Schema(object):
                             fieldname, fieldtype, field.__class__.__name__))
 
     def addField(self, fieldname, fieldtype):
-        if self.hasField(fieldname, fieldtype):
-            raise KeyError("field %s:%s already exists in Schema" % (fieldname,fieldtype))
-        if fieldname in self._fields:
-            fieldspec = self._fields[fieldname]
-        else:
-            fieldspec = {}
-        field = self._fieldstore.getField(fieldtype)
-        stored = QualifiedField(fieldname, fieldtype, field)
-        fieldspec[fieldtype] = stored
-        with self._index.new_txn() as txn:
-            self._index.add_field(txn, fieldname, unicode(pickle.dumps(fieldspec)))
-        self._fields[fieldname] = fieldspec
-        return stored
+        try:
+            if fieldname in self._fields:
+                fieldspec = self._fields[fieldname]
+            else:
+                fieldspec = {}
+            if fieldtype in fieldspec:
+                raise KeyError("field %s:%s already exists in Schema" % (fieldname,fieldtype))
+            field = self._fieldstore.getField(fieldtype)
+            stored = QualifiedField(fieldname, fieldtype, field)
+            fieldspec[fieldtype] = stored
+            with self._index.new_txn() as txn:
+                self._index.add_field(txn, fieldname, unicode(pickle.dumps(fieldspec)))
+            self._fields[fieldname] = fieldspec
+            return succeed(stored)
+        except Exception, e:
+            return fail(e)
 
     def getField(self, fieldname, fieldtype):
-        if fieldname == None and fieldtype == None:
-            return self.getField(u'message', None)
-        if fieldname not in self._fields:
+        try:
+            if fieldname == None and fieldtype == None:
+                return self.getField(u'message', None)
+            if fieldname not in self._fields:
+                raise KeyError("%s:%s" % (fieldname, fieldtype))
+            fieldspec = self._fields[fieldname]
+            if fieldtype in fieldspec:
+                return succeed(fieldspec[fieldtype])
+            if fieldtype == None and len(fieldspec) == 1:
+                return succeed(fieldspec.values()[0])
             raise KeyError("%s:%s" % (fieldname, fieldtype))
-        fieldspec = self._fields[fieldname]
-        if fieldtype in fieldspec:
-            return fieldspec[fieldtype]
-        if fieldtype == None and len(fieldspec) == 1:
-            return fieldspec.values()[0]
-        raise KeyError("%s:%s" % (fieldname, fieldtype))
+        except Exception, e:
+            return fail(e)
 
     def hasField(self, fieldname, fieldtype):
-        if fieldname not in self._fields:
-            return False
-        fieldspec = self._fields[fieldname]
-        if fieldtype not in fieldspec:
-            return False
-        return True
+        try:
+            if fieldname not in self._fields:
+                return succeed(False)
+            fieldspec = self._fields[fieldname]
+            if fieldtype not in fieldspec:
+                return succeed(False)
+            return True
+        except Exception, e:
+            return fail(e)
 
     def listFields(self):
-        return self._cached.itervalues()
+        return succeed(self._cached.values())

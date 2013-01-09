@@ -17,6 +17,7 @@
 
 import time, datetime
 from zope.interface import implements
+from twisted.internet.defer import succeed
 from terane.bier import IIndex
 from terane.bier.evid import EVID, EVID_MIN
 from terane.outputs.store import backend
@@ -97,32 +98,33 @@ class Index(backend.Index):
         return "<terane.outputs.store.Index '%s'>" % self.name
 
     def getSchema(self):
-        return self._schema
+        return succeed(self._schema)
  
     def newSearcher(self):
         """
         Return a new object implementing ISearcher.
         """
-        return IndexSearcher(self)
+        return succeed(IndexSearcher(self))
     
     def newWriter(self):
         """
         Return a new object implementing IWriter, which is protected by a new
         transaction.
         """
-        return IndexWriter(self)
+        return succeed(IndexWriter(self))
 
     def getStats(self):
         """
         """
         lastModified = datetime.datetime.fromtimestamp(self._lastModified).isoformat()
-        return {
+        stats = {
             "index-size": self._indexSize,
             "current-segment-size": self._currentSize,
             "num-segments": len(self._segments),
             "last-modified": lastModified,
             "last-event": self._lastId
             }
+        return succeed(stats)
 
     def _makeSegment(self):
         with self.new_txn() as txn:

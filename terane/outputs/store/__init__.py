@@ -15,13 +15,13 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import os, fcntl
-from twisted.internet import reactor
-from twisted.application.service import MultiService
+import os
 from zope.interface import implements
+from zope.component import getUtility
 from terane.plugins import Plugin, IPlugin
+from terane.sched import IScheduler
 from terane.bier.event import Contract
-from terane.bier.writing import writeEventToIndex
+from terane.bier.writing import WriterWorker
 from terane.outputs import Output, IOutput, ISearchable
 from terane.outputs.store.env import Env
 from terane.outputs.store.index import Index
@@ -40,6 +40,7 @@ class StoreOutput(Output):
         self._fieldstore = fieldstore
         self._index = None
         self._contract = Contract().sign()
+        self._task = getUtility(IScheduler).addTask("output:%s" % name)
 
     def configure(self, section):
         self._indexName = section.getString("index name", self.name)
@@ -70,10 +71,21 @@ class StoreOutput(Output):
         if not self.running:
             return
         # store the event in the index
-        writeEventToIndex(event, self._index)
+        worker = self._task.addWorker(WriterWorker(event, self._index))
         # rotate the index segments if necessary
-        self._index.rotateSegments(self._segRotation, self._segRetention)
+        d = worker.whenDone()
+        d.addCallbacks(self._rotateSegments, self._writeError)
     
+    def _rotateSegments(self, worker):
+        logger.debug("[output:%s] wrote event to index" % self.name)
+        try:
+            self._index.rotateSegments(self._segRotation, self._segRetention)
+        except Exception, e:
+            logger.exception(e)
+
+    def _writeError(self, failure):
+        logger.error("[output:%s] failed to write event: %s" % (self.name, failure))
+
     def getIndex(self):
         return self._index
 
