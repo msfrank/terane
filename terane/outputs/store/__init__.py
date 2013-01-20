@@ -40,7 +40,6 @@ class StoreOutput(Output):
         self._fieldstore = fieldstore
         self._index = None
         self._contract = Contract().sign()
-        self._task = getUtility(IScheduler).addTask("output:%s" % name)
 
     def configure(self, section):
         self._indexName = section.getString("index name", self.name)
@@ -52,7 +51,8 @@ class StoreOutput(Output):
         self._segOptimize = section.getBoolean("optimize segments", False)
         
     def startService(self):
-        self._index = Index(self._plugin._env, self._indexName, self._fieldstore)
+        self._task = getUtility(IScheduler).addTask("output:%s" % self.name)
+        self._index = Index(self)
         logger.debug("[output:%s] opened index '%s'" % (self.name,self._indexName))
         Output.startService(self)
 

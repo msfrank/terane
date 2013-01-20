@@ -44,10 +44,11 @@ class Index(backend.Index):
 
     implements(IIndex)
 
-    def __init__(self, env, name, fieldstore):
-        backend.Index.__init__(self, env, name)
-        self.name = name
-        self._env = env
+    def __init__(self, output):
+        self.name = output._indexName
+        self._env = output._plugin._env
+        backend.Index.__init__(self, self._env, self.name)
+        self._task = output._task
         self._segments = []
         self._indexSize = 0
         self._current = None
@@ -57,11 +58,11 @@ class Index(backend.Index):
         self._lastId = EVID_MIN
         try:
             # load schema
-            self._schema = Schema(self, fieldstore)
+            self._schema = Schema(self, output._fieldstore)
             # load data segments
             with self.new_txn() as txn:
                 for segmentName,_ in self.iter_segments(txn):
-                    segment = Segment(env, txn, segmentName)
+                    segment = Segment(self._env, txn, segmentName)
                     last_update = segment.get_meta(txn, u'last-update')
                     self._currentSize = last_update[u'size']
                     self._indexSize += last_update[u'size']
@@ -82,10 +83,10 @@ class Index(backend.Index):
             # if the index has no segments, create one
             if self._segments == []:
                 self._makeSegment()
-                logger.info("created first segment for new index '%s'" % name)
+                logger.info("created first segment for new index '%s'" % self.name)
             else:
                 logger.info("found %i events in %i segments for index '%s'" % (
-                    self._indexSize, len(self._segments), name))
+                    self._indexSize, len(self._segments), self.name))
             logger.debug("last evid is %s" % self._lastId)
             # get a reference to the current segment
             self._current = self._segments[-1]
