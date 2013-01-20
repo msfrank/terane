@@ -137,6 +137,7 @@ class Server(MultiService):
         # register the scheduler
         scheduler = Scheduler()
         provideUtility(scheduler, IScheduler)
+        scheduler.setServiceParent(self)
         # configure the statistics manager
         stats.setServiceParent(self)
         stats.configure(self.settings)

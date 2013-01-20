@@ -18,8 +18,12 @@
 from time import time
 from types import GeneratorType
 from zope.interface import Interface, implements
+from twisted.application.service import Service
 from twisted.internet.task import Cooperator
 from twisted.internet.defer import Deferred
+from terane.loggers import getLogger
+
+logger = getLogger('terane.sched')
 
 class IScheduler(Interface):
     def addTask(name, nice):
@@ -35,7 +39,7 @@ class IScheduler(Interface):
         Returns an iterator which yields each Task in the Scheduler.
         """
 
-class Scheduler(object):
+class Scheduler(Service):
     """
     The toplevel scheduler which manages Tasks and dispatches work
     using a round-robin algorithm.
@@ -61,6 +65,11 @@ class Scheduler(object):
         else:
             self._reactor = reactor
 
+    def startService(self):
+        Service.startService(self)
+        logger.debug("started scheduler with timeslice=%f, epsilon=%f" % (
+                     self.timeslice, self._epsilon))
+
     def _invoke(self, callable_, *args, **kwds):
         return self._reactor.callLater(self._epsilon, callable_, *args, **kwds)
 
@@ -77,6 +86,7 @@ class Scheduler(object):
         """
         task = Task(self, name, nice)
         self._tasks.add(task)
+        logger.debug("added task %s to scheduler" % task)
         return task
 
     def iterTasks(self):
@@ -88,6 +98,14 @@ class Scheduler(object):
         :rtype: iter
         """
         return iter(self._tasks)
+
+    def stopService(self):
+        ntasks = len(self._tasks)
+        for task in self.iterTasks():
+            task.close()
+        self._tasks = set()
+        Service.stopService(self)
+        logger.debug("stopped scheduler (%i tasks killed)" % ntasks)
 
 STATE_READY = 0
 STATE_RUNNING = 1
@@ -163,19 +181,31 @@ class Task(object):
             self._whenStateChanges = Deferred()
         return self._whenStateChanges
 
+    def close(self):
+        """
+        Stops the task and all of its active workers.  After all workers
+        have been stopped, the task state is changed to STATE_DONE.
+        """
+        cooperator = self._cooperator
+        self._cooperator = None
+        cooperator.stop()
+
     def _taskDone(self, result):
         self.completedworkers += 1
         self.runningworkers -= 1
         if self.runningworkers == 0:
             self._changeState(STATE_READY)
-        return result
+        return None
 
     def _taskError(self, failure):
         self.completedworkers += 1
         self.runningworkers -= 1
         if self.runningworkers == 0:
-            self._changeState(STATE_READY)
-        return failure
+            if self._cooperator == None:
+                self._changeState(STATE_DONE)
+            else:
+                self._changeState(STATE_READY)
+        return None
 
 class Worker(object):
     """
@@ -250,6 +280,7 @@ class Worker(object):
         self._task.waitingtime += waitingEnd - self._waitingStart
         self._waitingStart = None
         self.state = STATE_RUNNING
+        logger.trace("Worker wait error: %s" % failure.getErrorMessage())
         if isinstance(self._iterable, GeneratorType):
             self._waitResume = lambda: self._iterable.throw(failure.value)
         else:
@@ -270,5 +301,6 @@ class Worker(object):
             self._task.waitingtime += waitingEnd - self._waitingStart
             self._waitingStart = None
         self.state = STATE_DONE
+        logger.trace("Worker error: %s" % failure.getErrorMessage())
         if self._whenDone != None:
             self._whenDone.errback(failure)
