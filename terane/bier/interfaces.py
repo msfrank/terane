@@ -50,17 +50,6 @@ class IField(ILoadable):
         """
 
 class ISchema(Interface):
-    def hasField(fieldname, fieldtype):
-        """
-        Determine whether a field exists in the schema.
-
-        :param fieldname: The name of the field.
-        :type fieldname: str
-        :param fieldtype: The type of the field.
-        :type fieldtype: str
-        :returns: True if the field exists in the schema, otherwise False.
-        :rtype: bool
-        """
     def getField(fieldname, fieldtype):
         """
         Returns the specified Field.
