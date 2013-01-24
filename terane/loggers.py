@@ -88,7 +88,11 @@ class BaseHandler(object):
             if 'failure' in record:
                 f = record['failure']
                 record['message'] = "Caught exception %s: %s" % (f.type.__name__, f.value)
-                record['why'] = ''.join(record['why'])
+                if 'why' not in record or record['why'] == None:
+                    tb = f.getTracebackObject()
+                    if tb == None:
+                        tb = sys.exc_info()[2]
+                    record['why'] = ''.join(traceback.format_tb(tb))
                 self.handle("%(time)s %(levelname)s %(loggername)s: %(message)s\n%(why)s" % record)
             else:
                 record['message'] = ' '.join(record['message'])
@@ -126,13 +130,11 @@ class Logger(object):
         return self._name
 
     def msg(self, level, message, **kwds):
-        kwds = {'logger': self, 'level': level}
+        kwds.update({'logger': self, 'level': level})
         msg(message, **kwds)
 
     def exception(self, exception):
-        type_, value_, traceback_ = sys.exc_info()
-        kwds = {'logger': self, 'level': DEBUG}
-        err(exception, traceback.format_tb(traceback_), **kwds)
+        err(exception, None, logger=self, level=DEBUG)
 
     def trace(self, message, **kwds):
         self.msg(TRACE, message, **kwds)

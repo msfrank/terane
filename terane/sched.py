@@ -195,7 +195,7 @@ class Task(object):
         self.runningworkers -= 1
         if self.runningworkers == 0:
             self._changeState(STATE_READY)
-        return None
+        return result
 
     def _taskError(self, failure):
         self.completedworkers += 1
@@ -205,7 +205,7 @@ class Task(object):
                 self._changeState(STATE_DONE)
             else:
                 self._changeState(STATE_READY)
-        return None
+        return failure
 
 class Worker(object):
     """
@@ -246,19 +246,15 @@ class Worker(object):
             return self._run(self._iterable.next)
 
     def _run(self, op):
-        caught = None
         runningStart = time()
         try:
             result = op()
             if isinstance(result, GeneratorType):
                 self._iterable = result
                 result = self._iterable.next()
-        except Exception, caught:
-            pass
-        runningEnd = time()
-        self._task.runningtime += runningEnd - runningStart
-        if not caught == None:
-            raise caught
+        finally:
+            runningEnd = time()
+            self._task.runningtime += runningEnd - runningStart
         if isinstance(result, Deferred):
             self._waitingStart = runningEnd
             self.state = STATE_WAITING
@@ -280,7 +276,7 @@ class Worker(object):
         self._task.waitingtime += waitingEnd - self._waitingStart
         self._waitingStart = None
         self.state = STATE_RUNNING
-        logger.trace("Worker wait error: %s" % failure.getErrorMessage())
+        logger.exception(failure.value)
         if isinstance(self._iterable, GeneratorType):
             self._waitResume = lambda: self._iterable.throw(failure.value)
         else:
@@ -293,7 +289,7 @@ class Worker(object):
             self._waitingStart = None
         self.state = STATE_DONE
         if self._whenDone != None:
-            self._whenDone.callback(self)
+            self._whenDone.callback(self.iterable)
 
     def _workerError(self, failure):
         if self._waitingStart:
@@ -301,6 +297,6 @@ class Worker(object):
             self._task.waitingtime += waitingEnd - self._waitingStart
             self._waitingStart = None
         self.state = STATE_DONE
-        logger.trace("Worker error: %s" % failure.getErrorMessage())
+        logger.exception(failure.value)
         if self._whenDone != None:
             self._whenDone.errback(failure)
