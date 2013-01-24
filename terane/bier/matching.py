@@ -17,6 +17,7 @@
 
 import bisect
 from zope.interface import implements
+from twisted.internet.defer import inlineCallbacks, returnValue, succeed, fail
 from terane.bier.interfaces import IMatcher, IPostingList
 from terane.bier.event import Contract
 from terane.bier.evid import EVID
@@ -49,16 +50,18 @@ class QueryTerm(object):
             return "<QueryTerm %s='%s'>" % (self.fieldname,self.value)
         return "<QueryTerm '%s'>" % self.value
 
+    @inlineCallbacks
     def optimizeMatcher(self, index):
-        schema = index.getSchema()
+        schema = yield index.getSchema()
         try:
-            field = schema.getField(self.fieldname, self.fieldtype)
+            field = yield schema.getField(self.fieldname, self.fieldtype)
         except KeyError:
-            return None
+            returnValue(None)
         matcher = field.makeMatcher(self.fieldfunc, self.value)
         if not matcher:
-            return None
-        return matcher.optimizeMatcher(index)
+            returnValue(None)
+        matcher = yield matcher.optimizeMatcher(index)
+        returnValue(matcher)
 
     def matchesLength(searcher, startId, endId):
         raise NotImplementedError()
@@ -98,8 +101,9 @@ class Term(object):
         :returns: The optimized matcher.
         :rtype: An object implementing :class:`terane.bier.IMatcher`
         """
-        return self
+        return succeed(self)
 
+    @inlineCallbacks
     def matchesLength(self, searcher, startId, endId):
         """
         Returns an estimate of the approximate number of matching postings which will
@@ -110,10 +114,11 @@ class Term(object):
         :returns: The postings length estimate.
         :rtype: int
         """
-        length = searcher.postingsLength(self.field, self.value, startId, endId)
+        length = yield searcher.postingsLength(self.field, self.value, startId, endId)
         logger.trace("%s: postingsLength() => %i" % (self, length))
-        return length
+        returnValue(length)
 
+    @inlineCallbacks
     def iterMatches(self, searcher, startId, endId):
         """
         Returns an object for iterating through matching postings.
@@ -123,9 +128,10 @@ class Term(object):
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.IPostingList`
         """
-        self._postings = searcher.iterPostings(self.field, self.value, startId, endId)
-        return self
+        self._postings = yield searcher.iterPostings(self.field, self.value, startId, endId)
+        returnValue(self)
 
+    @inlineCallbacks
     def nextPosting(self):
         """
         Returns the next matching posting, or (None,None,None) if there are no
@@ -134,10 +140,11 @@ class Term(object):
         :returns: The posting of the next matching event, or (None,None,None).
         :rtype: tuple
         """
-        posting = self._postings.nextPosting()
+        posting = yield self._postings.nextPosting()
         logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
-        return posting
+        returnValue(posting)
 
+    @inlineCallbacks
     def skipPosting(self, targetId):
         """
         Returns the posting matching targetId if the matcher contains the specified targetId,
@@ -148,9 +155,9 @@ class Term(object):
         :returns: The posting matching the targetId, or (None,None,None).
         :rtype: tuple
         """
-        posting = self._postings.skipPosting(targetId)
+        posting = yield self._postings.skipPosting(targetId)
         logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
-        return posting
+        returnValue(posting)
 
     def close(self):
         self._postings.close()
@@ -172,16 +179,18 @@ class RangeGreaterThan(Term):
         return "<RangeGreaterThan %s=%s, exclusive=%s>" % (
             self.field,self.value, self.exclusive)
 
+    @inlineCallbacks
     def matchesLength(self, searcher, startId, endId):
-        length = searcher.postingsLengthBetween(self.field,
+        length = yield searcher.postingsLengthBetween(self.field,
             self.value, None, self.exclusive, False, startId, endId)
         logger.trace("%s: postingsLength() => %i" % (self, length))
-        return length
+        returnValue(length)
 
+    @inlineCallbacks
     def iterMatches(self, searcher, startId, endId):
-        self._postings = searcher.iterPostingsBetween(self.field,
+        self._postings = yield searcher.iterPostingsBetween(self.field,
             self.value, None, self.exclusive, False, startId, endId)
-        return self
+        returnValue(self)
 
 class RangeLessThan(Term):
     """
@@ -199,16 +208,18 @@ class RangeLessThan(Term):
         return "<RangeLessThan %s=%s, exclusive=%s>" % (
             self.field,self.value, self.exclusive)
 
+    @inlineCallbacks
     def matchesLength(self, searcher, startId, endId):
-        length = searcher.postingsLengthBetween(self.field,
+        length = yield searcher.postingsLengthBetween(self.field,
             None, self.value, False, self.exclusive, startId, endId)
         logger.trace("%s: postingsLength() => %i" % (self, length))
-        return length
+        returnValue(length)
 
+    @inlineCallbacks
     def iterMatches(self, searcher, startId, endId):
-        self._postings = searcher.iterPostingsBetween(self.field,
+        self._postings = yield searcher.iterPostingsBetween(self.field,
             None, self.value, False, self.exclusive, startId, endId)
-        return self
+        returnValue(self)
 
 class Every(Term):
     """
@@ -224,8 +235,9 @@ class Every(Term):
         """
         The Every matcher cannot be optimized, so it just returns itself.
         """
-        return self
+        return succeed(self)
 
+    @inlineCallbacks
     def matchesLength(self, searcher, startId, endId):
         """
         Returns an estimate of the approximate number of matching postings which will
@@ -236,11 +248,11 @@ class Every(Term):
         :returns: The postings length estimate.
         :rtype: int
         """
-        length = searcher.postingsLength(None, None, startId, endId)
+        length = yield searcher.postingsLength(None, None, startId, endId)
         logger.trace("%s: postingsLength() => %i" % (self, length))
-        return length
+        returnValue(length)
 
-
+    @inlineCallbacks
     def iterMatches(self, searcher, startId, endId):
         """
         :param searcher: A handle to the index we are searching.
@@ -248,8 +260,8 @@ class Every(Term):
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.IPostingList`
         """
-        self._postings = searcher.iterPostings(None, None, startId, endId)
-        return self
+        self._postings = yield searcher.iterPostings(None, None, startId, endId)
+        returnValue(self)
 
 class AND(object):
     """

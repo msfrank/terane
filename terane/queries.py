@@ -17,13 +17,15 @@
 
 import time
 from zope.interface import Interface, implements
+from zope.component import getUtility
 from twisted.internet.defer import succeed
 from twisted.python.failure import Failure
 from terane.manager import IManager, Manager
+from terane.sched import IScheduler
 from terane.routes import IIndexStore
 from terane.bier.evid import EVID
 from terane.bier.ql import parseIterQuery, parseTailQuery
-from terane.bier.searching import searchIndices, Period, SearcherError
+from terane.bier.searching import SearcherWorker, Period, SearcherError
 from terane.loggers import getLogger
 
 logger = getLogger('terane.queries')
@@ -117,6 +119,7 @@ class QueryManager(Manager):
         self._indexstore = indexstore
         self.maxResultSize = 10
         self.maxIterations = 5
+        self._task = getUtility(IScheduler).addTask(self.name)
 
     def configure(self, settings):
         pass
@@ -158,17 +161,14 @@ class QueryManager(Manager):
         logger.trace("iter query: %s" % query)
         logger.trace("iter period: %s" % period)
         # query each index and return the results
-        try:
-            task = searchIndices(indices, query, period, lastId, reverse, fields, limit)
-        except SearcherError, e:
-            raise QueryExecutionError(str(e))
         def _returnIterResult(result):
             if isinstance(result, Failure): 
                 if result.check(SearcherError):
                     raise QueryExecutionError(result.getErrorMessage())
                 result.raiseException()
             return QueryResult({'runtime': result.runtime, 'fields': result.fields}, result.events)
-        return task.whenDone().addBoth(_returnIterResult)
+        worker = SearcherWorker(indices, query, period, lastId, reverse, fields, limit)
+        return self._task.addWorker(worker).whenDone().addBoth(_returnIterResult)
 
     def tailEvents(self, query, lastId=None, indices=None, limit=100, fields=None):
         """
@@ -211,7 +211,6 @@ class QueryManager(Manager):
         period = Period(lastId, EVID.fromString(EVID.MAX_ID), True, False)
         logger.trace("tail period: %s" % period)
         # query each index, and return the results
-        task = searchIndices(indices, query, period, None, False, fields, limit)
         def _returnTailResult(result, lastId=None):
             if isinstance(result, Failure) and result.check(SearcherError):
                 raise QueryExecutionError(str(e))
@@ -220,7 +219,8 @@ class QueryManager(Manager):
                 lastId = events[-1][0]
             metadata = {'runtime': result.runtime, 'lastId': str(lastId), 'fields': result.fields}
             return QueryResult(metadata, events)
-        return task.whenDone().addBoth(_returnTailResult, lastId)
+        worker = SearcherWorker(indices, query, period, None, False, fields, limit)
+        return self._task.addWorker(worker).whenDone().addBoth(_returnTailResult, lastId)
 
     def showIndex(self, name):
         """

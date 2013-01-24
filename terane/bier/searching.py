@@ -16,6 +16,7 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import time, datetime, calendar, copy
+from twisted.internet.defer import inlineCallbacks, returnValue
 from twisted.internet.task import cooperate
 from terane.bier.interfaces import IIndex, ISearcher, IPostingList, IEventStore
 from terane.bier.evid import EVID
@@ -89,163 +90,151 @@ class Period(object):
             end = end - 1
         return start, end
 
-class ResultSet(object):
-    def __init__(self, searchers, postingLists, start, reverse, fields, limit):
-        self._searchers = searchers
-        self._postingLists = postingLists
-        self._currPostings = [(None,None,None) for i in range(len(postingLists))]
-        self._start = start
-        self._lastId = None
-        if reverse:
-            self._cmp = lambda x,y: cmp(y,x) 
+class SearcherWorker(object):
+    """
+    A worker which searches the specified indices using the supplied query.
+    Instances of this class must be submitted to a :class:`terane.sched.Task`
+    to be scheduled. 
+    """
+
+    def __init__(self, indices, query, period, lastId=None, reverse=False, fields=None, limit=100):
+        """
+        :param indices: A list of indices to search.
+        :type indices: A list of objects implementing :class:`terane.bier.index.IIndex`
+        :param query: The programmatic query to use for searching the indices.
+        :type query: An object implementing :class:`terane.bier.searching.IQuery`
+        :param period: The period within which the search is constrained.
+        :type period: :class:`terane.bier.searching.Period`
+        :param lastId: The real key to start iterating from.
+        :type lastId: :class:`terane.bier.evid.EVID`
+        :param reverse: If True, then reverse the order of events.
+        :type reverse: bool
+        :param fields: If not None, then only return the specified fields of each event. 
+        :type fields: list or None
+        :param limit: Only returned the specified number of events.
+        :type limit: int
+        """
+        # determine the evids to use as start and end keys
+        if reverse == False:
+            self._startId, self._endId = period.getRange()
         else:
-            self._cmp = cmp
+            self._endId, self._startId = period.getRange()
+        if lastId != None:
+            if not lastId in period:
+                raise SearcherError("lastId %s is not within period" % lastId)
+            self._startId = lastId
+        self._lastId = lastId
+        for index in indices:
+            if not IIndex.providedBy(index):
+                raise TypeError("one or more indices does not implement IIndex")
+        self._indices = indices
+        self._query = query
+        self._reverse = reverse
         self._fields = fields
         self._limit = limit
-        self._count = 0
         self.events = []
         self.fields = []
         self.runtime = 0.0
 
-    def __iter__(self):
-        return self
-
     def next(self):
-        try:
-            nlists = len(self._postingLists)
-            if nlists == 0:
-                raise StopIteration()
-            # check each child iter for the lowest evid
-            curr = 0
-            for i in range(nlists):
-                # if the postingList is None, then its closed
-                if self._postingLists[i] == None:
-                    continue
-                # if current posting for this posting list was consumed, then
-                # get the next posting from the posting list
-                if self._currPostings[i] == (None,None,None):
-                    self._currPostings[i] = self._postingLists[i].nextPosting()
-                # if the next posting for this posting list is (None,None,None),
-                # then we are done with this posting list
-                if self._currPostings[i] == (None,None,None):
-                    self._postingLists[i] = None
-                    continue
-                # if the evid equals the last evid returned, then ignore it
-                if self._lastId != None and self._currPostings[i][0] == self._lastId:
-                    self._currPostings[i] = (None,None,None)
-                    continue
-                # we don't compare the first evid with itself
-                if i == 0:
-                    continue
-                # if the evid is the current smallest evid, then remember it
-                if self._currPostings[curr] == (None,None,None) or \
-                  self._cmp(self._currPostings[i][0], self._currPostings[curr][0]) < 0:
-                    curr = i
-            # stop iterating if there are no more results
-            if self._currPostings[curr] == (None,None,None):
-                raise StopIteration()
-            evid,tvalue,store = self._currPostings[curr]
-            # remember the last evid
-            self._lastId = evid
-            # forget the evid so we don't return it again
-            self._currPostings[curr] = (None,None,None)
-            # retrieve the event
-            if not IEventStore.providedBy(store):
-                raise TypeError("store does not implement IEventStore")
-            defaultfield, defaultvalue, fields = store.getEvent(evid)
-            if defaultfield not in self.fields:
-                self.fields.append(defaultfield)
-            # keep a record of all field names found in the results.
-            for fieldname in fields.keys():
-                if fieldname not in self.fields:
-                    self.fields.append(fieldname)
-            # filter out unwanted fields
-            if self._fields != None:
-                fields = dict([(k,v) for k,v in fields.items() if k in self._fields])
-            self.events.append(((evid.ts,evid.offset), defaultfield, defaultvalue, fields))
-            logger.trace("added event %s to resultset" % evid)
-            # if we have reached our limit
-            self._count += 1
-            if self._count == self._limit:
-                raise StopIteration()
-        except:
-            self.close()
-            self.runtime = time.time() - self._start
-            logger.trace("retrieved %i events in %f seconds" % (len(self.events),self.runtime))
-            raise
-
-    def close(self):
-        for postingList in self._postingLists:
-            if postingList != None: postingList.close()
-        self._postingLists = None
-        for searcher in self._searchers:
-            searcher.close()
-        self._searchers = None
-
-def searchIndices(indices, query, period, lastId=None, reverse=False, fields=None, limit=100):
-    """
-    Search the specified indices for events matching the specified query.
-
-    :param indices: A list of indices to search.
-    :type indices: A list of objects implementing :class:`terane.bier.index.IIndex`
-    :param query: The programmatic query to use for searching the indices.
-    :type query: An object implementing :class:`terane.bier.searching.IQuery`
-    :param period: The period within which the search is constrained.
-    :type period: :class:`terane.bier.searching.Period`
-    :param lastId: The real key to start iterating from.
-    :type lastId: :class:`terane.bier.evid.EVID`
-    :param reverse: If True, then reverse the order of events.
-    :type reverse: bool
-    :param fields: If not None, then only return the specified fields of each event. 
-    :type fields: list or None
-    :param limit: Only returned the specified number of events.
-    :type limit: int
-    :returns: A CooperativeTask which contains a Deferred and manages the search task.
-    :rtype: :class:`twisted.internet.task.CooperativeTask`
-    """
-    start = time.time()
-    # determine the evids to use as start and end keys
-    if reverse == False:
-        startId, endId = period.getRange()
-    else:
-        endId, startId = period.getRange()
-    if lastId != None:
-        if not lastId in period:
-            raise SearcherError("lastId %s is not within period" % lastId)
-        startId = lastId
-    # search each index separately, then merge the results
-    try:
+        start = time.time()
         searchers = []
         postingLists = []
-        for index in indices:
-            if not IIndex.providedBy(index):
-                raise TypeError("index does not implement IIndex")
-            # we create a copy of the original query, which can possibly be optimized
-            # with index-specific knowledge.
-            _query = copy.deepcopy(query)
-            try:
-                _query = _query.optimizeMatcher(index)
-            except NotImplementedError, e:
-                raise SearcherError(str(e))
-            logger.debug("optimized query for index '%s': %s" % (index.name,str(_query)))
-            # if the query optimized out entirely, then skip to the next index
-            if _query == None:
-                continue
-            # get the posting list to iterate through
-            searcher = index.newSearcher()
-            if not ISearcher.providedBy(searcher):
-                raise TypeError("searcher does not implement ISearcher")
-            postingList = _query.iterMatches(searcher, startId, endId)
-            if not IPostingList.providedBy(postingList):
-                raise TypeError("posting list does not implement IPostingList")
-            searchers.append(searcher)
-            postingLists.append(postingList)
-        # return a cooperative task
-        return cooperate(ResultSet(searchers, postingLists, start, reverse, fields, limit))
-    except BaseException, e:
-        if not isinstance(e, SearcherError):
-            logger.exception(e)
-        # free all held resources since we aren't passing them to ResultSet
-        for postingList in postingLists: postingList.close()
-        for searcher in searchers: searcher.close()
-        raise
+        try:
+            # get a searcher and posting list for each index
+            for index in self._indices:
+                # we create a copy of the original query, which can possibly be optimized
+                # with index-specific knowledge.
+                query = copy.deepcopy(self._query)
+                try:
+                    query = yield query.optimizeMatcher(index)
+                except NotImplementedError, e:
+                    raise SearcherError(str(e))
+                logger.debug("optimized query for index '%s': %s" % (index.name,str(query)))
+                # if the query optimized out entirely, then skip to the next index
+                if query == None:
+                    continue
+                # get the posting list to iterate through
+                searcher = yield index.newSearcher()
+                if not ISearcher.providedBy(searcher):
+                    raise TypeError("searcher does not implement ISearcher")
+                postingList = yield query.iterMatches(searcher, self._startId, self._endId)
+                if not IPostingList.providedBy(postingList):
+                    raise TypeError("posting list does not implement IPostingList")
+                searchers.append(searcher)
+                postingLists.append(postingList)
+            # loop forever until we reach the search limit, we exhaust all of our
+            # posting lists, or we encounter an exception
+            currPostings = [(None,None,None) for i in range(len(postingLists))]
+            smallestList = 0
+            lastId = None
+            compar = (lambda x,y: cmp(y,x)) if self._reverse else cmp 
+            while True:
+                # if we have reached our limit
+                if len(self.events) == self._limit:
+                    self.runtime = time.time() - start
+                    raise StopIteration()
+                # check each child iter for the lowest evid
+                for currList in range(len(postingLists)):
+                    if currList == None:
+                        smallestList = 0
+                    # if the postingList is None, then its closed
+                    if postingLists[currList] == None:
+                        # FIXME: close the posting list and searcher
+                        continue
+                    # if current posting for this posting list was not consumed
+                    if currPostings[currList] != (None,None,None):
+                        continue
+                    # otherwise get the next posting from the posting list
+                    currPostings[currList] = yield postingLists[currList].nextPosting()
+                    # if the next posting for this posting list is (None,None,None),
+                    # then we are done with this posting list
+                    if currPostings[currList] == (None,None,None):
+                        postingList = postingLists[currList]
+                        yield postingList.close()
+                        postingLists[currList] = None
+                        continue
+                    # if the evid equals the last evid returned, then ignore it
+                    if lastId != None and currPostings[currList][0] == lastId:
+                        currPostings[currList] = (None,None,None)
+                        continue
+                    # we don't compare the first evid with itself
+                    if currList == 0:
+                        continue
+                    # if the evid is the current smallest evid, then remember it
+                    if (currPostings[smallestList] == (None,None,None) or
+                      compar(currPostings[currList][0], currPostings[smallestList][0]) < 0):
+                        smallestList = currList
+                # get the next posting
+                currList = None
+                evid,_,store = currPostings[smallestList]
+                # stop iterating if there are no more results
+                if evid == None:
+                    self.runtime = time.time() - start
+                    raise StopIteration()
+                # remember the last evid
+                lastId = evid
+                # forget the evid so we don't return it again
+                currPostings[self._smallestList] = (None,None,None)
+                # retrieve the event
+                if not IEventStore.providedBy(store):
+                    raise TypeError("store does not implement IEventStore")
+                event = yield store.getEvent(evid)
+                defaultfield, defaultvalue, fields = event
+                if defaultfield not in self.fields:
+                    self.fields.append(defaultfield)
+                # keep a record of all field names found in the results
+                for fieldname in fields.keys():
+                    if fieldname not in self.fields:
+                        self.fields.append(fieldname)
+                # filter out unwanted fields
+                if self._fields != None:
+                    fields = dict([(k,v) for k,v in fields.items() if k in self._fields])
+                self.events.append(((evid.ts,evid.offset), defaultfield, defaultvalue, fields))
+                logger.trace("added event %s to results" % evid)
+        finally:
+            for postingList in postingLists:
+                if postingList != None:
+                    yield postingList.close()
+            for searcher in searchers:
+                yield searcher.close()
