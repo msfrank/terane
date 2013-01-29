@@ -20,6 +20,7 @@ from zope.interface import implements
 from twisted.internet.defer import inlineCallbacks, returnValue, succeed
 from terane.bier import ISearcher, IPostingList, IEventStore
 from terane.bier.evid import EVID
+from terane.outputs.store.schema import Schema
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.searching')
@@ -37,11 +38,14 @@ class IndexSearcher(object):
         :param ix: The index to search.
         :type ix: :class:`terane.outputs.store.index.Index`
         """
-        txn = ix.new_txn(TXN_SNAPSHOT=True)
+        self._ix = ix
         self._task = ix._task
+        self._txn = txn = ix.new_txn(TXN_SNAPSHOT=True)
         self._segmentSearchers = [SegmentSearcher(s,txn,self._task) for s in ix._segments]
-        self._txn = txn
 
+    def getSchema(self):
+        return succeed(Schema(self._ix, self._txn))
+        
     @inlineCallbacks
     def postingsLength(self, field, term, startId, endId):
         """

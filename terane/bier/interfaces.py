@@ -105,13 +105,13 @@ class IPostingList(Interface):
         """
 
 class IMatcher(Interface):
-    def optimizeMatcher(index):
+    def optimizeMatcher(searcher):
         """
         Optimizes the matcher.  This may return the object itself, a new object, or
         None if the query completely optimizes away.
 
-        :param index: The index we are querying.
-        :type index: An object implementing :class:`terane.bier.index.IIndex`
+        :param searcher: A searcher from the index we are querying.
+        :type searcher: An object implementing :class:`terane.bier.interfaces.ISearcher`
         :returns: An optimized matcher.
         :rtype: An object implementing :class:`terane.bier.searching.IMatcher`
         """
@@ -119,8 +119,8 @@ class IMatcher(Interface):
         """
         Returns an estimate of the number of matching postings within the specified period.
 
-        :param searcher: A handle to the index we are searching.
-        :type searcher: An object implementing :class:`terane.bier.searching.ISearcher`
+        :param searcher: A searcher from the index we are searching.
+        :type searcher: An object implementing :class:`terane.bier.interfaces.ISearcher`
         :param period: The period within which the search query is constrained.
         :type period: :class:`terane.bier.searching.Period`
         :returns: An estimate of the number of postings.
@@ -131,8 +131,8 @@ class IMatcher(Interface):
         Returns an object implementing IPostingList which yields each matching posting
         within the specified period.
         
-        :param searcher: A handle to the index we are searching.
-        :type searcher: An object implementing :class:`terane.bier.searching.ISearcher`
+        :param searcher: A searcher from the index we are searching.
+        :type searcher: An object implementing :class:`terane.bier.interfaces.ISearcher`
         :param period: The period within which the search query is constrained.
         :type period: :class:`terane.bier.searching.Period`
         :param reverse: If True, then reverse the order of iteration.
@@ -142,6 +142,10 @@ class IMatcher(Interface):
         """
 
 class ISearcher(Interface):
+    def getSchema():
+        """
+        Returns an object implementing ISchema.
+        """
     def postingsLength(field, term, startId, endId):
         """
         Returns an estimate of the number of possible postings for the term in the
@@ -208,9 +212,9 @@ class IEventStore(Interface):
         """
 
 class IWriter(Interface):
-    def begin():
+    def getSchema():
         """
-        Enter the transactional context.
+        Returns an object implementing ISchema.
         """
     def newEvent(evid, event):
         """
@@ -244,10 +248,6 @@ class IWriter(Interface):
         """
           
 class IIndex(Interface):
-    def getSchema():
-        """
-        Returns an object implementing ISchema.
-        """
     def newSearcher():
         """
         Returns an object implementing ISearcher.

@@ -28,20 +28,11 @@ class Schema(object):
 
     implements(ISchema)
 
-    def __init__(self, index, fieldstore):
-        self._index = index
-        self._fields = {}
-        self._fieldstore = fieldstore
-        # load schema data from the db
-        with self._index.new_txn() as txn:
-            for fieldname,fieldspec in self._index.iter_fields(txn):
-                self._fields[fieldname] = pickle.loads(str(fieldspec))
-                # verify that the field type is consistent
-                for fieldtype,stored in self._fields[fieldname].items():
-                    field = fieldstore.getField(fieldtype)
-                    if not stored.field.__class__ == field.__class__:
-                        raise Exception("schema field %s:%s does not match registered type %s" % (
-                            fieldname, fieldtype, field.__class__.__name__))
+    def __init__(self, ix, txn):
+        self._ix = ix
+        self._fields = ix._fields
+        self._fieldstore = ix._fieldstore
+        self._txn = txn
 
     def addField(self, fieldname, fieldtype):
         try:
@@ -54,8 +45,7 @@ class Schema(object):
             field = self._fieldstore.getField(fieldtype)
             stored = QualifiedField(fieldname, fieldtype, field)
             fieldspec[fieldtype] = stored
-            with self._index.new_txn() as txn:
-                self._index.add_field(txn, fieldname, unicode(pickle.dumps(fieldspec)))
+            self._ix.add_field(self._txn, fieldname, unicode(pickle.dumps(fieldspec)))
             self._fields[fieldname] = fieldspec
             return succeed(stored)
         except Exception, e:
@@ -76,16 +66,8 @@ class Schema(object):
         except Exception, e:
             return fail(e)
 
-    def hasField(self, fieldname, fieldtype):
-        try:
-            if fieldname not in self._fields:
-                return succeed(False)
-            fieldspec = self._fields[fieldname]
-            if fieldtype not in fieldspec:
-                return succeed(False)
-            return True
-        except Exception, e:
-            return fail(e)
-
     def listFields(self):
-        return succeed(self._cached.values())
+        fields = []
+        for fieldname,fieldspec in self._fields.items():
+            fields += fieldspec.values()
+        return succeed(fields)

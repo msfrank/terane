@@ -15,11 +15,12 @@
 # You should have received a copy of the GNU General Public License
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
-import time, datetime
+import time, datetime, pickle
 from zope.interface import implements
 from twisted.internet.defer import succeed
 from terane.bier import IIndex
 from terane.bier.evid import EVID, EVID_MIN
+from terane.bier.fields import SchemaError
 from terane.outputs.store import backend
 from terane.outputs.store.segment import Segment
 from terane.outputs.store.schema import Schema
@@ -50,6 +51,8 @@ class Index(backend.Index):
         backend.Index.__init__(self, self._env, self.name)
         self._task = output._task
         self._segments = []
+        self._fieldstore = output._fieldstore
+        self._fields = {}
         self._indexSize = 0
         self._current = None
         self._currentSize = 0
@@ -58,7 +61,15 @@ class Index(backend.Index):
         self._lastId = EVID_MIN
         try:
             # load schema
-            self._schema = Schema(self, output._fieldstore)
+            with self.new_txn() as txn:
+                for fieldname,fieldspec in self.iter_fields(txn):
+                    self._fields[fieldname] = pickle.loads(str(fieldspec))
+                    # verify that the field type is consistent
+                    for fieldtype,stored in self._fields[fieldname].items():
+                        field = self._fieldstore.getField(fieldtype)
+                        if not stored.field.__class__ == field.__class__:
+                            raise SchemaError("schema field %s:%s does not match registered type %s" % (
+                                fieldname, fieldtype, field.__class__.__name__))
             # load data segments
             with self.new_txn() as txn:
                 for segmentName,_ in self.iter_segments(txn):
@@ -98,9 +109,6 @@ class Index(backend.Index):
     def __str__(self):
         return "<terane.outputs.store.Index '%s'>" % self.name
 
-    def getSchema(self):
-        return succeed(self._schema)
- 
     def newSearcher(self):
         """
         Return a new object implementing ISearcher.

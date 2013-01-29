@@ -20,6 +20,7 @@ from zope.interface import implements
 from twisted.internet.defer import succeed, fail
 from terane.bier import IWriter
 from terane.bier.writing import WriterError
+from terane.outputs.store.schema import Schema
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.writing')
@@ -32,21 +33,18 @@ class IndexWriter(object):
     implements(IWriter)
 
     def __init__(self, ix):
-        self._txn = None
         self._ix = ix
+        try:
+            self._txn = ix.new_txn()
+        except Exception, e:
+            return fail(e)
         self._indexSize = self._ix._indexSize
         self._currentSize = self._ix._currentSize
         self._lastId = self._ix._lastId
         self._lastModified = self._ix._lastModified
 
-    def begin(self):
-        if self._txn:
-            return fail(WriterError("IndexWriter is already in a transaction"))
-        try:
-            self._txn = self._ix.new_txn()
-        except Exception, e:
-            return fail(e)
-        return succeed(self)
+    def getSchema(self):
+        return succeed(Schema(self._ix, self._txn))
 
     def newEvent(self, evid, event):
         try:
