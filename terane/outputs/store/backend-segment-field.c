@@ -23,7 +23,7 @@
  * terane_Segment_get_field: Retrieve the value associated with the
  *  specified field.
  *
- * callspec: Segment.get_field(txn, field)
+ * callspec: Segment.get_field(txn, field, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   field (object): The field (name,type) tuple
@@ -33,28 +33,32 @@
  *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
  */
 PyObject *
-terane_Segment_get_field (terane_Segment *self, PyObject *args)
+terane_Segment_get_field (terane_Segment *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *field = NULL;
     DBT key, data;
     PyObject *value = NULL;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OO", &txn, &field))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
+    if ((dbflags = _terane_parse_db_get_flags (kwds)) < 0)
+        return NULL;
     /* use the field as the key */
     memset (&key, 0, sizeof (DBT));
     key.flags = DB_DBT_REALLOC;
     if (_terane_msgpack_dump (field, (char **) &key.data, &key.size) < 0)
         return NULL;
-    /* get the record */
+    /* get the record with the GIL released */
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
-    dbret = self->fields->get (self->fields, txn? txn->txn : NULL, &key, &data, 0);
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->fields->get (self->fields, txn? txn->txn : NULL, &key, &data, dbflags);
+    Py_END_ALLOW_THREADS
     switch (dbret) {
         case 0:
             /* create a python string from the data */
@@ -83,7 +87,7 @@ terane_Segment_get_field (terane_Segment *self, PyObject *args)
  * terane_Segment_set_field: Change the value associated with the
  *  specified field.
  *
- * callspec: Segment.set_field(txn, field, value)
+ * callspec: Segment.set_field(txn, field, value, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  *   field (object): The field (name,type) tuple
@@ -93,16 +97,18 @@ terane_Segment_get_field (terane_Segment *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
  */
 PyObject *
-terane_Segment_set_field (terane_Segment *self, PyObject *args)
+terane_Segment_set_field (terane_Segment *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *field = NULL;
     PyObject *value = NULL;
     DBT key, data;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "O!OO", &terane_TxnType, &txn, &field, &value))
+        return NULL;
+    if ((dbflags = _terane_parse_db_put_flags (kwds)) < 0)
         return NULL;
     /* use the field as the key */
     memset (&key, 0, sizeof (DBT));
@@ -114,8 +120,10 @@ terane_Segment_set_field (terane_Segment *self, PyObject *args)
         PyMem_Free (key.data);
         return NULL;
     }
-    /* set the record */
+    /* set the record with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
     dbret = self->fields->put (self->fields, txn->txn, &key, &data, 0);
+    Py_END_ALLOW_THREADS
     PyMem_Free (key.data);
     PyMem_Free (data.data);
     switch (dbret) {

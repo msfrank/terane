@@ -143,29 +143,28 @@ PyObject * terane_Index_new_txn (terane_Index *self, PyObject *args, PyObject *k
 PyObject * terane_Index_close (terane_Index *self);
 
 /* Segment methods */
-PyObject * terane_Segment_get_meta (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_set_meta (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_get_meta (terane_Segment *self, PyObject *args, PyObject *kwds);
+PyObject * terane_Segment_set_meta (terane_Segment *self, PyObject *args, PyObject *kwds);
 
-PyObject * terane_Segment_get_field (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_set_field (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_get_field (terane_Segment *self, PyObject *args, PyObject *kwds);
+PyObject * terane_Segment_set_field (terane_Segment *self, PyObject *args, PyObject *kwds);
 
-PyObject * terane_Segment_new_event (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_get_event (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_set_event (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_delete_event (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_contains_event (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_get_event (terane_Segment *self, PyObject *args, PyObject *kwds);
+PyObject * terane_Segment_set_event (terane_Segment *self, PyObject *args, PyObject *kwds);
+PyObject * terane_Segment_delete_event (terane_Segment *self, PyObject *args, PyObject *kwds);
+PyObject * terane_Segment_contains_event (terane_Segment *self, PyObject *args, PyObject *kwds);
 PyObject * terane_Segment_estimate_events (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_iter_events (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_iter_events (terane_Segment *self, PyObject *args, PyObject *kwds);
 
-PyObject * terane_Segment_get_term (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_set_term (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_iter_terms (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_get_term (terane_Segment *self, PyObject *args, PyObject *kwds);
+PyObject * terane_Segment_set_term (terane_Segment *self, PyObject *args, PyObject *kwds);
+PyObject * terane_Segment_iter_terms (terane_Segment *self, PyObject *args, PyObject *kwds);
 
-PyObject * terane_Segment_get_posting (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_set_posting (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_contains_posting (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_get_posting (terane_Segment *self, PyObject *args, PyObject *kwds);
+PyObject * terane_Segment_set_posting (terane_Segment *self, PyObject *args, PyObject *kwds);
+PyObject * terane_Segment_contains_posting (terane_Segment *self, PyObject *args, PyObject *kwds);
 PyObject * terane_Segment_estimate_postings (terane_Segment *self, PyObject *args);
-PyObject * terane_Segment_iter_postings (terane_Segment *self, PyObject *args);
+PyObject * terane_Segment_iter_postings (terane_Segment *self, PyObject *args, PyObject *kwds);
 
 PyObject * terane_Segment_delete (terane_Segment *self);
 PyObject * terane_Segment_close (terane_Segment *self);
@@ -204,6 +203,17 @@ int             _terane_msgpack_cmp_values (terane_value *v1, terane_value *v2);
 int             _terane_msgpack_cmp (char *b1, uint32_t l1, char *b2, uint32_t l2, int *result);
 int             _terane_msgpack_DB_compare (DB *db, const DBT *dbt1, const DBT *dbt2);
 void            _terane_msgpack_free_value (terane_value *value);
+
+/*
+ * Berkeley DB flag parsing declarations
+ */
+int _terane_parse_env_txn_begin_flags (PyObject *kwds);
+int _terane_parse_db_get_flags (PyObject *kwds);
+int _terane_parse_db_put_flags (PyObject *kwds);
+int _terane_parse_db_del_flags (PyObject *kwds);
+int _terane_parse_db_exists_flags (PyObject *kwds);
+int _terane_parse_db_cursor_flags (PyObject *kwds);
+
 
 /*
  * class type declarations

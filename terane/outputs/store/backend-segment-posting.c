@@ -22,7 +22,7 @@
 /*
  * terane_Segment_get_posting:
  *
- * callspec: Segment.get_posting(txn, posting)
+ * callspec: Segment.get_posting(txn, posting, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   posting (object): The posting key
@@ -32,13 +32,13 @@
  *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
  */
 PyObject *
-terane_Segment_get_posting (terane_Segment *self, PyObject *args)
+terane_Segment_get_posting (terane_Segment *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *posting = NULL;
     DBT key, data;
     PyObject *value = NULL;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OO", &txn, &posting))
@@ -47,6 +47,8 @@ terane_Segment_get_posting (terane_Segment *self, PyObject *args)
         txn = NULL;
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
+    if ((dbflags = _terane_parse_db_get_flags (kwds)) < 0)
+        return NULL;
 
     /* build the key */
     memset (&key, 0, sizeof (DBT));
@@ -54,10 +56,12 @@ terane_Segment_get_posting (terane_Segment *self, PyObject *args)
     if (_terane_msgpack_dump (posting, (char **) &key.data, &key.size) < 0)
         return NULL;
 
-    /* get the record */
+    /* get the record with the GIL released */
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
-    dbret = self->postings->get (self->postings, txn? txn->txn : NULL, &key, &data, 0);
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->postings->get (self->postings, txn? txn->txn : NULL, &key, &data, dbflags);
+    Py_END_ALLOW_THREADS
     PyMem_Free (key.data);
     switch (dbret) {
         case 0:
@@ -85,7 +89,7 @@ terane_Segment_get_posting (terane_Segment *self, PyObject *args)
 /*
  * terane_Segment_set_posting:
  *
- * callspec: Segment.set_posting(txn, posting)
+ * callspec: Segment.set_posting(txn, posting, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  *   psting (object): The posting key
@@ -95,16 +99,18 @@ terane_Segment_get_posting (terane_Segment *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
  */
 PyObject *
-terane_Segment_set_posting (terane_Segment *self, PyObject *args)
+terane_Segment_set_posting (terane_Segment *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *posting = NULL;
     PyObject *value = NULL;
     DBT key, data;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "O!OO", &terane_TxnType, &txn, &posting, &value))
+        return NULL;
+    if ((dbflags = _terane_parse_db_put_flags (kwds)) < 0)
         return NULL;
 
     /* build the key */
@@ -117,8 +123,10 @@ terane_Segment_set_posting (terane_Segment *self, PyObject *args)
         PyMem_Free (key.data);
         return NULL;
     }
-    /* set the record */
-    dbret = self->postings->put (self->postings, txn->txn, &key, &data, 0);
+    /* set the record with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->postings->put (self->postings, txn->txn, &key, &data, dbflags);
+    Py_END_ALLOW_THREADS
     PyMem_Free (key.data);
     PyMem_Free (data.data);
     switch (dbret) {
@@ -136,7 +144,7 @@ terane_Segment_set_posting (terane_Segment *self, PyObject *args)
  * terane_Segment_contains_posting: Determine whether the specified posting
  *  exists.
  *
- * callspec: Segment.contains_posting(txn, posting)
+ * callspec: Segment.contains_posting(txn, posting, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   posting (object): The posting key.
@@ -145,12 +153,12 @@ terane_Segment_set_posting (terane_Segment *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to find the record
  */
 PyObject *
-terane_Segment_contains_posting (terane_Segment *self, PyObject *args)
+terane_Segment_contains_posting (terane_Segment *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *posting = NULL;
     DBT key;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OO", &txn, &posting))
@@ -159,6 +167,8 @@ terane_Segment_contains_posting (terane_Segment *self, PyObject *args)
         txn = NULL;
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
+    if ((dbflags = _terane_parse_db_exists_flags (kwds)) < 0)
+        return NULL;
 
     /* build the key */
     memset (&key, 0, sizeof (DBT));
@@ -166,8 +176,10 @@ terane_Segment_contains_posting (terane_Segment *self, PyObject *args)
         return NULL;
     key.flags = DB_DBT_REALLOC;
 
-    /* check if key exists in the db */
-    dbret = self->postings->exists (self->postings, txn? txn->txn : NULL, &key, 0);
+    /* check for the record with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->postings->exists (self->postings, txn? txn->txn : NULL, &key, dbflags);
+    Py_END_ALLOW_THREADS
     PyMem_Free (key.data);
     switch (dbret) {
         case 0:
@@ -261,7 +273,7 @@ error:
  * terane_Segment_iter_postings: Iterate through all postings associated
  *  with the specified term in the specified field.
  *
- * callspec: Segment.iter_postings(txn, start, end)
+ * callspec: Segment.iter_postings(txn, start, end, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   start (object): The posting key marking the start of the range
@@ -273,12 +285,12 @@ error:
  *   terane.outputs.store.backend.Error: A db error occurred when trying to get the record
  */
 PyObject *
-terane_Segment_iter_postings (terane_Segment *self, PyObject *args)
+terane_Segment_iter_postings (terane_Segment *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *start = NULL, *end = NULL, *reverse = NULL;
     DBC *cursor = NULL;
-    int dbret;
+    int dbflags, dbret;
     PyObject *iter = NULL;
 
     /* parse parameters */
@@ -290,14 +302,16 @@ terane_Segment_iter_postings (terane_Segment *self, PyObject *args)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
     if (reverse != Py_True && reverse != Py_False)
         return PyErr_Format (PyExc_TypeError, "reverse must be True or False");
+    if ((dbflags = _terane_parse_db_cursor_flags (kwds)) < 0)
+        return NULL;
 
-    /* create a new cursor */
-    dbret = self->postings->cursor (self->postings, txn? txn->txn : NULL, &cursor, 0);
+    /* create a new cursor with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->postings->cursor (self->postings, txn? txn->txn : NULL, &cursor, dbflags);
+    Py_END_ALLOW_THREADS
     if (dbret != 0)
         return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
             db_strerror (dbret));
-
-    /* create the Iter */
     if (start == Py_None && end == Py_None)
         iter = terane_Iter_new ((PyObject *) self, cursor,
             reverse == Py_True ? 1 : 0);
@@ -310,7 +324,10 @@ terane_Segment_iter_postings (terane_Segment *self, PyObject *args)
     else
         iter = terane_Iter_new_within ((PyObject *) self, cursor,
             start, end, reverse == Py_True ? 1 : 0);
-    if (iter == NULL) 
+    if (iter == NULL) {
+        Py_BEGIN_ALLOW_THREADS
         cursor->close (cursor);
+        Py_END_ALLOW_THREADS
+    }
     return iter;
 }

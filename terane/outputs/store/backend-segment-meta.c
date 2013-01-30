@@ -22,7 +22,7 @@
 /*
  * terane_Segment_get_meta: get a Segment metadata value
  *
- * callspec: Segment.get_meta(txn, id)
+ * callspec: Segment.get_meta(txn, id, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   id (string): The metadata id
@@ -32,13 +32,13 @@
  *   terane.outputs.store.backend.Error: A db error occurred when trying to retrieve the record
  */
 PyObject *
-terane_Segment_get_meta (terane_Segment *self, PyObject *args)
+terane_Segment_get_meta (terane_Segment *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *id = NULL;
     DBT key, data;
     PyObject *value = NULL;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OO", &txn, &id))
@@ -47,16 +47,20 @@ terane_Segment_get_meta (terane_Segment *self, PyObject *args)
         txn = NULL;
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
+    if ((dbflags = _terane_parse_db_get_flags (kwds)) < 0)
+        return NULL;
 
     /* use the document id as the record number */
     memset (&key, 0, sizeof (DBT));
     key.flags = DB_DBT_REALLOC;
     if (_terane_msgpack_dump (id, (char **) &key.data, &key.size) < 0)
         return NULL;
-    /* get the record */
+    /* get the record with the GIL released */
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
-    dbret = self->metadata->get (self->metadata, txn? txn->txn : NULL, &key, &data, 0);
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->metadata->get (self->metadata, txn? txn->txn : NULL, &key, &data, dbflags);
+    Py_END_ALLOW_THREADS
     switch (dbret) {
         case 0:
             /* create a python string from the data */
@@ -86,7 +90,7 @@ terane_Segment_get_meta (terane_Segment *self, PyObject *args)
 /*
  * terane_Segment_set_meta: set a Segment metadata value
  *
- * callspec: Segment.set_meta(txn, id, value)
+ * callspec: Segment.set_meta(txn, id, value, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  *   id (string): The metadata id
@@ -96,16 +100,18 @@ terane_Segment_get_meta (terane_Segment *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
  */
 PyObject *
-terane_Segment_set_meta (terane_Segment *self, PyObject *args)
+terane_Segment_set_meta (terane_Segment *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *id = NULL;
     PyObject *value = NULL;
     DBT key, data;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "O!OO", &terane_TxnType, &txn, &id, &value))
+        return NULL;
+    if ((dbflags = _terane_parse_db_put_flags (kwds)) < 0)
         return NULL;
 
     memset (&key, 0, sizeof (DBT));
@@ -116,8 +122,10 @@ terane_Segment_set_meta (terane_Segment *self, PyObject *args)
         PyMem_Free (key.data);
         return NULL;
     }
-    /* set the record */
-    dbret = self->metadata->put (self->metadata, txn->txn, &key, &data, 0);
+    /* set the record with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->metadata->put (self->metadata, txn->txn, &key, &data, dbflags);
+    Py_END_ALLOW_THREADS
     PyMem_Free (key.data);
     PyMem_Free (data.data);
     switch (dbret) {

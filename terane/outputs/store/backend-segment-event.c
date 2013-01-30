@@ -20,52 +20,9 @@
 #include "backend.h"
 
 /*
- * terane_Segment_new_event: create a new event
- *
- * callspec: Segment.new_event(txn, evid)
- * parameters:
- *   txn (Txn): A Txn object to wrap the operation in
- *   evid (object): The event identifier
- * returns: None
- * exceptions:
- *   terane.outputs.store.backend.DocExists: The event specified by evid already exists
- *   terane.outputs.store.backend.Error: A db error occurred when trying to create the record
- */
-PyObject *
-terane_Segment_new_event (terane_Segment *self, PyObject *args)
-{
-    terane_Txn *txn = NULL;
-    PyObject *evid = NULL;
-    DBT key, data;
-    int dbret;
-
-    /* parse parameters */
-    if (!PyArg_ParseTuple (args, "O!O", &terane_TxnType, &txn, &evid))
-        return NULL;
-    /* use the document id as the key */
-    memset (&key, 0, sizeof (DBT));
-    if (_terane_msgpack_dump (evid, (char **) &key.data, &key.size) < 0)
-        return NULL;
-    memset (&data, 0, sizeof (DBT));
-    /* put a new document.  raise DocExists if the event identifier already exists. */
-    dbret = self->events->put (self->events, txn->txn, &key, &data, DB_NOOVERWRITE);
-    PyMem_Free (key.data);
-    switch (dbret) {
-        case 0:
-            break;
-        case DB_KEYEXIST:
-            return PyErr_Format (terane_Exc_DocExists, "Event already exists");
-        default:
-            return PyErr_Format (terane_Exc_Error, "Failed to create document: %s",
-                db_strerror (dbret));
-    }
-    Py_RETURN_NONE;
-}
-
-/*
  * terane_Segment_get_event: retrieve an event
  *
- * callspec: Segment.get_event(txn, evid)
+ * callspec: Segment.get_event(txn, evid, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   evid (object): The event identifier
@@ -75,28 +32,32 @@ terane_Segment_new_event (terane_Segment *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to retrieve the record
  */
 PyObject *
-terane_Segment_get_event (terane_Segment *self, PyObject *args)
+terane_Segment_get_event (terane_Segment *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *evid = NULL;
-    DBT key, data;
     PyObject *event = NULL;
-    int dbret;
+    DBT key, data;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OO", &txn, &evid))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
+    if ((dbflags = _terane_parse_db_get_flags (kwds)) < 0)
+        return NULL;
     /* use the event identifier as the key */
     memset (&key, 0, sizeof (DBT));
     key.flags = DB_DBT_REALLOC;
     if (_terane_msgpack_dump (evid, (char **) &key.data, &key.size) < 0)
         return NULL;
-    /* get the document */
+    /* get the record with the GIL released */
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
-    dbret = self->events->get (self->events, txn? txn->txn : NULL, &key, &data, 0);
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->events->get (self->events, txn? txn->txn : NULL, &key, &data, dbflags);
+    Py_END_ALLOW_THREADS
     switch (dbret) {
         case 0:
             /* create a python string from the data */
@@ -124,7 +85,7 @@ terane_Segment_get_event (terane_Segment *self, PyObject *args)
 /*
  * terane_Segment_set_event: set the event contents
  *
- * callspec: Segment.set_event(txn, evid, event)
+ * callspec: Segment.set_event(txn, evid, event, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  *   evid (object): The event identifier
@@ -134,16 +95,18 @@ terane_Segment_get_event (terane_Segment *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to set the record
  */
 PyObject *
-terane_Segment_set_event (terane_Segment *self, PyObject *args)
+terane_Segment_set_event (terane_Segment *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *evid = NULL;
     PyObject *event = NULL;
     DBT key, data;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "O!OO", &terane_TxnType, &txn, &evid, &event))
+        return NULL;
+    if ((dbflags = _terane_parse_db_put_flags (kwds)) < 0)
         return NULL;
     /* use the evid as the key */
     memset (&key, 0, sizeof (DBT));
@@ -155,8 +118,10 @@ terane_Segment_set_event (terane_Segment *self, PyObject *args)
         PyMem_Free (key.data);
         return NULL;
     }
-    /* set the record */
+    /* set the record with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
     dbret = self->events->put (self->events, txn->txn, &key, &data, 0);
+    Py_END_ALLOW_THREADS
     PyMem_Free (key.data);
     PyMem_Free (data.data);
     /* db error, raise Exception */
@@ -173,7 +138,7 @@ terane_Segment_set_event (terane_Segment *self, PyObject *args)
 /*
  * terane_Segment_delete_event: Delete an event.
  *
- * callspec: Segment.delete_event(txn, evid)
+ * callspec: Segment.delete_event(txn, evid, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  *   evid (object): The event identifier
@@ -183,22 +148,26 @@ terane_Segment_set_event (terane_Segment *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to delete the record
  */
 PyObject *
-terane_Segment_delete_event (terane_Segment *self, PyObject *args)
+terane_Segment_delete_event (terane_Segment *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *evid = NULL;
     DBT key;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "O!O", &terane_TxnType, &txn, &evid))
+        return NULL;
+    if ((dbflags = _terane_parse_db_del_flags (kwds)) < 0)
         return NULL;
     /* get the event id */
     memset (&key, 0, sizeof (DBT));
     if (_terane_msgpack_dump (evid, (char **) &key.data, &key.size) < 0)
         return NULL;
-    /* delete the record */
-    dbret = self->events->del (self->events, txn->txn, &key, 0);
+    /* delete the record with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->events->del (self->events, txn->txn, &key, dbflags);
+    Py_END_ALLOW_THREADS
     PyMem_Free (key.data);
     switch (dbret) {
         case 0:
@@ -218,7 +187,7 @@ terane_Segment_delete_event (terane_Segment *self, PyObject *args)
 /*
  * terane_Segment_contains_event: Determine whether an event exists.
  *
- * callspec: Segment.contains_event(txn, evid)
+ * callspec: Segment.contains_event(txn, evid, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   evid (object): The event identifier
@@ -227,25 +196,29 @@ terane_Segment_delete_event (terane_Segment *self, PyObject *args)
  *   Exception: A db error occurred when trying to get the record
  */
 PyObject *
-terane_Segment_contains_event (terane_Segment *self, PyObject *args)
+terane_Segment_contains_event (terane_Segment *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *evid = NULL;
     DBT key;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OO", &txn, &evid))
         return NULL;
     if ((PyObject *) txn == Py_None)
         txn = NULL;
+    if ((dbflags = _terane_parse_db_exists_flags (kwds)) < 0)
+        return NULL;
     /* get the event id */
     memset (&key, 0, sizeof (DBT));
     if (_terane_msgpack_dump (evid, (char **) &key.data, &key.size) < 0)
         return NULL;
     key.flags = DB_DBT_REALLOC;
-    /* check for the record */
-    dbret = self->events->exists (self->events, txn? txn->txn : NULL, &key, 0);
+    /* check for the record with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->events->exists (self->events, txn? txn->txn : NULL, &key, dbflags);
+    Py_END_ALLOW_THREADS
     PyMem_Free (key.data);
     switch (dbret) {
         case 0:
@@ -301,18 +274,22 @@ terane_Segment_estimate_events (terane_Segment *self, PyObject *args)
     if (_terane_msgpack_dump (end, (char **) &end_key.data, &end_key.size) < 0)
         goto error;
 
-    /* estimate start key range */
+    /* estimate start key range with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
     dbret = self->events->key_range (self->events, txn? txn->txn : NULL,
         &start_key, &start_range, 0);
+    Py_END_ALLOW_THREADS
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to estimate start key range: %s",
             db_strerror (dbret));
         goto error;
     }
 
-    /* estimate end key range */
+    /* estimate end key range with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
     dbret = self->events->key_range (self->events, txn? txn->txn : NULL,
         &end_key, &end_range, 0);
+    Py_END_ALLOW_THREADS
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to estimate end key range: %s",
             db_strerror (dbret));
@@ -340,7 +317,7 @@ error:
  * terane_Segment_iter_events: Iterate through all event ids between
  * the specified start and end identifiers.
  *
- * callspec: Segment.iter_events(txn)
+ * callspec: Segment.iter_events(txn, start, end, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   start (object): The starting event identifier, inclusive
@@ -351,13 +328,13 @@ error:
  *   Exception: A db error occurred when trying to get the record
  */
 PyObject *
-terane_Segment_iter_events (terane_Segment *self, PyObject *args)
+terane_Segment_iter_events (terane_Segment *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *start = NULL, *end = NULL, *reverse = NULL;
     DBC *cursor = NULL;
     PyObject *iter = NULL;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OOOO", &txn, &start, &end, &reverse))
@@ -368,15 +345,17 @@ terane_Segment_iter_events (terane_Segment *self, PyObject *args)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
     if (reverse != Py_True && reverse != Py_False)
         return PyErr_Format (PyExc_TypeError, "reverse must be True or False");
+    if ((dbflags = _terane_parse_db_cursor_flags (kwds)) < 0)
+        return NULL;
 
-    /* create a new cursor */
-    dbret = self->events->cursor (self->events, txn? txn->txn : NULL, &cursor, 0);
-    /* if cursor allocation failed, return Error */
-    if (dbret != 0)
-        return PyErr_Format (terane_Exc_Error, "Failed to allocate document cursor: %s",
-            db_strerror (dbret));
-
+    /* create a new cursor with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->events->cursor (self->events, txn? txn->txn : NULL, &cursor, dbflags);
+    Py_END_ALLOW_THREADS
     /* allocate a new Iter object */
+    if (dbret != 0)
+        return PyErr_Format (terane_Exc_Error, "Failed to allocate DB cursor: %s",
+            db_strerror (dbret));
     if (start == Py_None && end == Py_None)
         iter = terane_Iter_new ((PyObject *) self, cursor,
             reverse == Py_True ? 1 : 0);
@@ -389,7 +368,10 @@ terane_Segment_iter_events (terane_Segment *self, PyObject *args)
     else
         iter = terane_Iter_new_within ((PyObject *) self, cursor,
             start, end, reverse == Py_True ? 1 : 0);
-    if (iter == NULL)
+    if (iter == NULL) {
+        Py_BEGIN_ALLOW_THREADS
         cursor->close (cursor);
+        Py_END_ALLOW_THREADS
+    }
     return iter;
 }

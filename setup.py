@@ -77,6 +77,7 @@ setup(
         Extension('terane.outputs.store.backend', [
             'terane/outputs/store/backend.c',
             'terane/outputs/store/backend-env.c',
+            'terane/outputs/store/backend-flags.c',
             'terane/outputs/store/backend-index.c',
             'terane/outputs/store/backend-index-field.c',
             'terane/outputs/store/backend-index-meta.c',
