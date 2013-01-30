@@ -395,10 +395,12 @@ _Iter_get (terane_Iter *iter, int itype, int flags, DBT *range_key)
     }
     key.flags = DB_DBT_MALLOC;
 
-    /* get the next cursor item */
+    /* get the next cursor item with the GIL released */
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
+    Py_BEGIN_ALLOW_THREADS
     dbret = iter->cursor->get (iter->cursor, &key, &data, flags);    
+    Py_END_ALLOW_THREADS
 
     /* handle cursor range movement */
     if (flags == DB_SET_RANGE) {
@@ -418,7 +420,9 @@ _Iter_get (terane_Iter *iter, int itype, int flags, DBT *range_key)
                     key.flags = DB_DBT_MALLOC;
                     memset (&data, 0, sizeof (DBT));
                     data.flags = DB_DBT_MALLOC;
+                    Py_BEGIN_ALLOW_THREADS
                     dbret = iter->cursor->get (iter->cursor, &key, &data, DB_LAST);
+                    Py_END_ALLOW_THREADS
                     if (dbret != 0)
                         goto error;
                     break;
@@ -440,7 +444,9 @@ _Iter_get (terane_Iter *iter, int itype, int flags, DBT *range_key)
                 key.flags = DB_DBT_MALLOC;
                 memset (&data, 0, sizeof (DBT));
                 data.flags = DB_DBT_MALLOC;
+                Py_BEGIN_ALLOW_THREADS
                 dbret = iter->cursor->get (iter->cursor, &key, &data, DB_PREV);
+                Py_END_ALLOW_THREADS
                 if (dbret != 0)
                     goto error;
             }
@@ -647,7 +653,12 @@ PyObject *
 terane_Iter_close (terane_Iter *self)
 {
     if (self->cursor != NULL) {
-        int dbret = self->cursor->close (self->cursor);
+        int dbret;
+       
+        /* close the cursor with the GIL released */
+        Py_BEGIN_ALLOW_THREADS
+        dbret = self->cursor->close (self->cursor);
+        Py_END_ALLOW_THREADS
         switch (dbret) {
             case 0:
                 break;
