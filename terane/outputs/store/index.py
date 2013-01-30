@@ -16,6 +16,7 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import time, datetime, pickle
+from threading import Lock
 from zope.interface import implements
 from twisted.internet.defer import succeed
 from terane.bier import IIndex
@@ -51,6 +52,7 @@ class Index(backend.Index):
         backend.Index.__init__(self, self._env, self.name)
         self._task = output._task
         self._segments = []
+        self._writeLock = Lock()
         self._fieldstore = output._fieldstore
         self._fields = {}
         self._indexSize = 0
@@ -80,7 +82,7 @@ class Index(backend.Index):
                     lastId = last_update[u'last-id']
                     lastId = EVID(lastId[0], lastId[1])
                     if lastId > self._lastId:
-                        self._lastId = last_update[u'last-id']
+                        self._lastId = lastId
                     if last_update[u'last-modified'] > self._lastModified:
                         self._lastModified = last_update[u'last-modified']
                     self._segments.append(segment)
