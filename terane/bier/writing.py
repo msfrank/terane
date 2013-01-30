@@ -49,35 +49,44 @@ class WriterWorker(object):
 
 
     def next(self):
-        # get the current schema
-        schema = yield self.index.getSchema()
-        if not ISchema.providedBy(schema):
-            raise TypeError("index schema does not implement ISchema")
-        # create a new transactional writer
-        writer = yield self.index.newWriter()
-        if not IWriter.providedBy(writer):
-            raise TypeError("index writer does not implement IWriter")
-        # update the index in the context of a writer
-        yield writer.begin()
-        try:   
-            # create a new event identifier
-            evid = EVID.fromEvent(self.event)
+        w = str(hash(self))
+        evid = EVID.fromEvent(self.event)
+        writer = None
+        try:
+            # store the event
+            writer = yield self.index.newWriter()
+            if not IWriter.providedBy(writer):
+                raise TypeError("index writer does not implement IWriter")
+            fields = dict([(fn,v) for fn,ft,v in self.event])
+            logger.trace("[writer %s] creating event %s" % (w,evid))
+            yield writer.newEvent(evid, fields)
+            yield writer.commit()
+            writer = None
             # process the value of each field in the event
-            fields = {}
             for fieldname, fieldtype, value in self.event:
+                writer = yield self.index.newWriter()
+                if not IWriter.providedBy(writer):
+                    raise TypeError("index writer does not implement IWriter")
+                schema = yield writer.getSchema()
+                if not ISchema.providedBy(schema):
+                    raise TypeError("index schema does not implement ISchema")
                 try:
+                    logger.trace("[writer %s] retrieving field %s:%s" % (w,fieldname,fieldtype))
                     field = yield schema.getField(fieldname, fieldtype)
                 except KeyError:
+                    logger.trace("[writer %s] adding field %s:%s" % (w,fieldname,fieldtype))
                     field = yield schema.addField(fieldname, fieldtype)
-                # update the field with the event value
+                # store a posting for each term in each field
                 for term,meta in field.parseValue(value):
+                    logger.trace("[writer %s] creating posting %s:%s:%s" % (w,field,term,evid))
                     yield writer.newPosting(field, term, evid, meta)
-                fields[fieldname] = value
-            # store the document data
-            yield writer.newEvent(evid, fields)
-            # otherwise commit the transaction and return the event id
-            yield writer.commit()
-        # if an exception was raised, then abort the transaction
-        except Exception, e:
-            yield writer.abort()
-            raise e
+                yield writer.commit()
+                writer = None
+        except:
+            # if an exception was raised and a transaction is open, abort it
+            if writer != None:
+                logger.debug("[writer %s] aborting txn" % w)
+                yield writer.abort()
+            raise
+        # otherwise commit the transaction
+        logger.debug("[writer %s] committed event %s" % (w,str(evid)))
