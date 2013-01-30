@@ -24,6 +24,9 @@ from terane.loggers import getLogger
 
 logger = getLogger('terane.bier.schema')
 
+class SchemaError(Exception):
+    pass
+
 class QualifiedField(object):
     """
     """

@@ -450,13 +450,14 @@ class SegmentSearcher(object):
                 self._offset = evid.offset
             def next(self):
                 evid = [self._ts, self._offset]
-                fields = self._searcher, _segment.get_event(self._segment._txn, evid)
+                segment = self._searcher._segment
+                fields = segment.get_event(self._searcher._txn, evid)
                 defaultfield = u'message'
                 defaultvalue = fields[defaultfield]
                 del fields[defaultfield]
                 self.event = (defaultfield, defaultvalue, fields)
                 raise StopIteration()
-        worker = Worker(self)
+        worker = Worker(self, evid)
         return self._task.addWorker(worker).whenDone().addCallback(lambda w: w.event)
 
     def _close(self):

@@ -146,18 +146,16 @@ class SearcherWorker(object):
                 # we create a copy of the original query, which can possibly be optimized
                 # with index-specific knowledge.
                 query = copy.deepcopy(self._query)
-                try:
-                    query = yield query.optimizeMatcher(index)
-                except NotImplementedError, e:
-                    raise SearcherError(str(e))
-                logger.debug("optimized query for index '%s': %s" % (index.name,str(query)))
-                # if the query optimized out entirely, then skip to the next index
-                if query == None:
-                    continue
                 # get the posting list to iterate through
                 searcher = yield index.newSearcher()
                 if not ISearcher.providedBy(searcher):
                     raise TypeError("searcher does not implement ISearcher")
+                query = yield query.optimizeMatcher(searcher)
+                logger.debug("optimized query for index '%s': %s" % (index.name,str(query)))
+                # if the query optimized out entirely, then skip to the next index
+                if query == None:
+                    yield searcher.close()
+                    continue
                 postingList = yield query.iterMatches(searcher, self._startId, self._endId)
                 if not IPostingList.providedBy(postingList):
                     raise TypeError("posting list does not implement IPostingList")
@@ -215,7 +213,7 @@ class SearcherWorker(object):
                 # remember the last evid
                 lastId = evid
                 # forget the evid so we don't return it again
-                currPostings[self._smallestList] = (None,None,None)
+                currPostings[smallestList] = (None,None,None)
                 # retrieve the event
                 if not IEventStore.providedBy(store):
                     raise TypeError("store does not implement IEventStore")

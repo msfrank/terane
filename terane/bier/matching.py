@@ -51,8 +51,8 @@ class QueryTerm(object):
         return "<QueryTerm '%s'>" % self.value
 
     @inlineCallbacks
-    def optimizeMatcher(self, index):
-        schema = yield index.getSchema()
+    def optimizeMatcher(self, searcher):
+        schema = yield searcher.getSchema()
         try:
             field = yield schema.getField(self.fieldname, self.fieldtype)
         except KeyError:
@@ -60,7 +60,7 @@ class QueryTerm(object):
         matcher = field.makeMatcher(self.fieldfunc, self.value)
         if not matcher:
             returnValue(None)
-        matcher = yield matcher.optimizeMatcher(index)
+        matcher = yield matcher.optimizeMatcher(searcher)
         returnValue(matcher)
 
     def matchesLength(searcher, startId, endId):
@@ -90,11 +90,9 @@ class Term(object):
     def __str__(self):
         return "<Term %s=%s>" % (self.field,self.value)
 
-    def optimizeMatcher(self, index):
+    def optimizeMatcher(self, searcher):
         """
-        Optimize the matcher.  If the field does not exist in the index, then toss the
-        matcher.  If the normalized term value splits into multiple terms, then return
-        the union of the terms.
+        Optimize the matcher.  This implementation is a no-op.
 
         :param index: The index we will be running the query on.
         :type index: Object implementing :class:`terane.bier.IIndex`
@@ -231,7 +229,7 @@ class Every(Term):
     def __str__(self):
         return "<Every>"
 
-    def optimizeMatcher(self, index):
+    def optimizeMatcher(self, searcher):
         """
         The Every matcher cannot be optimized, so it just returns itself.
         """
@@ -282,14 +280,14 @@ class AND(object):
     def __str__(self):
         return "<AND [%s]>" % ', '.join([str(child) for child in self.children])
 
-    def optimizeMatcher(self, index):
+    def optimizeMatcher(self, searcher):
         """
         Optimize the matcher.  If any child matchers are AND operators, then move their
         children into this matcher.  If any child matchers optimize out, then toss them.
         If all child matchers optimize out, then we can toss the parent matcher as well.
 
-        :param index: The index we will be running the query on.
-        :type index: Object implementing :class:`terane.bier.IIndex`
+        :param searcher: The index we will be running the query on.
+        :type searcher: Object implementing :class:`terane.bier.ISearcher`
         :returns: The optimized matcher.
         :rtype: An object implementing :class:`terane.bier.IMatcher`
         """
@@ -309,9 +307,9 @@ class AND(object):
         self.children = children
         # if there are any NOT operators, then we wrap this matcher and the combined NOTs in a Sieve.
         if len(excludes) > 0:
-            return Sieve(self, OR(excludes)).optimizeMatcher(index)
+            return Sieve(self, OR(excludes)).optimizeMatcher(searcher)
         # optimize each child matcher
-        self.children = [child.optimizeMatcher(index) for child in children]
+        self.children = [child.optimizeMatcher(searcher) for child in children]
         # if there are no children, then we can toss this matcher too
         if len(self.children) == 0:
             return None
