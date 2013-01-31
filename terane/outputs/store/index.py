@@ -141,7 +141,7 @@ class Index(backend.Index):
         with self.new_txn() as txn:
             segmentId = self._currentSid + 1
             segmentName = u"%s.%i" % (self.name, segmentId)
-            self.add_segment(txn, segmentName, None)
+            self.set_segment(txn, segmentName, None, NOOVERWRITE=True)
             segment = Segment(self._env, txn, segmentName)
             segment.set_meta(txn, u'created-on', int(time.time()))
             last_update = {

@@ -126,18 +126,18 @@ typedef struct _terane_Segment {
 PyObject * terane_Env_close (terane_Env *self);
 
 /* Index methods */
-PyObject * terane_Index_get_meta (terane_Index *self, PyObject *args);
-PyObject * terane_Index_set_meta (terane_Index *self, PyObject *args);
+PyObject * terane_Index_get_meta (terane_Index *self, PyObject *args, PyObject *kwds);
+PyObject * terane_Index_set_meta (terane_Index *self, PyObject *args, PyObject *kwds);
 
-PyObject * terane_Index_get_field (terane_Index *self, PyObject *args);
-PyObject * terane_Index_add_field (terane_Index *self, PyObject *args);
-PyObject * terane_Index_iter_fields (terane_Index *self, PyObject *args);
-PyObject * terane_Index_contains_field (terane_Index *self, PyObject *args);
+PyObject * terane_Index_get_field (terane_Index *self, PyObject *args, PyObject *kwds);
+PyObject * terane_Index_set_field (terane_Index *self, PyObject *args, PyObject *kwds);
+PyObject * terane_Index_iter_fields (terane_Index *self, PyObject *args, PyObject *kwds);
+PyObject * terane_Index_contains_field (terane_Index *self, PyObject *args, PyObject *kwds);
 PyObject * terane_Index_count_fields (terane_Index *self);
 
-PyObject * terane_Index_add_segment (terane_Index *self, PyObject *args);
-PyObject * terane_Index_iter_segments (terane_Index *self, PyObject *args);
-PyObject * terane_Index_delete_segment (terane_Index *self, PyObject *args);
+PyObject * terane_Index_set_segment (terane_Index *self, PyObject *args, PyObject *kwds);
+PyObject * terane_Index_iter_segments (terane_Index *self, PyObject *args, PyObject *kwds);
+PyObject * terane_Index_delete_segment (terane_Index *self, PyObject *args, PyObject *kwds);
 
 PyObject * terane_Index_new_txn (terane_Index *self, PyObject *args, PyObject *kwds);
 PyObject * terane_Index_close (terane_Index *self);

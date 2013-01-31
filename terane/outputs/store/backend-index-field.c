@@ -20,9 +20,9 @@
 #include "backend.h"
 
 /*
- * terane_Index_get_field: get the pickled fieldspec for the field.
+ * terane_Index_get_field: get the value associated with the field.
  *
- * callspec: Index.get_field(txn, fieldname)
+ * callspec: Index.get_field(txn, fieldname, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   fieldname (string): The field name
@@ -31,13 +31,13 @@
  *   terane.outputs.store.backend.Error: A db error occurred when trying to get the field
  */
 PyObject *
-terane_Index_get_field (terane_Index *self, PyObject *args)
+terane_Index_get_field (terane_Index *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     DBT key, data;
     PyObject *fieldspec = NULL;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OO", &txn, &fieldname))
@@ -46,16 +46,20 @@ terane_Index_get_field (terane_Index *self, PyObject *args)
         txn = NULL;
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
+    if ((dbflags = _terane_parse_db_get_flags (kwds)) < 0)
+        return NULL;
 
     /* use the fieldname as key */
     memset (&key, 0, sizeof (DBT));
     key.flags = DB_DBT_REALLOC;
     if (_terane_msgpack_dump (fieldname, (char **) &key.data, &key.size) < 0)
         return NULL;
-    /* get the record */
+    /* get the record with the GIL released */
     memset (&data, 0, sizeof (DBT));
     data.flags = DB_DBT_MALLOC;
-    dbret = self->schema->get (self->schema, txn? txn->txn : NULL, &key, &data, 0);
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->schema->get (self->schema, txn? txn->txn : NULL, &key, &data, dbflags);
+    Py_END_ALLOW_THREADS
     switch (dbret) {
         case 0:
             /* deserialize the data */
@@ -83,9 +87,10 @@ terane_Index_get_field (terane_Index *self, PyObject *args)
 }
 
 /*
- * terane_Index_add_field: add the field to the Store.
+ * terane_Index_set_field: Change the value associated with the specified
+ *  field.
  *
- * callspec: Index.add_field(txn, fieldname, fieldspec)
+ * callspec: Index.set_field(txn, fieldname, fieldspec, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  *   fieldname (string): The field name
@@ -95,17 +100,19 @@ terane_Index_get_field (terane_Index *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to add the field
  */
 PyObject *
-terane_Index_add_field (terane_Index *self, PyObject *args)
+terane_Index_set_field (terane_Index *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     PyObject *fieldspec = NULL;
     DBT key, data;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "O!OO", &terane_TxnType, &txn,
         &fieldname, &fieldspec))
+        return NULL;
+    if ((dbflags = _terane_parse_db_put_flags (kwds)) < 0)
         return NULL;
 
     /* use the fieldname as the key */
@@ -117,8 +124,10 @@ terane_Index_add_field (terane_Index *self, PyObject *args)
         PyMem_Free (key.data);
         return NULL;
     }
-    /* set the record */
-    dbret = self->schema->put (self->schema, txn->txn, &key, &data, DB_NOOVERWRITE);
+    /* set the record with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->schema->put (self->schema, txn->txn, &key, &data, dbflags);
+    Py_END_ALLOW_THREADS
     switch (dbret) {
         case 0:
             /* increment the internal field count */
@@ -151,12 +160,12 @@ terane_Index_add_field (terane_Index *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to get the fields
  */
 PyObject *
-terane_Index_contains_field (terane_Index *self, PyObject *args)
+terane_Index_contains_field (terane_Index *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *fieldname = NULL;
     DBT key;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "OO", &txn, &fieldname))
@@ -165,12 +174,18 @@ terane_Index_contains_field (terane_Index *self, PyObject *args)
         txn = NULL;
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
+    if ((dbflags = _terane_parse_db_exists_flags (kwds)) < 0)
+        return NULL;
 
-    /* see if fieldname exists in the schema */
+    /* use the fieldname as the key */
     memset (&key, 0, sizeof (key));
     if (_terane_msgpack_dump (fieldname, (char **) &key.data, &key.size) < 0)
         return NULL;
-    dbret = self->schema->exists (self->schema, txn? txn->txn : NULL, &key, 0);
+
+    /* check for the record with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->schema->exists (self->schema, txn? txn->txn : NULL, &key, dbflags);
+    Py_END_ALLOW_THREADS
     PyMem_Free (key.data);
     switch (dbret) {
         case 0:
@@ -196,12 +211,12 @@ terane_Index_contains_field (terane_Index *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to get the fields
  */
 PyObject *
-terane_Index_iter_fields (terane_Index *self, PyObject *args)
+terane_Index_iter_fields (terane_Index *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     DBC *cursor = NULL;
     PyObject *iter = NULL;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "O", &txn))
@@ -210,9 +225,14 @@ terane_Index_iter_fields (terane_Index *self, PyObject *args)
         txn = NULL;
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
+    if ((dbflags = _terane_parse_db_cursor_flags (kwds)) < 0)
+        return NULL;
 
-    /* create a new cursor */
-    dbret = self->schema->cursor (self->schema, txn? txn->txn : NULL, &cursor, 0);
+    /* create a new cursor with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->schema->cursor (self->schema, txn? txn->txn : NULL, &cursor, dbflags);
+    Py_END_ALLOW_THREADS
+
     /* if cursor allocation failed, return Error */
     if (dbret != 0)
         return PyErr_Format (terane_Exc_Error, "Failed to allocate document cursor: %s",
@@ -221,8 +241,9 @@ terane_Index_iter_fields (terane_Index *self, PyObject *args)
     /* allocate a new Iter object */
     iter = terane_Iter_new ((PyObject *) self, cursor, 0);
     if (iter == NULL) {
+        Py_BEGIN_ALLOW_THREADS
         cursor->close (cursor);
-        return NULL;
+        Py_END_ALLOW_THREADS
     }
     return iter;
 }

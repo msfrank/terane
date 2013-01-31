@@ -20,9 +20,9 @@
 #include "backend.h"
 
 /*
- * terane_Index_add_segment: add a new segment to the index.
+ * terane_Index_set_segment: set the value of an Index segment.
  *
- * callspec: Index.add_segment(txn, name, value)
+ * callspec: Index.set_segment(txn, id, value, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in
  *   id (object): The segment id
@@ -32,16 +32,18 @@
  *   terane.outputs.store.backend.Error: A db error occurred when trying to add the record.
  */
 PyObject *
-terane_Index_add_segment (terane_Index *self, PyObject *args)
+terane_Index_set_segment (terane_Index *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *id = NULL;
     PyObject *metadata = NULL;
     DBT key, data;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "O!OO", &terane_TxnType, &txn, &id, &metadata))
+        return NULL;
+    if ((dbflags = _terane_parse_db_put_flags (kwds)) < 0)
         return NULL;
     /*  use the segment name as the key */
     memset (&key, 0, sizeof (DBT));
@@ -53,8 +55,10 @@ terane_Index_add_segment (terane_Index *self, PyObject *args)
         PyMem_Free (key.data);
         return NULL;
     }
-    /* add the record */
-    dbret = self->segments->put (self->segments, txn->txn, &key, &data, DB_NOOVERWRITE);
+    /* set the record with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->segments->put (self->segments, txn->txn, &key, &data, dbflags);
+    Py_END_ALLOW_THREADS
     if (key.data)
         PyMem_Free (key.data);
     if (data.data)
@@ -72,7 +76,7 @@ terane_Index_add_segment (terane_Index *self, PyObject *args)
 /*
  * terane_Index_iter_segments: iterate through all segments.
  *
- * callspec: Index.iter_segments(txn)
+ * callspec: Index.iter_segments(txn, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  * returns: a new Iter object.  Each iteration returns a tuple consisting of
@@ -81,12 +85,12 @@ terane_Index_add_segment (terane_Index *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying to create the iterator
  */
 PyObject *
-terane_Index_iter_segments (terane_Index *self, PyObject *args)
+terane_Index_iter_segments (terane_Index *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     DBC *cursor = NULL;
     PyObject *iter = NULL;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "O", &txn))
@@ -95,9 +99,13 @@ terane_Index_iter_segments (terane_Index *self, PyObject *args)
         txn = NULL;
     if (txn && txn->ob_type != &terane_TxnType)
         return PyErr_Format (PyExc_TypeError, "txn must be a Txn or None");
+    if ((dbflags = _terane_parse_db_cursor_flags (kwds)) < 0)
+        return NULL;
     
-    /* create a new cursor */
-    dbret = self->segments->cursor (self->segments, txn? txn->txn : NULL, &cursor, 0);
+    /* create a new cursor with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->segments->cursor (self->segments, txn? txn->txn : NULL, &cursor, dbflags);
+    Py_END_ALLOW_THREADS
     /* if cursor allocation failed, return Error */
     if (dbret != 0) {
         PyErr_Format (terane_Exc_Error, "Failed to allocate segment cursor: %s",
@@ -105,15 +113,18 @@ terane_Index_iter_segments (terane_Index *self, PyObject *args)
         return NULL;
     }
     iter = terane_Iter_new ((PyObject *) self, cursor, 0);
-    if (iter == NULL)
+    if (iter == NULL) {
+        Py_BEGIN_ALLOW_THREADS
         cursor->close (cursor);
+        Py_END_ALLOW_THREADS
+    }
     return iter;
 }
 
 /*
  * terane_Index_delete_segment: remove the segment from the Index.
  *
- * callspec: Index.delete_segment(txn, segment)
+ * callspec: Index.delete_segment(txn, id, **flags)
  * parameters:
  *   txn (Txn): A Txn object to wrap the operation in, or None
  *   id (object): The id of the segment to delete
@@ -122,22 +133,28 @@ terane_Index_iter_segments (terane_Index *self, PyObject *args)
  *   terane.outputs.store.backend.Error: A db error occurred when trying count the segments
  */
 PyObject *
-terane_Index_delete_segment (terane_Index *self, PyObject *args)
+terane_Index_delete_segment (terane_Index *self, PyObject *args, PyObject *kwds)
 {
     terane_Txn *txn = NULL;
     PyObject *id = NULL;
     DBT key;
-    int dbret;
+    int dbflags, dbret;
 
     /* parse parameters */
     if (!PyArg_ParseTuple (args, "O!O", &terane_TxnType, &txn, &id))
         return NULL;
+    if ((dbflags = _terane_parse_db_del_flags (kwds)) < 0)
+        return NULL;
 
-    /* delete segment id from the Index */
+    /* use the segment name as the key */
     memset (&key, 0, sizeof (DBT));
     if (_terane_msgpack_dump (id, (char **) &key.data, &key.size) < 0)
         return NULL;
-    dbret = self->segments->del (self->segments, txn->txn, &key, 0);
+
+    /* delete the record with the GIL released */
+    Py_BEGIN_ALLOW_THREADS
+    dbret = self->segments->del (self->segments, txn->txn, &key, dbflags);
+    Py_END_ALLOW_THREADS
     if (key.data)
         PyMem_Free (key.data);
     switch (dbret) {

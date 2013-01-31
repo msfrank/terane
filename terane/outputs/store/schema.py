@@ -45,7 +45,8 @@ class Schema(object):
             field = self._fieldstore.getField(fieldtype)
             stored = QualifiedField(fieldname, fieldtype, field)
             fieldspec[fieldtype] = stored
-            self._ix.add_field(self._txn, fieldname, unicode(pickle.dumps(fieldspec)))
+            pickled = unicode(pickle.dumps(fieldspec))
+            self._ix.set_field(self._txn, fieldname, pickled, NOOVERWRITE=True)
             self._fields[fieldname] = fieldspec
             return succeed(stored)
         except Exception, e:
