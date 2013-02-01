@@ -17,7 +17,7 @@
 
 import math
 from zope.interface import implements
-from twisted.internet.defer import inlineCallbacks, returnValue, succeed
+from twisted.internet.defer import succeed
 from terane.bier import ISearcher, IPostingList, IEventStore
 from terane.bier.evid import EVID
 from terane.outputs.store.schema import Schema
@@ -46,7 +46,6 @@ class IndexSearcher(object):
     def getSchema(self):
         return succeed(Schema(self._ix, self._txn))
         
-    @inlineCallbacks
     def postingsLength(self, field, term, startId, endId):
         """
         Returns an estimate of the number of postings in the index within the
@@ -79,7 +78,6 @@ class IndexSearcher(object):
         worker = Worker(self._segmentSearchers, field, term, startId, endId)
         return self._task.addWorker(worker).whenDone().addCallback(lambda w: w.length)
 
-    @inlineCallbacks
     def postingsLengthBetween(self, field, startTerm, endTerm, startEx, endEx, startId, endId):
         """
         Returns an estimate of the number of possible postings for all the terms
@@ -293,7 +291,7 @@ class MergedPostingList(object):
                         if posting[0] == self._targetId:
                             break    
                 self.posting = posting
-        worker = Worker(self)
+        worker = Worker(self, targetId)
         return self._task.addWorker(worker).whenDone().addCallback(lambda w: w.posting)
 
     def close(self):

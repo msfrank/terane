@@ -280,6 +280,7 @@ class AND(object):
     def __str__(self):
         return "<AND [%s]>" % ', '.join([str(child) for child in self.children])
 
+    @inlineCallbacks
     def optimizeMatcher(self, searcher):
         """
         Optimize the matcher.  If any child matchers are AND operators, then move their
@@ -307,17 +308,23 @@ class AND(object):
         self.children = children
         # if there are any NOT operators, then we wrap this matcher and the combined NOTs in a Sieve.
         if len(excludes) > 0:
-            return Sieve(self, OR(excludes)).optimizeMatcher(searcher)
+            sieve = yield Sieve(self, OR(excludes)).optimizeMatcher(searcher)
+            returnValue(sieve)
         # optimize each child matcher
-        self.children = [child.optimizeMatcher(searcher) for child in children]
+        self.children = []
+        for child in children:
+            child = yield child.optimizeMatcher(searcher)
+            if child != None:
+                self.children.append(child)
         # if there are no children, then we can toss this matcher too
         if len(self.children) == 0:
-            return None
+            returnValue(None)
         # if there is one child, then return it instead
         if len(self.children) == 1:
-            return self.children[0]
-        return self
+            returnValue(self.children[0])
+        returnValue(self)
 
+    @inlineCallbacks
     def matchesLength(self, searcher, startId, endId):
         """
         Returns an estimate of the approximate number of postings which will be returned
@@ -333,11 +340,13 @@ class AND(object):
         """
         self._lengths = []
         for child in self.children:
-            bisect.insort_right(self._lengths, (child.matchesLength(searcher, startId, endId),child))
+            length = yield child.matchesLength(searcher, startId, endId)
+            bisect.insort_right(self._lengths, (length,child))
         length = self._lengths[0][0]
         logger.trace("%s: matchesLength() => %i" % (self, length))
-        return length
+        returnValue(length)
 
+    @inlineCallbacks
     def iterMatches(self, searcher, startId, endId):
         """
         Returns an object for iterating through events matching the query.
@@ -350,11 +359,15 @@ class AND(object):
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
         if self._lengths == None:
-            self.matchesLength(searcher, startId, endId)
-        self._smallest = self._lengths[0][1].iterMatches(searcher, startId, endId)
-        self._others = [child[1].iterMatches(searcher, startId, endId) for child in self._lengths[1:]]
-        return self
+            yield self.matchesLength(searcher, startId, endId)
+        self._smallest = yield self._lengths[0][1].iterMatches(searcher, startId, endId)
+        self._others = []
+        for child in self._lengths[1:]:
+            child = yield child[1].iterMatches(searcher, startId, endId)
+            self._others.append(child)
+        returnValue(self)
 
+    @inlineCallbacks
     def nextPosting(self):
         """
         Returns the event identifier of the next event matching the query, or None if there are no
@@ -364,40 +377,45 @@ class AND(object):
         :rtype: :class:`terane.bier.evid.EVID`
         """
         while True:
-            posting = self._smallest.nextPosting()
+            posting = yield self._smallest.nextPosting()
             if posting[0] == None:
                 break
             for child in self._others:
-                if child.skipPosting(posting[0])[0] == None:
+                target = yield child.skipPosting(posting[0])
+                if target[0] == None:
                     posting = (None,None,None)
                     break
             if posting[0] != None:
                 break
         logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
-        return posting
+        returnValue(posting)
 
+    @inlineCallbacks
     def skipPosting(self, targetId):
         """
-        Returns the event identifier matching targetId if the query contains the specified targetId,
-        or None if the targetId is not present.
+        Returns the event identifier matching targetId if the query contains
+        the specified targetId, or None if the targetId is not present.
 
         :returns: The event identifier matching the targetId, or None.
         :rtype: :class:`terane.bier.evid.EVID`
         """
-        posting = self._smallest.skipPosting(targetId)
+        posting = yield self._smallest.skipPosting(targetId)
         if posting[0] != None:
             for child in self._others:
-                posting = child.skipPosting(targetId)
+                posting = yield child.skipPosting(targetId)
                 if posting[0] == None:
                     break
         logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
-        return posting[0]
+        returnValue(posting)
 
+    @inlineCallbacks
     def close(self):
-        self._smallest.close()
-        for i in self._others: i.close()
+        yield self._smallest.close()
+        for i in self._others:
+            yield i.close()
         self._smallest = None
         self._others = None
+        returnValue(none)
 
 class OR(object):
     """
@@ -417,7 +435,8 @@ class OR(object):
     def __str__(self):
         return "<OR [%s]>" % ', '.join([str(child) for child in self.children])
 
-    def optimizeMatcher(self, index):
+    @inlineCallbacks
+    def optimizeMatcher(self, searcher):
         """
         Optimize the query.  If any child queries are OR operators, then move their
         children into this query.  If any child queries optimize out, then toss them.
@@ -434,7 +453,8 @@ class OR(object):
             # if the child is an OR operator, then move all of the child's children
             # into this instance.
             if isinstance(child, OR):
-                for subchild in child.children: children.append(subchild)
+                for subchild in child.children:
+                    children.append(subchild)
             # if the child is a NOT operator, then move it to the excludes list
             elif isinstance(child, NOT):
                 excludes.append(child.child)
@@ -442,19 +462,26 @@ class OR(object):
             elif child != None:
                 children.append(child)
         self.children = children
-        # if there are any NOT operators, then we wrap this matcher and the combined NOTs in a Sieve.
+        # if there are any NOT operators, then we wrap this matcher and the
+        # combined NOTs in a Sieve and return it.
         if len(excludes) > 0:
-            return Sieve(self, OR(excludes)).optimizeMatcher(index)
+            sieve = yield Sieve(self, OR(excludes)).optimizeMatcher(searcher)
+            returnValue(sieve)
         # optimize each child matcher
-        self.children = [child.optimizeMatcher(index) for child in children]
+        self.children = []
+        for child in children:
+            child = yield child.optimizeMatcher(searcher)
+            if child != None:
+                self.children.append(child)
         # if there are no children, then we can toss this matcher too
         if len(self.children) == 0:
-            return None
+            returnValue(None)
         # if there is one child, then return it instead
         if len(self.children) == 1:
-            return self.children[0]
-        return self
+            returnValue(self.children[0])
+        returnValue(self)
 
+    @inlineCallbacks
     def matchesLength(self, searcher, startId, endId):
         """
         Returns an estimate of the approximate number of postings which will be returned
@@ -471,9 +498,10 @@ class OR(object):
         length = 0
         # the posting length estimate is the sum of all child queries
         for child in self.children:
-            length += child.matchesLength(searcher, startId, endId)
-        return length
+            length += (yield child.matchesLength(searcher, startId, endId))
+        returnValue(length)
 
+    @inlineCallbacks
     def iterMatches(self, searcher, startId, endId):
         """
         Returns an object for iterating through events matching the query.
@@ -485,25 +513,28 @@ class OR(object):
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
-        # smallestPostings contains the smallest posting for each child query, or (None,None,None) 
+        # smallestPostings contains the smallest posting for each child
+        # query, or (None,None,None) 
         self._smallestPostings = [(None,None,None) for i in range(len(self.children))]
-        # iters contains the iterator (object implementing IPostingList) for each child query
-        self._iters = [child.iterMatches(searcher, startId, endId) for child in self.children]
+        # iters contains the iterator (object implementing IPostingList)
+        # for each child query
+        self._iters = []
+        for child in self.children:
+            i = yield child.iterMatches(searcher, startId, endId)
+            self._iters.append(i)
         # lastId is the last evid returned by the iterator
         self._lastId = None
-        # set our cmp function, which determines the next evid to return.  if we are searching in
-        # reverse order, then reverse the meaning if the regular comparison function.
-        if endId < startId:
-            self._cmp = lambda d1,d2: cmp(d2,d1)
-        # otherwise use the normal comparison function
-        else:
-            self._cmp = cmp
-        return self
+        # set our cmp function, which determines the next evid to return.
+        # if we are searching in reverse order, then reverse the meaning of
+        # the regular comparison function.
+        self._cmp = (lambda d1,d2: cmp(d2,d1)) if endId < startId else cmp
+        returnValue(self)
 
+    @inlineCallbacks
     def nextPosting(self):
         """
-        Returns the event identifier of the next event matching the query, or None if there are no
-        more events which match the query.
+        Returns the event identifier of the next event matching the query, or
+        None if there are no more events which match the query.
 
         :returns: The event identifier of the next matching event, or None.
         :rtype: :class:`terane.bier.evid.EVID`
@@ -513,7 +544,7 @@ class OR(object):
         for i in range(len(self.children)):
             # if None, then get the next posting from the iter
             if self._smallestPostings[i][0] == None:
-                self._smallestPostings[i] = self._iters[i].nextPosting()
+                self._smallestPostings[i] = yield self._iters[i].nextPosting()
             # if the posting evid is None, then check the next iter
             if self._smallestPostings[i][0] == None:
                 continue
@@ -534,12 +565,13 @@ class OR(object):
         # forget the evid so we don't return it again
         self._smallestPostings[curr] = (None,None,None)
         logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
-        return posting
+        returnValue(posting)
 
+    @inlineCallbacks
     def skipPosting(self, targetId):
         """
-        Returns the event identifier matching targetId if the query contains the specified targetId,
-        or None if the targetId is not present.
+        Returns the event identifier matching targetId if the query contains
+        the specified targetId, or None if the targetId is not present.
 
         :returns: The event identifier matching the targetId, or None.
         :rtype: :class:`terane.bier.evid.EVID`
@@ -553,16 +585,19 @@ class OR(object):
                 break
             # otherwise check if the targetId exists in the child query
             if posting[0] == None or self._cmp(posting[0], targetId) < 0:
-                posting = self._iters[i].skipPosting(targetId)
+                posting = yield self._iters[i].skipPosting(targetId)
                 self._smallestPostings[i] = posting
                 if posting[0] == targetId:
                     break    
         logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
-        return posting
+        returnValue(posting)
 
+    @inlineCallbacks
     def close(self):
-        for i in self._iters: i.close()
+        for i in self._iters:
+            yield i.close()
         self._iters = None
+        returnValue(None)
 
 class NOT(object):
     """
@@ -587,12 +622,12 @@ class NOT(object):
         """
         Optimize the query.  If the child query optimizes out, then toss this query.
 
-        :param index: The index we will be running the query on.
-        :type index: Object implementing :class:`terane.bier.index.IIndex`
+        :param searcher: A handle to the index we are searching.
+        :type searcher: An object implementing :class:`terane.bier.interfaces.ISearcher`
         :returns: The optimized query.
         :rtype: An object implementing :class:`terane.bier.searching.IQuery`
         """
-        return Sieve(Every(), self.child).optimizeMatcher(index)
+        return Sieve(Every(), self.child).optimizeMatcher(searcher)
 
     def matchesLength(self, searcher, startId, endId):
         """
@@ -601,20 +636,22 @@ class NOT(object):
         """
         raise NotImplementedError()
 
+    @inlineCallbacks
     def iterMatches(self, searcher, startId, endId):
         """
         Returns an object for iterating through events matching the query.
 
         :param searcher: A handle to the index we are searching.
-        :type searcher: An object implementing :class:`terane.bier.searching.ISearcher`
+        :type searcher: An object implementing :class:`terane.bier.interfaces.ISearcher`
         :param period: The period within which the search query is constrained.
         :type period: :class:`terane.bier.searching.Period`
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
-        self._iter = self.child.iterMatches(searcher, startId, endId)
-        return self
+        self._iter = yield self.child.iterMatches(searcher, startId, endId)
+        returnValue(self)
 
+    @inlineCallbacks
     def nextPosting(self):
         """
         Returns the event identifier of the next event matching the query, or None if there are no
@@ -623,10 +660,11 @@ class NOT(object):
         :returns: The event identifier of the next matching event, or None.
         :rtype: :class:`terane.bier.evid.EVID`
         """
-        posting = self._iter.nextPosting()
+        posting = yield self._iter.nextPosting()
         logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
-        return posting
+        returnValue(posting)
 
+    @inlineCallbacks
     def skipPosting(self, targetId):
         """
         Returns the event identifier matching targetId if the query contains
@@ -635,13 +673,15 @@ class NOT(object):
         :returns: The event identifier matching the targetId, or None.
         :rtype: :class:`terane.bier.evid.EVID`
         """
-        posting = self._iter.skipPosting(targetId)
+        posting = yield self._iter.skipPosting(targetId)
         logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
-        return posting
+        returnValue(posting)
 
+    @inlineCallbacks
     def close(self):
-        self._iter.close()
+        yield self._iter.close()
         self._iter = None
+        returnValue(None)
 
 class Sieve(object):
     """
@@ -664,24 +704,23 @@ class Sieve(object):
     def __str__(self):
         return "<Sieve source=%s, filter=%s>" % (str(self.source), str(self.filter))
 
-    def optimizeMatcher(self, index):
+    @inlineCallbacks
+    def optimizeMatcher(self, searcher):
         """
         Optimize the query.
 
-        :param index: The index we will be running the query on.
-        :type index: Object implementing :class:`terane.bier.index.IIndex`
         :returns: The optimized query.
         :rtype: An object implementing :class:`terane.bier.searching.IQuery`
         """
-        source = self.source.optimizeMatcher(index)
+        source = yield self.source.optimizeMatcher(searcher)
         if source == None:
-            return None
-        filter = self.filter.optimizeMatcher(index)
+            returnValue(None)
+        filter = yield self.filter.optimizeMatcher(searcher)
         if filter == None:
-            return source
+            returnValue(source)
         self.source = source
         self.filter = filter
-        return self
+        returnValue(self)
 
     def matchesLength(self, searcher, startId, endId):
         """
@@ -698,6 +737,7 @@ class Sieve(object):
         """
         return self.source.matchesLength(searcher, startId, endId)
 
+    @inlineCallbacks
     def iterMatches(self, searcher, startId, endId):
         """
         Returns an object for iterating through events matching the query.
@@ -709,10 +749,11 @@ class Sieve(object):
         :returns: An object for iterating through events matching the query.
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
-        self._sourceIter = self.source.iterMatches(searcher, startId, endId)
-        self._filterIter = self.filter.iterMatches(searcher, startId, endId)
-        return self
+        self._sourceIter = yield self.source.iterMatches(searcher, startId, endId)
+        self._filterIter = yield self.filter.iterMatches(searcher, startId, endId)
+        returnValue(self)
 
+    @inlineCallbacks
     def nextPosting(self):
         """
         Returns the event identifier of the next event matching the query, or None
@@ -724,16 +765,18 @@ class Sieve(object):
         posting = (None,None,None)
         # loop until we find a evid not in the filter, or there are no more evids
         while True:
-            posting = self._sourceIter.nextPosting()
+            posting = yield self._sourceIter.nextPosting()
             # if there are not more evids to retrieve from the source, we are done
             if posting[0] == None:
                 break
             # if the the evid isn't present in the filter, then return it
-            if posting[0] != self._filterIter.skipPosting(posting[0])[0]:
+            target = yield self._filterIter.skipPosting(posting[0])
+            if posting[0] != target[0]:
                 break
         logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
-        return posting
+        returnValue(posting)
 
+    @inlineCallbacks
     def skipPosting(self, targetId):
         """
         Returns the event identifier matching targetId if the query contains
@@ -743,18 +786,20 @@ class Sieve(object):
         :rtype: :class:`terane.bier.evid.EVID`
         """
         # skip the source to the targetId
-        posting = self._sourceIter.skipPosting(targetId)
+        posting = yield self._sourceIter.skipPosting(targetId)
         # if targetId is not in the source, then the skip fails
         if posting[0] != None:
             # if the targetId is present in the filter, then the skip fails
-            if posting[0] == self._filterIter.skipPosting(posting[0])[0]:
+            target = yield self._filterIter.skipPosting(posting[0])
+            if posting[0] == target[0]:
                 posting = (None,None,None)
         logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
-        return posting
+        returnValue(posting)
 
+    @inlineCallbacks
     def close(self):
-        self._sourceIter.close()
-        self._filterIter.close()
+        yield self._sourceIter.close()
+        yield self._filterIter.close()
         self._filterIter = None
         self._sourceIter = None
 
@@ -779,7 +824,7 @@ class Phrase(object):
     def __str__(self):
         return "<Phrase %s>" % self.terms
 
-    def optimizeMatcher(self, index):
+    def optimizeMatcher(self, searcher):
         """
         Optimize the matcher.  If the field doesn't exist in the schema, then toss the matcher.
 
@@ -789,11 +834,12 @@ class Phrase(object):
         :rtype: An object implementing :class:`terane.bier.IMatcher`
         """
         if len(self.terms) == 0:
-            return None
+            return succeed(None)
         if len(self.terms) == 1:
-            return Term(self.field, self.terms[0]).optimizeMatcher(index)
-        return self
+            return Term(self.field, self.terms[0]).optimizeMatcher(searcher)
+        return succeed(self)
 
+    @inlineCallbacks
     def matchesLength(self, searcher, startId, endId):
         """
         Returns an estimate of the approximate number of postings which will be returned
@@ -810,12 +856,13 @@ class Phrase(object):
         self._lengths = []
         for position in range(len(self.terms)):
             term = self.terms[position]
-            length = searcher.postingsLength(self.field, term, startId, endId)
+            length = yield searcher.postingsLength(self.field, term, startId, endId)
             bisect.insort_right(self._lengths, (length,term,position))
         length = self._lengths[0][0]
         logger.trace("%s: matchesLength() => %i" % (self, length))
-        return length
+        returnValue(length)
 
+    @inlineCallbacks
     def iterMatches(self, searcher, startId, endId):
         """
         Returns an object for iterating through events matching the query.
@@ -828,61 +875,63 @@ class Phrase(object):
         :rtype: An object implementing :class:`terane.bier.searching.IPostingList`
         """
         if self._lengths == None:
-            self.matchesLength(searcher, startId, endId)
-        self._iters = [searcher.iterPostings(self.field, v[1], startId, endId) for v in self._lengths]
-        return self
+            yield self.matchesLength(searcher, startId, endId)
+        self._iters = []
+        for v in self._lengths:
+            i = yield searcher.iterPostings(self.field, v[1], startId, endId)
+            self._iters.append(i)
+        returnValue(self)
 
+    @inlineCallbacks
     def nextPosting(self):
         """
-        Returns the event identifier of the next event matching the query, or None if there are no
-        more events which match the query.
+        Returns the event identifier of the next event matching the query, or
+        None if there are no more events which match the query.
 
         :returns: The event identifier of the next matching event, or None.
         :rtype: :class:`terane.bier.evid.EVID`
         """
-        def _get():
-            while True:
-                postings = []
-                smallest = 0
-                posting = self._iters[0].nextPosting()
+        while True:
+            postings = []
+            smallest = 0
+            posting = yield self._iters[0].nextPosting()
+            if posting == (None, None, None):
+                logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
+                returnValue(posting)
+            postings.append(posting)
+            for i in range(len(self._iters))[1:]:
+                posting = yield self._iters[i].skipPosting(postings[0][0])
                 if posting == (None, None, None):
-                    return posting
+                    break
                 postings.append(posting)
-                for i in range(len(self._iters))[1:]:
-                    posting = self._iters[i].skipPosting(postings[0][0])
-                    if posting == (None, None, None):
-                        break
-                    postings.append(posting)
-                if len(postings) != len(self._iters):
-                    continue
-                if self._positionsMatch(postings) == True:
-                    return posting
-        posting = _get()
-        logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
-        return posting
+            if len(postings) != len(self._iters):
+                continue
+            if self._positionsMatch(postings) == True:
+                logger.trace("%s: nextPosting() => %s" % (self, posting[0])) 
+                returnValue(posting)
 
+    @inlineCallbacks
     def skipPosting(self, targetId):
         """
-        Returns the event identifier matching targetId if the query contains the specified targetId,
-        or None if the targetId is not present.
+        Returns the event identifier matching targetId if the query contains
+        the specified targetId, or None if the targetId is not present.
 
         :returns: The event identifier matching the targetId, or None.
         :rtype: :class:`terane.bier.evid.EVID`
         """
-        def _skip():
-            postings = []
-            smallest = 0
-            for i in range(len(self._iters)):
-                posting = self._iters[i].skipPosting(targetId)
-                if posting[0] == None:
-                    return (None, None, None)
-                postings.append(posting)
-            if self._positionsMatch(postings) == True:
-                return postings[0]
-            return (None, None, None)
-        posting = _skip()
-        logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, posting[0]))
-        return posting
+        postings = []
+        smallest = 0
+        for i in range(len(self._iters)):
+            posting = yield self._iters[i].skipPosting(targetId)
+            if posting[0] == None:
+                logger.trace("%s: skipPosting(%s) => None" % (self, targetId))
+                returnValue((None, None, None))
+            postings.append(posting)
+        if self._positionsMatch(postings) == True:
+            logger.trace("%s: skipPosting(%s) => %s" % (self, targetId, postings[0][0]))
+            returnValue(postings[0])
+        logger.trace("%s: skipPosting(%s) => None" % (self, targetId))
+        returnValue((None, None, None))
 
     def _positionsMatch(self, postings):
         """
