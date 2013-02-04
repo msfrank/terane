@@ -200,7 +200,7 @@ error:
 PyObject *
 terane_Index_new_txn (terane_Index *self, PyObject *args, PyObject *kwds)
 {
-    return terane_Txn_new (self->env, NULL, args, kwds);
+    return terane_Txn_new (self->env, NULL, kwds);
 }
 
 /*

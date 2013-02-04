@@ -45,46 +45,16 @@ _Txn_dealloc (terane_Txn *self)
  *  terane.outputs.store.backend:Error: failed to create the DB_TXN handle
  */
 PyObject *
-terane_Txn_new (terane_Env *env, terane_Txn *parent, PyObject *args, PyObject *kwds)
+terane_Txn_new (terane_Env *env, terane_Txn *parent, PyObject *kwds)
 {
     terane_Txn *txn, *prev;
-    int dbret, dbflags = 0;
-    PyObject *read_committed = NULL;
-    PyObject *read_uncommitted = NULL;
-    PyObject *txn_nosync = NULL;
-    PyObject *txn_nowait = NULL;
-    PyObject *txn_snapshot = NULL;
-    PyObject *txn_write_nosync = NULL;
-
-    char *kwdlist[] = {
-        "READ_COMMITTED",
-        "READ_UNCOMMITTED",
-        "TXN_NOSYNC",
-        "TXN_NOWAIT",
-        "TXN_SNAPSHOT", 
-        "TXN_WRITE_NOSYNC",
-        NULL
-    };
+    int dbflags, dbret;
 
     assert (env != NULL);
 
-    /* parse parameters and set transaction flags */
-    if (!PyArg_ParseTupleAndKeywords (args, kwds, "|OOOOOO", kwdlist, &read_committed,
-      &read_uncommitted, &txn_nosync, &txn_nowait, &txn_snapshot, &txn_write_nosync))
+    /* parse flags */
+    if ((dbflags = _terane_parse_env_txn_begin_flags (kwds)) < 0)
         return NULL;
-    if (read_committed && PyObject_IsTrue (read_committed))
-        dbflags |= DB_READ_COMMITTED;
-    if (read_uncommitted && PyObject_IsTrue (read_uncommitted))
-        dbflags |= DB_READ_UNCOMMITTED;
-    if (txn_nosync && PyObject_IsTrue (txn_nosync))
-        dbflags |= DB_TXN_NOSYNC;
-    if (txn_nowait && PyObject_IsTrue (txn_nowait))
-        dbflags |= DB_TXN_NOWAIT;
-    if (txn_snapshot && PyObject_IsTrue (txn_snapshot))
-        dbflags |= DB_TXN_SNAPSHOT;
-    if (txn_write_nosync && PyObject_IsTrue (txn_write_nosync))
-        dbflags |= DB_TXN_WRITE_NOSYNC;
-
     /* allocate the Txn object */
     txn = PyObject_New (terane_Txn, &terane_TxnType);
     if (txn == NULL)
@@ -132,8 +102,23 @@ error:
 PyObject *
 terane_Txn_new_txn (terane_Txn *self, PyObject *args, PyObject *kwds)
 {
-    return terane_Txn_new (self->env, self, args, kwds);
+    return terane_Txn_new (self->env, self, kwds);
 }
+
+/*
+ * terane_Txn_new_txn: Create a child Txn.
+ *
+ * parameters:
+ * returns: A new terane.outputs.store.backend:Txn object
+ * exceptions:
+ *  terane.outputs.store.backend:Error: failed to create a DB_TXN handle.
+ */
+PyObject *
+terane_Txn_id (terane_Txn *self)
+{
+    return PyLong_FromUnsignedLong (self->txn->id (self->txn));
+}
+
 
 /*
  * _Txn_discard: discard the invalid Txn handle, and all child handles.
@@ -169,14 +154,16 @@ _Txn_discard (terane_Txn *txn)
  *  terane.outputs.store.backend:Error: the commit failed.
  */
 PyObject *
-terane_Txn_commit (terane_Txn *self)
+terane_Txn_commit (terane_Txn *self, PyObject *args, PyObject *kwds)
 {
-    int dbret;
+    int dbflags, dbret;
 
+    if ((dbflags = _terane_parse_txn_commit_flags (kwds)) < 0)
+        return NULL;
     if (self->txn == NULL)
         return PyErr_Format (terane_Exc_Error, "Failed to commit transaction: DB_TXN handle is NULL");
     /* try to commit the transaction */
-    dbret = self->txn->commit (self->txn, 0);
+    dbret = self->txn->commit (self->txn, dbflags);
     /* 
      * regardless of return status, the DB_TXN handle is invalid now, as are all child
      * transactions, so discard all references to them.
@@ -276,7 +263,7 @@ terane_Txn_exit (terane_Txn *self, PyObject *args)
         return NULL;
     /* if all parameters are None, then the operations succeeded */
     if (type == Py_None && value == Py_None && tb == Py_None)
-        terane_Txn_commit (self);
+        terane_Txn_commit (self, NULL, NULL);
     else
         terane_Txn_abort (self);
     Py_RETURN_FALSE;
@@ -285,11 +272,18 @@ terane_Txn_exit (terane_Txn *self, PyObject *args)
 /* Txn methods declaration */
 PyMethodDef _Txn_methods[] =
 {
-    { "new_txn", (PyCFunction) terane_Txn_new_txn, METH_VARARGS|METH_KEYWORDS, "Create a child Txn." },
-    { "commit", (PyCFunction) terane_Txn_commit, METH_NOARGS, "Close the DB Txn." },
-    { "abort", (PyCFunction) terane_Txn_abort, METH_NOARGS, "Close the DB Txn." },
-    { "__enter__", (PyCFunction) terane_Txn_enter, METH_NOARGS, "Enter the DB Txn context." },
-    { "__exit__", (PyCFunction) terane_Txn_exit, METH_VARARGS, "Exit the DB Txn context." },
+    { "new_txn", (PyCFunction) terane_Txn_new_txn, METH_VARARGS|METH_KEYWORDS,
+        "Create a child Txn." },
+    { "id", (PyCFunction) terane_Txn_id, METH_NOARGS,
+        "Return the DB Txn id." },
+    { "commit", (PyCFunction) terane_Txn_commit, METH_VARARGS|METH_KEYWORDS,
+        "Close the DB Txn." },
+    { "abort", (PyCFunction) terane_Txn_abort, METH_NOARGS,
+        "Close the DB Txn." },
+    { "__enter__", (PyCFunction) terane_Txn_enter, METH_NOARGS,
+        "Enter the DB Txn context." },
+    { "__exit__", (PyCFunction) terane_Txn_exit, METH_VARARGS,
+        "Exit the DB Txn context." },
     { NULL, NULL, 0, NULL }
 };
 

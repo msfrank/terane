@@ -170,9 +170,10 @@ PyObject * terane_Segment_delete (terane_Segment *self);
 PyObject * terane_Segment_close (terane_Segment *self);
 
 /* Txn methods */
-PyObject * terane_Txn_new (terane_Env *env, terane_Txn *parent, PyObject *args, PyObject *kwds);
+PyObject * terane_Txn_new (terane_Env *env, terane_Txn *parent, PyObject *kwds);
 PyObject * terane_Txn_new_txn (terane_Txn *self, PyObject *args, PyObject *kwds);
-PyObject * terane_Txn_commit (terane_Txn *self);
+PyObject * terane_Txn_id (terane_Txn *self);
+PyObject * terane_Txn_commit (terane_Txn *self, PyObject *args, PyObject *kwds);
 PyObject * terane_Txn_abort (terane_Txn *self);
 
 /* Iter methods */
@@ -208,6 +209,7 @@ void            _terane_msgpack_free_value (terane_value *value);
  * Berkeley DB flag parsing declarations
  */
 int _terane_parse_env_txn_begin_flags (PyObject *kwds);
+int _terane_parse_txn_commit_flags (PyObject *kwds);
 int _terane_parse_db_get_flags (PyObject *kwds);
 int _terane_parse_db_put_flags (PyObject *kwds);
 int _terane_parse_db_del_flags (PyObject *kwds);

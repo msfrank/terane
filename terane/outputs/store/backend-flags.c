@@ -67,6 +67,19 @@ _terane_parse_env_txn_begin_flags (PyObject *kwds)
 }    
 
 int
+_terane_parse_txn_commit_flags (PyObject *kwds)
+{
+    struct flagdef flagdefs[] = {
+        { "TXN_NOSYNC", DB_TXN_NOSYNC },
+        { "TXN_SYNC", DB_TXN_SYNC }, 
+        { "TXN_WRITE_NOSYNC", DB_TXN_WRITE_NOSYNC },
+        { NULL, 0 }
+    };
+    return _parse_flags (kwds, flagdefs);
+}    
+
+
+int
 _terane_parse_db_get_flags (PyObject *kwds)
 {
     struct flagdef flagdefs[] = {
