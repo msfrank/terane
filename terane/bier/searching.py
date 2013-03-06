@@ -161,6 +161,8 @@ class SearcherWorker(object):
                     raise TypeError("posting list does not implement IPostingList")
                 searchers.append(searcher)
                 postingLists.append(postingList)
+            if len(postingLists) == 0:
+                raise StopIteration()
             # loop forever until we reach the search limit, we exhaust all of our
             # posting lists, or we encounter an exception
             currPostings = [(None,None,None) for i in range(len(postingLists))]

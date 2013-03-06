@@ -49,38 +49,6 @@ class IField(ILoadable):
         :rtype: An object implementing :class:`terane.bier.IMatcher`
         """
 
-class ISchema(Interface):
-    def getField(fieldname, fieldtype):
-        """
-        Returns the specified Field.
-
-        :param fieldname: The name of the field.
-        :type fieldname: str
-        :param fieldtype: The type of the field.
-        :type fieldtype: str
-        :returns: A qualified field.
-        :rtype: :class:`terane.bier.field.QualifiedField`
-        :raises KeyError: The field does not exist in the schema.
-        """
-    def addField(fieldname, fieldtype):
-        """
-        Adds a new field to the schema.
-
-        :param fieldname: The name of the field.
-        :type fieldname: str
-        :param fieldtype: The type of the field.
-        :type fieldtype: str
-        :returns: A qualified field.
-        :rtype: :class:`terane.bier.field.QualifiedField`
-        :raises KeyError: The field already exists in the schema.
-        """
-    def listFields():
-        """
-        Returns a list of fields present in the schema.
-
-        :returns: The list of qualified fields.
-        :rtype: list
-        """
 
 class IPostingList(Interface):
     def nextPosting():
@@ -142,9 +110,16 @@ class IMatcher(Interface):
         """
 
 class ISearcher(Interface):
-    def getSchema():
+    def getField(fieldname, fieldtype):
         """
-        Returns an object implementing ISchema.
+        Returns the specified Field, or None if the field doesn't exist..
+
+        :param fieldname: The name of the field.
+        :type fieldname: str
+        :param fieldtype: The type of the field.
+        :type fieldtype: str
+        :returns: A qualified field.
+        :rtype: :class:`terane.bier.field.QualifiedField`
         """
     def postingsLength(field, term, startId, endId):
         """
@@ -212,9 +187,15 @@ class IEventStore(Interface):
         """
 
 class IWriter(Interface):
-    def getSchema():
+    def getField(fieldname, fieldtype):
         """
-        Returns an object implementing ISchema.
+        Returns the specified Field, creating it if it doesn't exist..
+
+        :param fieldname: The name of the field.
+        :type fieldname: str
+        :param fieldtype: The type of the field.
+        :type fieldtype: str
+        :returns: A qualified field.
         """
     def newEvent(evid, event):
         """
@@ -238,14 +219,6 @@ class IWriter(Interface):
         :param posting: Value associated with the posting.
         :type posting: dict
         """
-    def commit():
-        """
-        Exit the transactional context, committing any modifications.
-        """
-    def abort():
-        """
-        Exit the transactional context, discarding any modifications.
-        """
           
 class IIndex(Interface):
     def newSearcher():
@@ -255,6 +228,10 @@ class IIndex(Interface):
     def newWriter():
         """
         Returns an object implementing IWriter.
+        """
+    def listFields():
+        """
+        Returns a list of fields present in the schema.
         """
     def getStats():
         """

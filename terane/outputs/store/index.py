@@ -17,6 +17,7 @@
 
 import time, datetime, pickle
 from threading import Lock
+from uuid import UUID, uuid4, uuid5
 from zope.interface import implements
 from twisted.internet.defer import succeed
 from terane.bier import IIndex
@@ -24,7 +25,6 @@ from terane.bier.evid import EVID, EVID_MIN
 from terane.bier.fields import SchemaError
 from terane.outputs.store import backend
 from terane.outputs.store.segment import Segment
-from terane.outputs.store.schema import Schema
 from terane.outputs.store.searching import IndexSearcher
 from terane.outputs.store.writing import IndexWriter
 from terane.loggers import getLogger
@@ -50,18 +50,21 @@ class Index(backend.Index):
         self.name = output._indexName
         self._env = output._plugin._env
         backend.Index.__init__(self, self._env, self.name)
-        self._task = output._task
+        self._segmentLock = Lock()
         self._segments = []
-        self._writeLock = Lock()
+        self._current = None
+        self._fieldLock = Lock()
         self._fieldstore = output._fieldstore
         self._fields = {}
-        self._indexSize = 0
-        self._current = None
-        self._currentSize = 0
-        self._currentSid = None
-        self._lastModified = 0
-        self._lastId = EVID_MIN
+        self._indexUUID = None
         try:
+            # load index metadata
+            with self.new_txn() as txn:
+                try:
+                    self._indexUUID = UUID(self.get_meta(txn, u'uuid', RMW=True))
+                except KeyError:
+                    self._indexUUID = uuid4()
+                    self.set_meta(txn, u'uuid', unicode(self._indexUUID))
             # load schema
             with self.new_txn() as txn:
                 for fieldname,fieldspec in self.iter_fields(txn):
@@ -73,37 +76,29 @@ class Index(backend.Index):
                             raise SchemaError("schema field %s:%s does not match registered type %s" % (
                                 fieldname, fieldtype, field.__class__.__name__))
             # load data segments
+            indexSize = 0
             with self.new_txn() as txn:
-                for segmentName,_ in self.iter_segments(txn):
+                for segmentName,segmentUUID in self.iter_segments(txn):
                     segment = Segment(self._env, txn, segmentName)
-                    last_update = segment.get_meta(txn, u'last-update')
-                    self._currentSize = last_update[u'size']
-                    self._indexSize += last_update[u'size']
-                    lastId = last_update[u'last-id']
-                    lastId = EVID(lastId[0], lastId[1])
-                    if lastId > self._lastId:
-                        self._lastId = lastId
-                    if last_update[u'last-modified'] > self._lastModified:
-                        self._lastModified = last_update[u'last-modified']
-                    self._segments.append(segment)
-                    logger.debug("opened event index segment '%s'" % segmentName)
-            # get the current segment id
-            with self.new_txn() as txn:
-                try:
-                    self._currentSid = self.get_meta(txn, u'last-segment-id')
-                except KeyError:
-                    self._currentSid = 0
+                    try:
+                        foundUUID = segment.get_meta(txn, u'uuid')
+                    except KeyError:
+                        foundUUID = None
+                    if foundUUID == None or segmentUUID != foundUUID:
+                        logger.debug("index segment %s has invalid UUID %s" % (segmentName, foundUUID))
+                        segment.close()
+                    else:
+                        self._segments.append(segment)
+                        logger.debug("opened index segment '%s'" % segmentName)
             # if the index has no segments, create one
             if self._segments == []:
                 self._makeSegment()
                 logger.info("created first segment for new index '%s'" % self.name)
             else:
-                logger.info("found %i events in %i segments for index '%s'" % (
-                    self._indexSize, len(self._segments), self.name))
-            logger.debug("last evid is %s" % self._lastId)
+                logger.info("loaded %i segments for index '%s'" % (len(self._segments), self.name))
             # get a reference to the current segment
             self._current = self._segments[-1]
-            logger.debug("opened event index '%s'" % self.name)
+            logger.debug("opened event index '%s' (%s)" % (self.name, str(self._indexUUID)))
         except:
             self.close()
             raise
@@ -124,6 +119,18 @@ class Index(backend.Index):
         """
         return succeed(IndexWriter(self))
 
+    def listFields(self):
+        """
+        Return a list of fields in the schema.
+        """
+        def _listFields(ix):
+            fields = []
+            with ix._fieldLock:
+                for fieldname,fieldspec in ix._fields.items():
+                    fields += fieldspec.values()
+                return fields
+        return deferToThread(_listFields, self)
+
     def getStats(self):
         """
         """
@@ -139,28 +146,34 @@ class Index(backend.Index):
 
     def _makeSegment(self):
         with self.new_txn() as txn:
-            segmentId = self._currentSid + 1
+            try:
+                segmentId = self.get_meta(txn, u'last-segment-id', RMW=True)
+            except KeyError:
+                segmentId = 0
+            segmentId = segmentId + 1
+            self.set_meta(txn, u'last-segment-id', segmentId)
             segmentName = u"%s.%i" % (self.name, segmentId)
-            self.set_segment(txn, segmentName, None, NOOVERWRITE=True)
+            segmentUUID = unicode(uuid5(self._indexUUID, str(segmentName)))
+            self.set_segment(txn, segmentName, segmentUUID, NOOVERWRITE=True)
             segment = Segment(self._env, txn, segmentName)
             segment.set_meta(txn, u'created-on', int(time.time()))
+            segment.set_meta(txn, u'uuid', segmentUUID)
             last_update = {
-                u'size': 0,
+                u'segment-size': 0,
                 u'last-id': [EVID_MIN.ts, EVID_MIN.offset],
                 u'last-modified': 0
                 }
             segment.set_meta(txn, u'last-update', last_update)
-            self.set_meta(txn, u'last-segment-id', segmentId)
-        self._currentSid = segmentId
-        self._current = segment
-        self._currentSize = 0
-        self._segments.append(segment)
+        with self._segmentLock:
+            self._segments.append(segment)
+            self._current = segment
         return segment
 
     def rotateSegments(self, segRotation, segRetention):
         """
         Allocate a new Segment, making it the new current segment.
         """
+        return
         # if the current segment contains more events than specified by
         # segRotation, then rotate the index to generate a new segment.
         if segRotation > 0 and self._currentSize >= segRotation:

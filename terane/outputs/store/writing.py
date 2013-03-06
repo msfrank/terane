@@ -16,12 +16,13 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 import time
+import cPickle as pickle
 from zope.interface import implements
-from twisted.internet.defer import succeed, fail
+from twisted.internet.defer import succeed
 from twisted.internet.threads import deferToThread
 from terane.bier import IWriter
+from terane.bier.fields import QualifiedField
 from terane.bier.writing import WriterError
-from terane.outputs.store.schema import Schema
 from terane.loggers import getLogger
 
 logger = getLogger('terane.outputs.store.writing')
@@ -34,122 +35,137 @@ class IndexWriter(object):
     implements(IWriter)
 
     def __init__(self, ix):
-        self._txn = None
-        logger.trace("[txn %s] waiting for writeLock" % self)
-        with ix._writeLock:
-            logger.trace("[txn %s] acquired writeLock" % self)
-            self._segment = ix._current
-            logger.trace("[txn %s] released writeLock" % self)
         self._ix = ix
-        logger.trace("[txn %s] BEGIN new_txn" % self)
-        self._txn = ix.new_txn()
-        logger.trace("[txn %s] END new_Txn" % self)
-        self._numEvents = 0
-        self._lastId = None
-        self._lastModified = None
+        logger.trace("[writer %s] waiting for segmentLock" % self)
+        with ix._segmentLock:
+            logger.trace("[writer %s] acquired segmentLock" % self)
+            self._segment = ix._current
+        logger.trace("[writer %s] released segmentLock" % self)
 
     def __str__(self):
-        if self._txn:
-            return "%s:%x" % (str(hash(self)), self._txn.id())
-        return str(hash(self))
+        return "%x" % id(self)
 
-    def getSchema(self):
-        return succeed(Schema(self._ix, self._txn))
+    def getField(self, fieldname, fieldtype):
+        """
+        Return the field specified by the fieldname and fieldtype.  If the
+        field doesn't exist, create it.
+        """
+        def _getField(writer, fieldname, fieldtype):
+            ix = writer._ix
+            logger.trace("[writer %s] waiting for fieldLock" % self)
+            with ix._fieldLock:
+                logger.trace("[writer %s] acquired fieldLock" % self)
+                if fieldname in ix._fields:
+                    fieldspec = ix._fields[fieldname]
+                else:
+                    fieldspec = {}
+                if not fieldtype in fieldspec:
+                    field = ix._fieldstore.getField(fieldtype)
+                    stored = QualifiedField(fieldname, fieldtype, field)
+                    fieldspec[fieldtype] = stored
+                    pickled = unicode(pickle.dumps(fieldspec))
+                    with ix.new_txn() as txn:
+                        logger.trace("[txn %x] BEGIN set_field" % txn.id())
+                        ix.set_field(txn, fieldname, pickled, NOOVERWRITE=True)
+                        logger.trace("[txn %x] END set_field" % txn.id())
+                    ix._fields[fieldname] = fieldspec
+            logger.trace("[writer %s] released fieldLock" % self)
+            return fieldspec[fieldtype]
+        return deferToThread(_getField, self, fieldname, fieldtype)
 
     def newEvent(self, evid, event):
         def _newEvent(writer, evid, event):
+            ix = writer._ix
             segment = writer._segment
-            # serialize the fields dict and write it to the segment
-            logger.trace("[txn %s] BEGIN set_event" % writer)
-            segment.set_event(writer._txn, [evid.ts,evid.offset], event,
-                              NOOVERWRITE=True)
-            logger.trace("[txn %s] END set_event" % writer)
+            with ix.new_txn() as txn:
+                # serialize the fields dict and write it to the segment
+                logger.trace("[txn %x] BEGIN set_event" % txn.id())
+                segment.set_event(txn, [evid.ts,evid.offset], event,
+                                  NOOVERWRITE=True)
+                logger.trace("[txn %x] END set_event" % txn.id())
+            lastModified = int(time.time())
             # update segment metadata
-            writer._numEvents += 1
-            writer._lastId = evid
-            writer._lastModified = int(time.time())
-            lastUpdate = {
-                u'size': writer._ix._currentSize + 1,
-                u'last-id': [evid.ts, evid.offset],
-                u'last-modified': writer._lastModified
-                }
-            logger.trace("[txn %s] BEGIN set_meta" % writer)
-            segment.set_meta(writer._txn, u'last-update', lastUpdate)
-            logger.trace("[txn %s] END set_meta" % writer)
+            with ix.new_txn() as txn:
+                try:
+                    logger.trace("[txn %x] BEGIN get_meta" % txn.id())
+                    lastUpdate = segment.get_meta(txn, u'last-update', RMW=True)
+                    logger.trace("[txn %x] END get_meta" % txn.id())
+                except KeyError:
+                    lastUpdate = {
+                        u'segment-size': 0,
+                        u'last-id': [evid.ts, evid.offset],
+                        u'last-modified': lastModified
+                        }
+                assert(u'segment-size' in lastUpdate)
+                assert(u'last-id' in lastUpdate)
+                assert(u'last-modified' in lastUpdate)
+                lastUpdate[u'segment-size'] = lastUpdate[u'segment-size'] + 1 
+                lastUpdate[u'last-id'] = [evid.ts, evid.offset]
+                lastUpdate[u'last-modified'] = lastModified
+                logger.trace("[txn %x] BEGIN set_meta" % txn.id())
+                segment.set_meta(txn, u'last-update', lastUpdate)
+                logger.trace("[txn %x] END set_meta" % txn.id())
+            # update index metadata
+            with ix.new_txn() as txn:
+                try:
+                    logger.trace("[txn %x] BEGIN get_meta" % txn.id())
+                    lastUpdate = ix.get_meta(txn, u'last-update', RMW=True)
+                    logger.trace("[txn %x] END get_meta" % txn.id())
+                except KeyError:
+                    lastUpdate = {
+                        u'index-size': 0,
+                        u'last-id': [evid.ts, evid.offset],
+                        u'last-modified': lastModified
+                        }
+                assert(u'index-size' in lastUpdate)
+                assert(u'last-id' in lastUpdate)
+                assert(u'last-modified' in lastUpdate)
+                lastUpdate[u'index-size'] = lastUpdate[u'index-size'] + 1 
+                lastUpdate[u'last-id'] = [evid.ts, evid.offset]
+                lastUpdate[u'last-modified'] = lastModified
+                logger.trace("[txn %x] BEGIN set_meta" % txn.id())
+                ix.set_meta(txn, u'last-update', lastUpdate)
+                logger.trace("[txn %x] END set_meta" % txn.id())
         return deferToThread(_newEvent, self, evid, event)
 
     def newPosting(self, field, term, evid, posting):
         def _newPosting(writer, field, term, evid, posting):
+            ix = writer._ix
             segment = writer._segment
-            # increment the document count for this field
-            f = [field.fieldname, field.fieldtype]
-            try:
-                logger.trace("[txn %s] BEGIN get_field" % writer)
-                value = segment.get_field(writer._txn, f, RMW=True)
-                logger.trace("[txn %s] END get_field" % writer)
-                if not u'num-docs' in value:
-                    raise WriterError("field %s is missing key 'num-docs'" % f)
-                value[u'num-docs'] += 1
-            except KeyError:
-                value = {u'num-docs': 1}
-            logger.trace("[txn %s] BEGIN set_field" % writer)
-            segment.set_field(writer._txn, f, value)
-            logger.trace("[txn %s] END set_field" % writer)
-            # increment the document count for this term
-            t = [field.fieldname, field.fieldtype, term]
-            try:
-                logger.trace("[txn %s] BEGIN get_term" % writer)
-                value = segment.get_term(writer._txn, t, RMW=True)
-                logger.trace("[txn %s] END get_term" % writer)
-                if not u'num-docs' in value:
-                    raise WriterError("term %s is missing key 'num-docs'" % t)
-                value[u'num-docs'] += 1
-            except KeyError:
-                value = {u'num-docs': 1}
-            logger.trace("[txn %s] BEGIN set_term" % writer)
-            segment.set_term(writer._txn, t, value)
-            logger.trace("[txn %s] END set_term" % writer)
-            # add the posting
-            if posting == None:
-                posting = dict()
-            p = [field.fieldname, field.fieldtype, term, evid.ts, evid.offset]
-            logger.trace("[txn %s] BEGIN set_posting" % writer)
-            segment.set_posting(writer._txn, p, posting)
-            logger.trace("[txn %s] END set_posting" % writer)
+            with ix.new_txn() as txn:
+                # increment the document count for this field
+                f = [field.fieldname, field.fieldtype]
+                try:
+                    logger.trace("[txn %x] BEGIN get_field" % txn.id())
+                    value = segment.get_field(txn, f, RMW=True)
+                    logger.trace("[txn %x] END get_field" % txn.id())
+                except KeyError:
+                    value = {u'num-docs': 0}
+                assert(u'num-docs' in value)
+                value[u'num-docs'] = value[u'num-docs'] + 1
+                logger.trace("[txn %x] BEGIN set_field" % txn.id())
+                segment.set_field(txn, f, value)
+                logger.trace("[txn %x] END set_field" % txn.id())
+                # increment the document count for this term
+                t = [field.fieldname, field.fieldtype, term]
+                try:
+                    logger.trace("[txn %x] BEGIN get_term" % txn.id())
+                    value = segment.get_term(txn, t, RMW=True)
+                    logger.trace("[txn %x] END get_term" % txn.id())
+                except KeyError:
+                    value = {u'num-docs': 1}
+                assert(u'num-docs' in value)
+                value[u'num-docs'] = value[u'num-docs'] + 1
+                logger.trace("[txn %x] BEGIN set_term" % txn.id())
+                segment.set_term(txn, t, value)
+                logger.trace("[txn %x] END set_term" % txn.id())
+                # add the posting
+                posting = dict() if posting == None else posting
+                p = [field.fieldname, field.fieldtype, term, evid.ts, evid.offset]
+                logger.trace("[txn %x] BEGIN set_posting" % txn.id())
+                segment.set_posting(txn, p, posting)
+                logger.trace("[txn %x] END set_posting" % txn.id())
         return deferToThread(_newPosting, self, field, term, evid, posting)
 
-    def commit(self):
-        if self._txn == None:
-            succeed(None)
-        def _commit(writer):
-            txn = writer._txn
-            writer._txn = None
-            if writer._numEvents > 0:
-                ix = writer._ix
-                logger.trace("[txn %s] waiting for writeLock" % writer)
-                with writer._ix._writeLock:
-                    logger.trace("[txn %s] acquired writeLock" % writer)
-                    logger.trace("[txn %s] BEGIN commit" % writer)
-                    txn.commit()
-                    logger.trace("[txn %s] END commit" % writer)
-                    ix._indexSize += writer._numEvents
-                    ix._currentSize += writer._numEvents
-                    if ix._lastId == None or writer._lastId > ix._lastId:
-                        ix._lastId = writer._lastId
-                    if ix._lastModified == None or writer._lastModified > ix._lastModified:
-                        ix._lastModified = writer._lastModified
-                logger.trace("[txn %s] released writeLock" % writer)
-            else:
-                txn.commit()
-        return deferToThread(_commit, self)
-
-    def abort(self):
-        if self._txn == None:
-            succeed(None)
-        def _abort(writer):
-            txn = writer._txn
-            writer._txn = None
-            logger.trace("[txn %s] BEGIN abort" % writer)
-            txn.abort()
-            logger.trace("[txn %s] END abort" % writer)
-        return deferToThread(_abort, self)
+    def close(self):
+        return succeed(None)

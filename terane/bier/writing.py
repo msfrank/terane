@@ -16,7 +16,7 @@
 # along with Terane.  If not, see <http://www.gnu.org/licenses/>.
 
 from twisted.python.failure import Failure
-from terane.bier.interfaces import IIndex, ISchema, IWriter
+from terane.bier.interfaces import IIndex, IWriter
 from terane.bier.evid import EVID
 from terane.bier.event import Event
 from terane.loggers import getLogger
@@ -47,46 +47,29 @@ class WriterWorker(object):
             raise TypeError("index does not implement IIndex")
         self.index = index
 
+    def __str__(self):
+        return "%x" % id(self)
 
     def next(self):
-        w = str(hash(self))
-        evid = EVID.fromEvent(self.event)
         writer = None
+        evid = EVID.fromEvent(self.event)
         try:
             # store the event
             writer = yield self.index.newWriter()
             if not IWriter.providedBy(writer):
                 raise TypeError("index writer does not implement IWriter")
             fields = dict([(fn,v) for fn,ft,v in self.event])
-            logger.trace("[writer %s] creating event %s" % (w,evid))
+            logger.trace("[writer %s] creating event %s" % (self,evid))
             yield writer.newEvent(evid, fields)
-            yield writer.commit()
-            writer = None
             # process the value of each field in the event
             for fieldname, fieldtype, value in self.event:
-                writer = yield self.index.newWriter()
-                if not IWriter.providedBy(writer):
-                    raise TypeError("index writer does not implement IWriter")
-                schema = yield writer.getSchema()
-                if not ISchema.providedBy(schema):
-                    raise TypeError("index schema does not implement ISchema")
-                try:
-                    logger.trace("[writer %s] retrieving field %s:%s" % (w,fieldname,fieldtype))
-                    field = yield schema.getField(fieldname, fieldtype)
-                except KeyError:
-                    logger.trace("[writer %s] adding field %s:%s" % (w,fieldname,fieldtype))
-                    field = yield schema.addField(fieldname, fieldtype)
+                logger.trace("[writer %s] using field %s:%s" % (self,fieldname,fieldtype))
+                field = yield writer.getField(fieldname, fieldtype)
                 # store a posting for each term in each field
                 for term,meta in field.parseValue(value):
-                    logger.trace("[writer %s] creating posting %s:%s:%s" % (w,field,term,evid))
+                    logger.trace("[writer %s] creating posting %s:%s:%s" % (self,field,term,evid))
                     yield writer.newPosting(field, term, evid, meta)
-                yield writer.commit()
-                writer = None
-        except:
-            # if an exception was raised and a transaction is open, abort it
+            logger.debug("[writer %s] committed event %s" % (self,str(evid)))
+        finally:
             if writer != None:
-                logger.debug("[writer %s] aborting txn" % w)
-                yield writer.abort()
-            raise
-        # otherwise commit the transaction
-        logger.debug("[writer %s] committed event %s" % (w,str(evid)))
+                yield writer.close()
